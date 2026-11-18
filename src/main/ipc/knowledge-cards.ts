@@ -221,7 +221,7 @@ export function registerKnowledgeCardIpc(): void {
   ipcMain.handle('deck-sync:subscribe', async (event, input: unknown) => {
     const service = syncService(event);
     const i = (input ?? {}) as Record<string, unknown>;
-    const extra = Object.keys(i).filter(k => !['deckId', 'sourceKind', 'sourceRef', 'newItems', 'cards'].includes(k));
+    const extra = Object.keys(i).filter(k => !['deckId', 'sourceKind', 'sourceRef', 'newItems', 'cards', 'noteTypeId', 'prompt', 'chunk'].includes(k));
     if (extra.length || typeof i.sourceKind !== 'string') throw new Error('invalid-request');
     const sub = await service.subscribe({
       deckId: validateSafeId(i.deckId, 'deckId'),
@@ -229,6 +229,9 @@ export function registerKnowledgeCardIpc(): void {
       sourceRef: validateSafeId(i.sourceRef, 'sourceRef'),
       newItems: policy(i.newItems),
       cards: i.cards,
+      ...(i.noteTypeId === undefined ? {} : { noteTypeId: validateSafeId(i.noteTypeId, 'noteTypeId') }),
+      prompt: i.prompt,
+      chunk: i.chunk,
     });
     const result = await deckSyncScheduler.runNow(sub.id);
     return { subscription: service.get(sub.id), result };

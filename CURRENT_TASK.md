@@ -1,3 +1,40 @@
+## KEY-397 Poetry decks, daily verse chunking and progressive context cloze - 2026-11-18 - Agent: Claude Code
+
+**Request.** Revision decks from al-Bayan: right-click a poem or a poet; whole poem, or verse by verse with a progressive context cloze and a daily quota of new verses.
+
+**What changed:**
+- **Migration 035 (data only):** `stock-poem-whole` "Poem (whole)"; `stock-context-cloze` gets `Whole verse` and `Chunk` option fields, the `.bayt` hemistich CSS, and a back template that reveals the bayt.
+- **Fixed on the way (pre-existing):**
+  - The seeded context-cloze back was `{{FrontSide}}`, so the hidden ajuz was never shown on the answer side. Cards made earlier get the new back when their note is next re-rendered (synced or edited).
+  - Both review components (`SrsReviewScreen`, `SrsReviewPanel`) had their own copy of the context-cloze card logic. They now share `contextClozeCardFields` from `template-engine.ts`, so a card looks the same everywhere.
+  - "Compare similar items" on a leech searched with `front.slice(0, 40)`, which is markup for template cards. It now uses `cardSearchTerm` (the prompted verse, as plain text).
+- **`template-engine.ts`:** each bayt is `<span class="bayt" dir="auto">` with sadr and ajuz spans, so the order follows the verse's script (the sadr stays on the right in the English UI). "Whole verse" hides the whole bayt. "Chunk" makes the blurred lookahead show the rest of the day's chunk.
+- **`deck-sync.ts`:** poem and poet sources accept `noteTypeId` (`stock-context-cloze` or `stock-poem-whole`) plus `prompt` and `chunk` (1-50), stored in `template_options`. `applyDailyQuota` gives a deck with no preset of its own a preset copied from the default: new per day = chunk, new siblings not buried, new cards in position order. A deck that already has its own preset is never changed. The whole-poem item lays bayt poems out as two hemistichs and other poems as lines. `ipc/poetry.ts` passes `paired`.
+- **UI:** `PoemDeckDialog.tsx` (new) offers the layout, what is hidden, new verses per day, and the policy. Right-click works on the poem title and poet name in `PoetryReader.tsx`, and on a poet in `PoetBrowser.tsx`. Strings are in ar and en. The KEY-396 Arabic count messages were reworded ("عدد الأحاديث فيها: 7") to avoid the plural-agreement problem.
+
+**Verified (2026-11-18):**
+- Full suite: 2587/2587 pass. tsc and eslint are clean.
+- New `tests/services/poem-decks.test.ts` (5 tests):
+  - the chunk preset and in-order queue;
+  - the hide-whole-verse prompt;
+  - the whole-poem layout and escaping;
+  - a deck's own preset kept, plus validation;
+  - the leech search term.
+- `poem-decks-live` passed in ar and en on real poetry data:
+  - a 93-bayt poem gave one card per bayt;
+  - day one queued the first 6 bayts, in order;
+  - the review screen rendered RTL hemistichs with the rest of the chunk blurred;
+  - the poet's whole-poem deck held 443 poems;
+  - no renderer errors.
+- `sunnah-decks-live` and `deck-sync-live` were re-run and passed in ar and en.
+
+**Limitations:**
+- Two decks following the same poem share one note, so a different prompt or chunk in the second deck updates the shared note's option fields.
+- Non-bayt (English) poems in verse-by-verse mode are still paired two lines per card, as before.
+- The corpus marks some missing hemistichs with "#"; that text is shown verbatim.
+
+**Files:** scripts/poem-decks-live/run.mjs, scripts/poem-decks-live/main.cjs, scripts/sunnah-decks-live/main.cjs, src/main/database/migrations/035_poem_deck_note_types.ts, src/main/database/migrations/index.ts, src/main/ipc/knowledge-cards.ts, src/main/ipc/poetry.ts, src/main/services/deck-sync.ts, src/preload/index.ts, src/renderer/components/knowledge/PoemDeckDialog.tsx, src/renderer/components/knowledge/SrsReviewPanel.tsx, src/renderer/components/knowledge/SrsReviewScreen.tsx, src/renderer/components/knowledge/note-type-labels.ts, src/renderer/components/poetry/PoetBrowser.tsx, src/renderer/components/poetry/PoetryReader.tsx, src/renderer/translations.ts, src/shared/revision/template-engine.ts, tests/services/poem-decks.test.ts, docs/data-dictionary.md, CURRENT_TASK.md.
+
 ## KEY-396 Sunnah revision decks and narrator decks - 2026-11-18 - Agent: Claude Code
 
 **Request.** Revision decks straight from the Sunnah reader, with a choice of hadith cards, plus narrator (rijal) decks. The user decided narrator card fields are chosen per deck in the dialog (defaults pre-ticked).
@@ -15,6 +52,8 @@
 **Verified (2026-11-18):** full suite 2582/2582 pass; tsc clean; `sunnah-decks-live` passed in ar and en (Bukhari Kitab Bad' al-Wahy: 7 hadiths x 3 cards, 8 narrators, no renderer errors, empty grade instead of the tier code); `deck-sync-live` passed in ar and en.
 
 **Known limitation:** the Arabic count messages use one plural form ("7 حديثًا"), so 3-10 read slightly off.
+
+**Git/Jira:** commit 8d1449c pushed to origin/feature/library-domain; KEY-396 commented and moved to Done (2026-11-18).
 
 **Not built:** choosing hadith cards from the deck manager's "Live sources" window (it defaults to the full card).
 

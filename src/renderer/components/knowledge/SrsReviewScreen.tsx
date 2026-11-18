@@ -10,8 +10,7 @@ import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { MISTAKE_CATEGORIES, kindKey, mistakeKey, type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
 import { SafeCardRenderer, isTemplateHtml } from './SafeCardRenderer';
-import { renderTemplate } from '../../../shared/revision/template-engine';
-import { poetryBayts } from '../../../shared/poetry';
+import { renderTemplate, contextClozeCardFields, DEFAULT_CONTEXT_CLOZE_TEMPLATE, cardSearchTerm } from '../../../shared/revision/template-engine';
 import type { CardNote, CardNoteType } from '../../../shared/types/card-notes';
 import type { ReviewQueue, ReviewRating } from '../../../shared/srs';
 
@@ -170,32 +169,15 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
         if (currentNoteType.kind === 'cloze') {
           template = currentNoteType.templates[0] || { ord: 0, name: 'Cloze', front: '{{cloze:Text}}', back: '{{cloze:Text}}<br>{{Back Extra}}' };
         } else if (currentNoteType.kind === 'context_cloze') {
-          template = currentNoteType.templates[0] || {
-            ord: 0,
-            name: 'Context Card',
-            front: '<div class="context-before">{{Context Before}}</div>\n<div class="cloze-target">{{cloze:Target}}</div>\n<div class="context-after context-blurred">{{Context After}}</div>',
-            back: '{{FrontSide}}\n\n<hr id=answer>\n\n<div class="notes">{{Notes}}</div>',
-          };
+          template = currentNoteType.templates[0] || DEFAULT_CONTEXT_CLOZE_TEMPLATE;
         }
 
         if (template) {
           let fields = { ...currentNote.fields };
           if (currentNoteType.kind === 'context_cloze') {
-            const textToSplit = fields['Target'] || fields['Poem'] || fields['Text'] || Object.values(fields)[0] || '';
-            const verses = textToSplit.split(/\r?\n/u).map((s) => s.trim()).filter(Boolean);
-            const bayts = poetryBayts(verses);
-            if (bayts.length > 0 && cardOrd < bayts.length) {
-              const i = cardOrd;
-              const prevBayt = i > 0 ? (bayts[i - 1].ajuz ? `${bayts[i - 1].sadr} ... ${bayts[i - 1].ajuz}` : bayts[i - 1].sadr) : '';
-              const currBayt = bayts[i];
-              const targetText = currBayt.ajuz ? `${currBayt.sadr} {{c1::${currBayt.ajuz}}}` : `{{c1::${currBayt.sadr}}}`;
-              const nextBayt = i + 1 < bayts.length ? (bayts[i + 1].ajuz ? `${bayts[i + 1].sadr} ... ${bayts[i + 1].ajuz}` : bayts[i + 1].sadr) : '';
-              fields = {
-                ...fields,
-                'Context Before': prevBayt,
-                'Target': targetText,
-                'Context After': nextBayt,
-              };
+            const cardFields = contextClozeCardFields(fields, cardOrd);
+            if (cardFields) {
+              fields = cardFields;
               clozeNum = 1;
             }
           }
@@ -603,7 +585,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
               data-srs-compare-similar
               onClick={() => {
                 if (onCompareSimilar) {
-                  onCompareSimilar(queue.leechAlert!.front.slice(0, 40));
+                  onCompareSimilar(cardSearchTerm(queue.leechAlert!.front));
                 } else {
                   onClose();
                 }

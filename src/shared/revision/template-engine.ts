@@ -384,6 +384,72 @@ export function renderTemplate(
 }
 
 /**
+ * A short plain-text search term for a card's front, for "compare similar items" on a leech
+ * (KEY-397): the prompted verse of a context-cloze card (not its anchor), otherwise the front's
+ * text, without markup or the "[...]" cloze placeholder.
+ */
+export function cardSearchTerm(front: string, max = 40): string {
+  const target = /<div class="cloze-target">([\s\S]*?)<\/div>/u.exec(front)?.[1] ?? front;
+  const text = target
+    .replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/giu, ' ')
+    .replace(/<[^>]*>/gu, ' ')
+    .replace(/\[\.\.\.\]|\[…\]/gu, ' ')
+    .replace(/&nbsp;/gu, ' ')
+    .replace(/&lt;/gu, '<')
+    .replace(/&gt;/gu, '>')
+    .replace(/&quot;/gu, '"')
+    .replace(/&amp;/gu, '&')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return text.slice(0, max).trim();
+}
+
+/** The built-in context-cloze template, used when a context-cloze type has none. */
+export const DEFAULT_CONTEXT_CLOZE_TEMPLATE = {
+  ord: 0,
+  name: 'Context Card',
+  front: '<div class="context-before">{{Context Before}}</div>\n<div class="cloze-target">{{cloze:Target}}</div>\n<div class="context-after context-blurred">{{Context After}}</div>',
+  back: '<div class="context-before">{{Context Before}}</div>\n<div class="cloze-target">{{cloze:Target}}</div>\n<div class="context-after">{{Context After}}</div>\n\n<hr id=answer>\n\n<div class="notes">{{Notes}}</div>',
+};
+
+function contextClozeBayts(fields: Record<string, string>) {
+  const textToSplit = fields['Target'] || fields['Poem'] || fields['Text'] || Object.values(fields)[0] || '';
+  return poetryBayts(textToSplit.split(/\r?\n/u).map(s => s.trim()).filter(Boolean));
+}
+
+/**
+ * The fields one progressive-context-cloze card renders with (card `ord` = bayt index), or null
+ * when the note has no such bayt. Card generation and the review screens share this, so a card
+ * looks the same wherever it is shown.
+ *
+ * KEY-397: the two hemistichs are laid out side by side (.bayt in the note type's CSS). "Whole
+ * verse" hides the whole bayt instead of only the ajuz; "Chunk" (the daily quota) makes the
+ * blurred lookahead show the rest of that day's chunk, not just the next bayt.
+ */
+export function contextClozeCardFields(fields: Record<string, string>, ord: number): Record<string, string> | null {
+  const bayts = contextClozeBayts(fields);
+  if (ord < 0 || ord >= bayts.length) return null;
+  const showBayt = (b: { sadr: string; ajuz: string | null }) =>
+    b.ajuz ? `<span class="bayt" dir="auto"><span class="sadr">${b.sadr}</span> <span class="ajuz">${b.ajuz}</span></span>` : `<span class="bayt" dir="auto"><span class="sadr">${b.sadr}</span></span>`;
+  const wholeVerse = isFieldTruthy(fields['Whole verse'] ?? '');
+  const chunk = Math.max(0, Math.min(100, Number.parseInt((fields['Chunk'] ?? '').trim(), 10) || 0));
+  const i = ord;
+  const current = bayts[i];
+  const target = wholeVerse
+    ? `{{c1::${showBayt(current)}}}`
+    : current.ajuz
+      ? `<span class="bayt" dir="auto"><span class="sadr">${current.sadr}</span> <span class="ajuz">{{c1::${current.ajuz}}}</span></span>`
+      : `<span class="bayt" dir="auto"><span class="sadr">{{c1::${current.sadr}}}</span></span>`;
+  const lookaheadEnd = chunk > 0 ? Math.max(i + 1, (Math.floor(i / chunk) + 1) * chunk - 1) : i + 1;
+  return {
+    ...fields,
+    'Context Before': i > 0 ? showBayt(bayts[i - 1]) : '',
+    Target: target,
+    'Context After': bayts.slice(i + 1, Math.min(bayts.length, lookaheadEnd + 1)).map(showBayt).join(''),
+  };
+}
+
+/**
  * Generate cards for a note according to its note type and fields.
  * Follows Anki rules:
  * - A card is generated only when its front renders non-empty.
@@ -420,32 +486,13 @@ export function generateCards(
       }
     }
   } else if (noteType.kind === 'context_cloze') {
-    const textToSplit = fields['Target'] || fields['Poem'] || fields['Text'] || Object.values(fields)[0] || '';
-    const verses = textToSplit.split(/\r?\n/u).map(s => s.trim()).filter(Boolean);
-    const bayts = poetryBayts(verses);
-
-    const template = noteType.templates[0] || {
-      ord: 0,
-      name: 'Context Card',
-      front: '<div class="context-before">{{Context Before}}</div>\n<div class="cloze-target">{{cloze:Target}}</div>\n<div class="context-after context-blurred">{{Context After}}</div>',
-      back: '{{FrontSide}}\n\n<hr id=answer>\n\n<div class="notes">{{Notes}}</div>',
-    };
+    const bayts = contextClozeBayts(fields);
+    const template = noteType.templates[0] || DEFAULT_CONTEXT_CLOZE_TEMPLATE;
 
     if (bayts.length > 0) {
       for (let i = 0; i < bayts.length; i++) {
         const ord = i;
-        const prevBayt = i > 0 ? (bayts[i - 1].ajuz ? `${bayts[i - 1].sadr} ... ${bayts[i - 1].ajuz}` : bayts[i - 1].sadr) : '';
-        const currBayt = bayts[i];
-        const targetText = currBayt.ajuz ? `${currBayt.sadr} {{c1::${currBayt.ajuz}}}` : `{{c1::${currBayt.sadr}}}`;
-        const nextBayt = i + 1 < bayts.length ? (bayts[i + 1].ajuz ? `${bayts[i + 1].sadr} ... ${bayts[i + 1].ajuz}` : bayts[i + 1].sadr) : '';
-
-        const itemFields: Record<string, string> = {
-          ...fields,
-          'Context Before': prevBayt,
-          'Target': targetText,
-          'Context After': nextBayt,
-        };
-
+        const itemFields = contextClozeCardFields(fields, ord)!;
         const front = renderTemplate(template.front, { fields: itemFields, clozeNum: 1, cardOrd: ord }, 'front');
         if (isFieldTruthy(front)) {
           const back = renderTemplate(template.back, { fields: itemFields, clozeNum: 1, cardOrd: ord, frontRendered: front }, 'back');

@@ -44,6 +44,7 @@ import migration031 from './031_decks_and_scheduler';
 import migration032 from './032_stock_card_theme';
 import migration033 from './033_image_occlusion_note_type';
 import migration034 from './034_sunnah_deck_note_types';
+import migration035 from './035_poem_deck_note_types';
 
 
 /** All migrations in chronological order. */
@@ -82,6 +83,7 @@ export const migrations: Migration[] = [
   migration032,
   migration033,
   migration034,
+  migration035,
 ];
 
 

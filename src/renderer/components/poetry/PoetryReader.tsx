@@ -25,6 +25,7 @@ import { PoetryNarrations } from './PoetryNarrations';
 import { SavedPoetryNotes } from './SavedPoetryNotes';
 import { PoetBiography } from './PoetBiography';
 import { useCompanionContext } from '../../utils/companion-context';
+import { PoemDeckDialog, type PoemDeckSource } from '../knowledge/PoemDeckDialog';
 
 const POETRY_SIZE_KEY = 'baglib.poetry.size', POETRY_SIZE_MIN = 18, POETRY_SIZE_MAX = 40;
 export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: { poem: PoetryDetail; onBack: () => void; onPoet?: (id: number) => void; initialVerse?: number; initialTo?: number }) {
@@ -48,6 +49,12 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
     targetElement.current?.focus({ preventScroll: true });
   }, [initialVerse]);
   const [diacritics, setDiacritics] = useState(true);
+  // KEY-397: right-click the title or the poet's name to make a revision deck.
+  const [poemDeck, setPoemDeck] = useState<PoemDeckSource | null>(null);
+  const deckMenu = [
+    { id: 'deck-poem', label: t('poemAddDeck'), onClick: () => setPoemDeck({ kind: 'poem', ref: String(poem.id), label: [poem.title, poem.poet_name].filter(Boolean).join(' — ') }) },
+    ...(poem.poet_id ? [{ id: 'deck-poet', label: t('poetAddDeck'), onClick: () => setPoemDeck({ kind: 'poet', ref: String(poem.poet_id), label: poem.poet_name || '' }) }] : []),
+  ];
   // The companion note pane links to the open poem, at the verses it was opened on.
   useCompanionContext('bayan', () => {
     const from = Math.max(0, Math.min(Number.isSafeInteger(initialVerse) ? initialVerse! : 0, Math.max(verses.length - 1, 0)));
@@ -206,8 +213,8 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
     </IslamicReaderPanel>}
     <div ref={poemScroller} className="min-h-0 flex-1 overflow-y-auto py-5">
       <div data-poetry-header className="mx-auto mb-6 max-w-3xl text-center">
-        <h1 dir="auto" className="mb-1 text-3xl font-semibold leading-[1.8]">{poem.title || poem.poet_name}</h1>
-        <p dir="auto" className="mb-3 text-lg text-muted"><button type="button" className="rounded px-1 text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => { setPanelOpen(true); setReaderTab('related'); }}>{poem.poet_name}</button>{poem.poet_era && <> · {poem.poet_era}</>}</p>
+        <ContextMenu items={deckMenu} data-poem-heading><h1 dir="auto" className="mb-1 text-3xl font-semibold leading-[1.8]">{poem.title || poem.poet_name}</h1></ContextMenu>
+        <ContextMenu items={deckMenu} data-poem-poet dir="auto" className="mb-3 text-lg text-muted"><button type="button" className="rounded px-1 text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => { setPanelOpen(true); setReaderTab('related'); }}>{poem.poet_name}</button>{poem.poet_era && <> · {poem.poet_era}</>}</ContextMenu>
         <dl className="flex flex-wrap justify-center gap-2 text-sm">
           {chips.map(item => item.value ? <div key={item.key} className="flex items-baseline gap-1.5 rounded-full border border-subtle bg-surface px-3 py-1"><dt className="text-xs text-muted">{t(item.key)}</dt><dd dir="auto" className="leading-relaxed">{item.value}</dd></div> : null)}
         </dl>
@@ -266,5 +273,6 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
       {copied && <p role="status">{t('bayanCopied')}</p>}{failed && <p role="alert">{t('bayanUnavailable')}</p>}
       {saved && <p role="status">{t('bayanSaved')}</p>}
     </div>
+    {poemDeck && <PoemDeckDialog open source={poemDeck} onClose={() => setPoemDeck(null)} />}
   </section>;
 }

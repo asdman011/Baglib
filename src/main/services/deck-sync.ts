@@ -27,6 +27,7 @@
 import crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import type { Database } from 'better-sqlite3';
+import { DeckRepository } from '../database/repositories/deck.repository';
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { trashKnowledge } from './knowledge-history';
 
@@ -45,7 +46,20 @@ export interface DeckSubscription {
   label: string;
   /** Hadith sources: which cards each hadith gets (KEY-396). */
   cards?: HadithCard[];
+  /** Poem sources, verse by verse: what is hidden and the daily chunk (KEY-397). */
+  poem?: PoemOptions;
 }
+
+/** KEY-397: a poem verse by verse hides the ajuz or the whole bayt; chunk is the daily quota (0 = none). */
+export type PoemPrompt = 'ajuz' | 'verse';
+export interface PoemOptions {
+  prompt: PoemPrompt;
+  chunk: number;
+}
+export const DEFAULT_POEM_OPTIONS: PoemOptions = { prompt: 'ajuz', chunk: 0 };
+/** The note types a poem source may use: verse by verse (progressive context cloze) or the whole poem. */
+export const POEM_NOTE_TYPES = ['stock-context-cloze', 'stock-poem-whole'] as const;
+export const MAX_DAILY_VERSES = 50;
 
 /** The three hadith card templates of the "Hadith (variants)" type. */
 export type HadithCard = 'full' | 'matn' | 'isnad';
@@ -54,6 +68,7 @@ export const HADITH_CARDS: readonly HadithCard[] = ['full', 'matn', 'isnad'];
 interface ListOptions {
   noteTypeId: string;
   cards: HadithCard[];
+  poem?: PoemOptions;
 }
 
 export interface SourceItem {
@@ -81,7 +96,8 @@ export interface SourceReaders {
   collectionName(collection: string): string;
   sunnahChapter(collection: string, chapter: number): Promise<{ title: string; hadiths: Array<{ id: string; researchId?: number; number: string; sectionNumber: string; sectionTitle: string; text: string; isnad?: string; matn?: string; full?: string }> } | null>;
   sunnahChapterNumbers(collection: string): Promise<number[]>;
-  poem(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[] } | null>;
+  /** `paired`: Arabic bayt layout, where verses alternate sadr and ajuz. */
+  poem(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[]; paired?: boolean } | null>;
   poetPoemIds(poetId: number): Promise<number[]>;
 }
 
@@ -109,6 +125,8 @@ interface AnnotationRow {
 interface Adapter {
   /** A fixed note type, or null when the subscription's own note type is used (book sources). */
   noteTypeId: string | null;
+  /** Other note types the source may be subscribed with (poems: the whole-poem type). */
+  noteTypes?: readonly string[];
   /** Checks the source reference's shape. */
   validRef(ref: string): boolean;
   /** Item refs of this source start with this, used to find the deck's notes for it. */
@@ -151,9 +169,25 @@ async function hadithItems(readers: SourceReaders, collection: string, chapter: 
     });
 }
 
-async function poemItem(readers: SourceReaders, id: number): Promise<SourceItem | null> {
+async function poemItem(readers: SourceReaders, id: number, options: ListOptions): Promise<SourceItem | null> {
   const poem = await readers.poem(id);
   if (!poem || !poem.verses.some(v => v.trim())) return null;
+  if (options.noteTypeId === 'stock-poem-whole') {
+    // KEY-397: the whole poem on one card, each bayt as two hemistichs (verbatim, only & < > escaped).
+    const lines: string[] = [];
+    if (poem.paired) {
+      for (let i = 0; i < poem.verses.length; i += 2) {
+        const sadr = (poem.verses[i] ?? '').trim();
+        const ajuz = (poem.verses[i + 1] ?? '').trim();
+        if (!sadr && !ajuz) continue;
+        lines.push(`<div class="bayt" dir="auto"><span class="sadr">${escapeHtml(sadr)}</span>${ajuz ? ` <span class="ajuz">${escapeHtml(ajuz)}</span>` : ''}</div>`);
+      }
+    } else {
+      for (const verse of poem.verses) if (verse.trim()) lines.push(`<div class="verse" dir="auto">${escapeHtml(verse.trim())}</div>`);
+    }
+    return { ref: `poem:${id}`, fields: { Title: escapeHtml(poem.title.trim() || poem.poetName.trim()), Poet: escapeHtml(poem.poetName.trim()), Poem: lines.join(''), Notes: '' } };
+  }
+  const opts = options.poem ?? DEFAULT_POEM_OPTIONS;
   return {
     ref: `poem:${id}`,
     fields: {
@@ -161,6 +195,8 @@ async function poemItem(readers: SourceReaders, id: number): Promise<SourceItem 
       Target: poem.verses.map(v => escapeLines(v.trim())).filter(Boolean).join('\n'),
       'Context After': '',
       Notes: `${escapeHtml(poem.poetName)} — ${escapeHtml(poem.title)}`,
+      'Whole verse': opts.prompt === 'verse' ? 'y' : '',
+      Chunk: opts.chunk > 0 ? String(opts.chunk) : '',
     },
   };
 }
@@ -247,21 +283,23 @@ const ADAPTERS: Record<SupportedSubscriptionKind, Adapter> = {
   },
   poem: {
     noteTypeId: 'stock-context-cloze',
+    noteTypes: POEM_NOTE_TYPES,
     validRef: ref => NUMBER.test(ref),
     namespace: ref => `poem:${ref}`,
-    list: async (_db, ref, readers) => {
-      const item = await poemItem(readers, Number(ref));
+    list: async (_db, ref, readers, options) => {
+      const item = await poemItem(readers, Number(ref), options);
       return item ? [item] : [];
     },
   },
   poet: {
     noteTypeId: 'stock-context-cloze',
+    noteTypes: POEM_NOTE_TYPES,
     validRef: ref => NUMBER.test(ref),
     namespace: () => 'poem:',
-    list: async (_db, ref, readers) => {
+    list: async (_db, ref, readers, options) => {
       const items: SourceItem[] = [];
       for (const id of await readers.poetPoemIds(Number(ref))) {
-        const item = await poemItem(readers, id);
+        const item = await poemItem(readers, id, options);
         if (item) items.push(item);
       }
       return items;
@@ -287,6 +325,25 @@ function cardsOf(templateOptions: string | null): HadithCard[] {
   } catch {
     return ['full'];
   }
+}
+
+function poemOptionsOf(templateOptions: string | null): PoemOptions {
+  try {
+    const parsed = JSON.parse(templateOptions ?? '{}') as { prompt?: unknown; chunk?: unknown };
+    return {
+      prompt: parsed.prompt === 'verse' ? 'verse' : 'ajuz',
+      chunk: Number.isSafeInteger(parsed.chunk) && (parsed.chunk as number) > 0 && (parsed.chunk as number) <= MAX_DAILY_VERSES ? (parsed.chunk as number) : 0,
+    };
+  } catch {
+    return { ...DEFAULT_POEM_OPTIONS };
+  }
+}
+
+/** Checks a poem subscription's options (KEY-397). */
+export function validatePoemOptions(prompt: unknown, chunk: unknown): PoemOptions {
+  if (prompt !== undefined && prompt !== 'ajuz' && prompt !== 'verse') throw new Error('invalid-request');
+  if (chunk !== undefined && (!Number.isSafeInteger(chunk) || (chunk as number) < 0 || (chunk as number) > MAX_DAILY_VERSES)) throw new Error('invalid-request');
+  return { prompt: (prompt as PoemPrompt | undefined) ?? 'ajuz', chunk: (chunk as number | undefined) ?? 0 };
 }
 
 export function validateHadithCards(value: unknown): HadithCard[] {
@@ -375,6 +432,7 @@ export class DeckSyncService {
       lastSyncedAt: r.last_synced_at,
       label: labelOf(r.template_options) ?? workTitle(this.db, r.source_ref),
       cards: cardsOf(r.template_options),
+      ...(r.source_kind === 'poem' || r.source_kind === 'poet' ? { poem: poemOptionsOf(r.template_options) } : {}),
     }));
   }
 
@@ -382,19 +440,23 @@ export class DeckSyncService {
     return this.list().find(s => s.id === id) ?? null;
   }
 
-  async subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy; cards?: unknown }): Promise<DeckSubscription> {
+  async subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy; cards?: unknown; prompt?: unknown; chunk?: unknown }): Promise<DeckSubscription> {
     if (!isSupportedKind(input.sourceKind)) throw new Error('unsupported-source');
     const adapter = ADAPTERS[input.sourceKind];
     if (typeof input.sourceRef !== 'string' || !adapter.validRef(input.sourceRef)) throw new Error('invalid-request');
     const deck = this.db.prepare(`SELECT kind FROM deck WHERE id = ?`).get(input.deckId) as { kind: string } | undefined;
     if (!deck || deck.kind !== 'normal') throw new Error('invalid-request');
-    const noteTypeId = adapter.noteTypeId ?? input.noteTypeId ?? 'stock-basic';
+    if (adapter.noteTypeId && input.noteTypeId !== undefined && input.noteTypeId !== adapter.noteTypeId && !adapter.noteTypes?.includes(input.noteTypeId)) throw new Error('invalid-note-type');
+    const noteTypeId = (adapter.noteTypeId ? (input.noteTypeId ?? adapter.noteTypeId) : input.noteTypeId) ?? 'stock-basic';
     const type = this.notes.getNoteType(noteTypeId);
     if (!type) throw new Error('invalid-note-type');
     if (!adapter.noteTypeId && (type.fields.length < 2 || type.kind !== 'normal')) throw new Error('invalid-note-type');
     const label = await this.describeSource(input.sourceKind, input.sourceRef);
     if (label === null) throw new Error('source-not-found');
     const cards = validateHadithCards(input.cards);
+    const isPoem = input.sourceKind === 'poem' || input.sourceKind === 'poet';
+    if (!isPoem && (input.prompt !== undefined || input.chunk !== undefined)) throw new Error('invalid-request');
+    const poem = isPoem ? validatePoemOptions(input.prompt, input.chunk) : null;
     const existing = this.db
       .prepare(`SELECT id FROM deck_subscription WHERE deck_id = ? AND source_kind = ? AND source_ref = ?`)
       .get(input.deckId, input.sourceKind, input.sourceRef) as { id: string } | undefined;
@@ -405,8 +467,40 @@ export class DeckSyncService {
         `INSERT INTO deck_subscription (id, deck_id, source_kind, source_ref, note_type_id, template_options, new_items, last_synced_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
       )
-      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, JSON.stringify({ label, cards }), input.newItems === 'silent' ? 'silent' : 'toast');
+      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, JSON.stringify(poem ? { label, cards, ...poem } : { label, cards }), input.newItems === 'silent' ? 'silent' : 'toast');
+    if (poem && poem.chunk > 0) this.applyDailyQuota(input.deckId, poem.chunk);
     return this.get(id)!;
+  }
+
+  /**
+   * KEY-397: daily chunking. New verses come in order (deck position), so a long poem is learned
+   * in order at `perDay` new verses a day. A deck with no preset of its own gets one (a copy of the
+   * default with this new-card limit, new siblings not buried); a deck that already has its own
+   * preset keeps it untouched, so the user's settings are never changed silently.
+   */
+  applyDailyQuota(deckId: string, perDay: number): string | null {
+    const deck = this.db.prepare(`SELECT name, preset_id FROM deck WHERE id = ?`).get(deckId) as { name: string; preset_id: string | null } | undefined;
+    if (!deck || deck.preset_id) return null;
+    const decks = new DeckRepository(this.db);
+    const base = decks.getDefaultPreset();
+    const preset = decks.savePreset({
+      name: `${deck.name} — ${perDay}`.slice(0, 200),
+      learnSteps: base.learnSteps,
+      relearnSteps: base.relearnSteps,
+      newPerDay: perDay,
+      reviewsPerDay: base.reviewsPerDay,
+      desiredRetention: base.desiredRetention,
+      maximumInterval: base.maximumInterval,
+      buryNew: false,
+      buryReviews: base.buryReviews,
+      buryInterday: base.buryInterday,
+      leechThreshold: base.leechThreshold,
+      leechAction: base.leechAction,
+      newOrder: 'position',
+      fsrsParams: base.fsrsParams,
+    });
+    decks.assignPreset(deckId, preset.id);
+    return preset.id;
   }
 
   /** A readable name for the source, or null when it does not exist. */
@@ -463,7 +557,7 @@ export class DeckSyncService {
     const type = this.notes.getNoteType(sub.noteTypeId);
     if (!type) throw new Error('invalid-note-type');
     const fieldNames = type.fields.map(f => f.name);
-    const items = await adapter.list(this.db, sub.sourceRef, this.readers, { noteTypeId: sub.noteTypeId, cards: sub.cards ?? ['full'] });
+    const items = await adapter.list(this.db, sub.sourceRef, this.readers, { noteTypeId: sub.noteTypeId, cards: sub.cards ?? ['full'], poem: sub.poem });
     const result: SyncResult = { subscriptionId: sub.id, deckId: sub.deckId, added: 0, linked: 0, updated: 0, flagged: 0, orphaned: 0, restored: 0, unchanged: 0 };
 
     for (let i = 0; i < items.length; i += BATCH) {
@@ -494,7 +588,7 @@ export class DeckSyncService {
       if (others.length) {
         const claimed = new Set<string>();
         for (const other of others) {
-          for (const item of await ADAPTERS[other.sourceKind as SupportedSubscriptionKind].list(this.db, other.sourceRef, this.readers, { noteTypeId: other.noteTypeId, cards: other.cards ?? ['full'] })) claimed.add(item.ref);
+          for (const item of await ADAPTERS[other.sourceKind as SupportedSubscriptionKind].list(this.db, other.sourceRef, this.readers, { noteTypeId: other.noteTypeId, cards: other.cards ?? ['full'], poem: other.poem })) claimed.add(item.ref);
         }
         gone = gone.filter(n => !claimed.has(n.source_ref));
       }
@@ -685,7 +779,9 @@ export class DeckSyncService {
     const origin = sourceOfItemRef(sourceRef);
     if (!origin) return null;
     const cards = HADITH_CARDS.filter(card => (current[card === 'full' ? 'Full card' : card === 'matn' ? 'Matn card' : 'Isnad card'] ?? '').trim());
-    const item = (await ADAPTERS[origin.kind].list(this.db, origin.sourceRef, this.readers, { noteTypeId, cards: cards.length ? cards : ['full'] })).find(i => i.ref === sourceRef);
+    const chunk = Number.parseInt(current['Chunk'] ?? '', 10);
+    const poem: PoemOptions = { prompt: (current['Whole verse'] ?? '').trim() ? 'verse' : 'ajuz', chunk: Number.isSafeInteger(chunk) && chunk > 0 ? chunk : 0 };
+    const item = (await ADAPTERS[origin.kind].list(this.db, origin.sourceRef, this.readers, { noteTypeId, cards: cards.length ? cards : ['full'], poem })).find(i => i.ref === sourceRef);
     return item ? this.fieldsFor(fieldNames, item) : null;
   }
 

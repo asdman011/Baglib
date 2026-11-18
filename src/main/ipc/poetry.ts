@@ -14,12 +14,12 @@ import { translations } from '../../renderer/translations';
 
 let poetryQuery: ((operation: 'detail' | 'search', input: unknown) => Promise<unknown>) | null = null;
 /** KEY-409: one poem's title, poet and verses, for live deck sync. */
-export async function readPoemForSync(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[] } | null> {
+export async function readPoemForSync(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[]; paired: boolean } | null> {
   if (!poetryQuery) return null;
   const poem = (await poetryQuery('detail', id)) as PoetryDetail | null;
   if (!poem) return null;
   const verses: unknown = JSON.parse(poem.verses_json);
-  return { id: poem.id, title: poem.title, poetName: poem.poet_name, verses: Array.isArray(verses) ? verses.filter((v): v is string => typeof v === 'string') : [] };
+  return { id: poem.id, title: poem.title, poetName: poem.poet_name, verses: Array.isArray(verses) ? verses.filter((v): v is string => typeof v === 'string') : [], paired: poem.language === 'ar' && poem.layout_type === 'bayt' };
 }
 /** KEY-409: the ids of every poem by one poet (Arabic and English), for live deck sync. */
 export async function readPoetPoemIds(poetId: number): Promise<number[]> {

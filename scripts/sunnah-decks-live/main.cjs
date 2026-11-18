@@ -115,7 +115,7 @@ app.on('browser-window-created', (_, owner) => {
     await evaluate(`document.querySelector('[data-narrator-field="teachers"]').click()`);
     await shot('03-narrator-dialog');
     await evaluate(`document.querySelector('[data-narrator-deck-create]').click()`);
-    await until(`(document.querySelector('[data-sunnah-deck-message]')?.textContent ?? '').includes('${language === 'ar' ? 'راويًا' : 'narrators'}') || !!document.querySelector('[data-sunnah-deck-error]')`, 900);
+    await until(`(document.querySelector('[data-sunnah-deck-message]')?.textContent ?? '').includes('${language === 'ar' ? 'عدد الرواة' : 'narrators'}') || !!document.querySelector('[data-sunnah-deck-error]')`, 900);
     const narratorError = await evaluate(`document.querySelector('[data-sunnah-deck-error]')?.textContent ?? ''`);
     assert.equal(narratorError, '', `narrator deck created without error: ${narratorError}`);
     results.narratorMessage = await evaluate(`document.querySelector('[data-sunnah-deck-message]').textContent`);

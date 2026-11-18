@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import type { PoetSummary } from '../../../shared/types/poetry';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { ContextMenu } from '../ui/ContextMenu';
+import { PoemDeckDialog, type PoemDeckSource } from '../knowledge/PoemDeckDialog';
 
 export function PoetBrowser({ language, era, location, onPoet }: { language: 'ar' | 'en'; era: string; location: string; onPoet: (id: number) => void }) {
   const { t, lang } = useWorkspace();
@@ -9,6 +11,7 @@ export function PoetBrowser({ language, era, location, onPoet }: { language: 'ar
   const [offset, setOffset] = useState(0);
   const [result, setResult] = useState<{ items: PoetSummary[]; total: number; offset: number }>({ items: [], total: 0, offset: 0 });
   const [failed, setFailed] = useState(false);
+  const [poemDeck, setPoemDeck] = useState<PoemDeckSource | null>(null);
   useEffect(() => {
     let alive = true;
     const timer = setTimeout(() => {
@@ -24,10 +27,11 @@ export function PoetBrowser({ language, era, location, onPoet }: { language: 'ar
     {failed && <p role="alert">{t('bayanUnavailable')}</p>}
     <div key={query} className="h-64 overflow-y-auto" onScroll={event => setOffset(Math.max(0, Math.floor(event.currentTarget.scrollTop / 64) - 3))}>
       <div className="relative" style={{ height: result.total * 64 }}>
-        {result.items.map((poet, index) => <button type="button" key={poet.id} onClick={() => onPoet(poet.id)} className="absolute w-full overflow-hidden border-b border-subtle px-3 text-start transition-colors hover:bg-surface-raised" style={{ top: (result.offset + index) * 64, height: 64, insetInlineStart: 0 }}>
+        {result.items.map((poet, index) => <ContextMenu key={poet.id} items={[{ id: 'deck-poet', label: t('poetAddDeck'), onClick: () => setPoemDeck({ kind: 'poet', ref: String(poet.id), label: poet.name }) }]} data-poet-row={poet.id} className="absolute w-full" style={{ top: (result.offset + index) * 64, height: 64, insetInlineStart: 0 }}><button type="button" onClick={() => onPoet(poet.id)} className="h-full w-full overflow-hidden border-b border-subtle px-3 text-start transition-colors hover:bg-surface-raised">
           <span dir="auto" className="block truncate leading-relaxed">{poet.name}</span><span dir="auto" className="block truncate text-xs text-muted">{[poet.era, poet.location, poet.poemCount.toLocaleString(lang)].filter(Boolean).join(' · ')}</span>
-        </button>)}
+        </button></ContextMenu>)}
       </div>
     </div>
+    {poemDeck && <PoemDeckDialog open source={poemDeck} onClose={() => setPoemDeck(null)} />}
   </aside>;
 }
