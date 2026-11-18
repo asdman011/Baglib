@@ -225,6 +225,8 @@ Two options, both within reach:
   - Customize Keyboard Shortcuts: review-screen keybindings.
 - **Compatibility at the edges instead of a runtime.** BagLib's `.apkg` import keeps whatever add-ons created: `[sound:]` media, custom templates (sandboxed) and custom fields. *Optionally*, it could expose an **AnkiConnect-compatible local API**, so browser tools such as Yomitan can add cards to BagLib. Pros: those tools work unchanged. Cons: a localhost HTTP server needs a security design (a token, origin checks, off by default).
 
+The design note for decisions 1-3 (native replacements, an AnkiConnect-compatible API with a threat model, import tolerance) is in `feature - Anki Add-ons and AnkiConnect API (TBD-2).md` (KEY-403, 2026-11-18).
+
 ### TBD-3: proactive revision recommendations (three approaches, none chosen)
 
 1. **Rule-based planner (offline, deterministic).** A daily "Revise next" panel built from FSRS queries:

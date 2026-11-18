@@ -1,3 +1,24 @@
+## KEY-403 Anki add-ons and AnkiConnect API research (TBD-2) - 2026-11-18 - Agent: Claude Code
+
+**Request.** A design note on Anki add-on compatibility, native replacements and an optional AnkiConnect-compatible API. No code; the decision is the user's.
+
+**Done:** `docs/features/feature - Anki Add-ons and AnkiConnect API (TBD-2).md` (new). It is based on the user's installed add-ons and AnkiConnect's own source and config, read without changing anything. The AnkiConnect findings:
+- no API key is set;
+- `storeMediaFile` accepts `path` and `url`.
+
+The note covers:
+- native replacements in priority order, with privacy and cost;
+- an AnkiConnect subset of about 12 actions;
+- the server design: off by default, 127.0.0.1, port 8766, key required, origin and Host checks, `data`-only media;
+- a threat model;
+- import tolerance.
+
+The investigation doc links to it.
+
+**Waiting on the user:** decisions 1-3. Jira: KEY-403 commented and moved to In Review.
+
+**Files:** docs/features/feature - Anki Add-ons and AnkiConnect API (TBD-2).md, docs/features/feature - Revision System Investigation.md, CURRENT_TASK.md.
+
 ## KEY-404 Revision recommendations research (TBD-3) - 2026-11-18 - Agent: Claude Code
 
 **Request.** A research and design comparison of three ways BagLib could suggest what to revise next. No code; the decision is the user's.
