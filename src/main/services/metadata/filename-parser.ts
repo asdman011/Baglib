@@ -623,15 +623,17 @@ export class FilenameParser {
     // 4. Arabic Attribution Particle (`لـ` / `للـ` / `لأبي` / `لابن` / `للشيخ` / `للأستاذ` / `للدكتور`)
     // Preceded by boundary, requiring definite article or specific honorific
     const arAuthorMatch = working.match(
-      /(?:[،,]\s*|\s+[-_]\s*|\s+)(?:لـ\s*|للشيخ\s+|للإمام\s+|للدكتور\s+|للأستاذ\s+|للعلامة\s+|للسيد\s+|للقاضي\s+|لأبي\s+|لابن\s+|لل(?=[\p{L}]))([\p{L}\s]+?)(?:\s*[-_]\s*|\s*$)/u
+      /(?:[،,]\s*|\s+[-_]\s*|\s+)(لـ\s*|للشيخ\s+|للإمام\s+|للدكتور\s+|للأستاذ\s+|للعلامة\s+|للسيد\s+|للقاضي\s+|لأبي\s+|لابن\s+|لل(?=[\p{L}]))([\p{L}\s]+?)(?:\s*[-_]\s*|\s*$)/u
     );
     if (arAuthorMatch) {
-      const fullMatch = arAuthorMatch[0];
-      let candidate = arAuthorMatch[1].trim();
+      const particle = arAuthorMatch[1].trim();
+      let candidate = arAuthorMatch[2].trim();
 
-      if (fullMatch.includes('لأبي')) candidate = 'أبو ' + candidate;
-      else if (fullMatch.includes('لابن')) candidate = 'ابن ' + candidate;
-      else if (fullMatch.includes('لل')) candidate = 'ال' + candidate;
+      // Only a bare "لل" was the article of the name itself ("للغزالي" → "الغزالي"). An honorific
+      // such as "للشيخ" or "للدكتور" is dropped whole: "للشيخ عبدالله عزام" → "عبدالله عزام".
+      if (particle === 'لأبي') candidate = 'أبو ' + candidate;
+      else if (particle === 'لابن') candidate = 'ابن ' + candidate;
+      else if (particle === 'لل') candidate = 'ال' + candidate;
 
       // Strip honorific prayers: "رحمه الله", "رضي الله عنه", "حفظه الله", "عفا عنه"
       candidate = candidate.replace(/\s*(?:رحمه\s+الله|رضي\s+الله\s+عنه|حفظه\s+الله|عفا\s+عنه).*$/, '').trim();

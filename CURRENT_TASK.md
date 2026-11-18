@@ -1,3 +1,25 @@
+## KEY-411 Filename parser: stray "ال" after an Arabic honorific - 2026-11-18 - Agent: Claude Code
+
+**Request.** A bug found during the KEY-401 live run. Importing `…فروض الاعيان للشيخ عبدالله عزام.pdf` linked the author "العبدالله عزام".
+
+**Cause.** In `filename-parser.ts`, step 4 used `fullMatch.includes('لل')`. That is also true for "للشيخ", "للإمام", "للدكتور" and so on, so "ال" was added to the front of the name.
+
+**Fix.**
+- The particle is now captured. "ال" is added only for a bare "لل" ("للغزالي" → "الغزالي"), "أبو" for "لأبي" and "ابن" for "لابن".
+- Honorifics are dropped whole.
+
+**Verified (2026-11-18):**
+- A new test in `tests/services/metadata/filename-parser.test.ts` covers:
+  - the real filename from `tests/real-files` → "عبدالله عزام";
+  - "للدكتور";
+  - the bare "لل";
+  - "لابن".
+- The parser and reconciler tests pass (39/39), and the full suite passes (2596/2596).
+
+**Limitation.** Authors already imported with the wrong name are not renamed; the user can edit them in the book details.
+
+**Files:** src/main/services/metadata/filename-parser.ts, tests/services/metadata/filename-parser.test.ts, CURRENT_TASK.md.
+
 ## KEY-401 Biography (tarajim) decks and Wikipedia quick-cards - 2026-11-18 - Agent: Claude Code
 
 **Request.** Decks for people (name, era and death date, main works, field), and a quick-card from a Wikipedia lookup inside BagLib (front = title, back = summary, link and language edition), in Arabic and English. Hadith narrators stay with KEY-396. Kept apart from KEY-233 (external biography and dictionary sources): this task uses the library's own author records and the existing Wikipedia service.
@@ -31,6 +53,8 @@
   - the biography deck came from the deck manager, with the real book's author card listing its work, plus the seeded sample authors;
   - real Wikipedia lookups ("ابن خلدون" on ar.wikipedia.org, "Ibn Khaldun" on en.wikipedia.org) through the popover produced cards with the title as written, the summary, the article link and the named edition;
   - no renderer errors.
+
+**Git/Jira:** commit bd1bc7ee pushed to origin/feature/library-domain; KEY-401 commented and moved to Done (2026-11-18).
 
 **Follow-up seen (not fixed, outside this task):** importing the Arabic PDF titled "…للشيخ عبدالله عزام" also links an author parsed as "العبدالله عزام". The importer's title parsing keeps a stray "ال" when it strips "للشيخ".
 

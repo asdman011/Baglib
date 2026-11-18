@@ -168,5 +168,14 @@ describe('FilenameParser Unit Tests', () => {
     assert.deepStrictEqual(res.authors, ['د. مصطفى محمود']);
     assert.strictEqual(res.authorConfidence >= 0.75, true);
   });
+  it('drops an Arabic honorific particle whole and restores only a bare "لل" article', () => {
+    // The real file in tests/real-files: "للشيخ" must not leave a stray "ال" on the name.
+    const real = FilenameParser.parse('الدفاع عن اراضي المسلمين اهم فروض الاعيان للشيخ عبدالله عزام.pdf');
+    assert.deepStrictEqual(real.authors, ['عبدالله عزام']);
+    assert.strictEqual(real.title, 'الدفاع عن اراضي المسلمين اهم فروض الاعيان');
+    assert.deepStrictEqual(FilenameParser.parse('رسالة في الفقه للدكتور محمد علي.pdf').authors, ['محمد علي']);
+    assert.deepStrictEqual(FilenameParser.parse('إحياء علوم الدين للغزالي.pdf').authors, ['الغزالي']);
+    assert.deepStrictEqual(FilenameParser.parse('المقدمة لابن خلدون.pdf').authors, ['ابن خلدون']);
+  });
 });
 
