@@ -1,3 +1,48 @@
+## KEY-413 Arabic Lexicons pack: 11 dictionaries from a local file - 2026-11-18 - Agents: Antigravity (gemini-4-argon-medium, stages 1-4) and Claude Code (review, fixes, verification)
+
+**Request.** The user supplied `repos/arabic_lexicons-main.zip` (github.com/wizsk/arabic_lexicons): "use the ones in here … they are 11 dictionaries". Antigravity built stages 1-4, then ran out of quota (it resets in about 161 h). By the user's instruction ("after the argon finishes you handle any remaining tasks"), Claude Code reviewed it, fixed it and verified it in place.
+
+**What changed:**
+- **The import** (`services/dictionary/arabic-lexicons.ts`, `arabic-lexicons-worker.ts`, `tsup.config.ts`):
+  - The Dictionaries panel imports the repo zip (nested `db.sqlite.zip` plus `ar_en/*`), or a `db.sqlite` with an optional `ar_en` folder.
+  - It unzips in a worker thread, checks the disk space and the expected tables, stages the files, then swaps them in atomically into `<userData>/dictionaries/arabic-lexicons/`.
+- **10 lexicons registered** in the existing `dictionaries` table (format `arabic-lexicons`, a TypeScript value only, since the column has no CHECK):
+  - Lisān al-ʿArab, al-Ṣiḥāḥ, Maqāyīs, al-Muḥīṭ, al-Wasīṭ, al-Muʿāṣir, Mufradāt, al-Ghanī, Hans Wehr and Lane.
+  - `headword_index.offset` holds the source row id, and al-Ghanī also indexes its `ghani_words` forms.
+  - Table names come only from a fixed whitelist, and the pack is read through one read-only connection.
+- **The 11th, "Direct":** a clean-room Buckwalter AraMorph analyser (`aramorph.ts`): prefix + stem + suffix split, checked against tables AB/AC/BC, giving the vocalised form, lemma, gloss and part of speech.
+- **Lookups:**
+  - Meanings are cleaned (`|`, `│`, `<br>` become line breaks, every diacritic is kept, the text is escaped).
+  - Each result shows its author and era.
+  - Hans Wehr and Lane also answer English searches.
+  - Hans Wehr, Lane and al-Ghanī show "Other words from this root" (`rootFamily`, ready for KEY-414).
+- **KEY-400 root cards** now take their meaning from Maqāyīs first, then Lisān.
+- **Claude's fixes:**
+  - The import dialog's filter name and folder title went into translations (they were hard-coded in English).
+  - A path sent from the renderer is type, length and extension checked.
+
+**Verified (2026-11-18, Claude):**
+- `tests/services/arabic-lexicons.test.ts`: 5/5.
+- tsc 0, eslint 0 errors, full suite **2612/2612**.
+- **`scripts/arabic-lexicons-live` passed in ar and en** with the **real** zip and real PDFs:
+  - the import took 5.0 s; a lookup across all 11 dictionaries took 91 ms cold and 69 ms warm;
+  - entry counts: 5,274 / 9,352 / 5,650 / 38,944 / 1,631 / 6,763 / 32,297 / 29,844 / 24,799 / 52,914, and Direct 82,158 stems;
+  - كتب matched all 11; وبالكتاب gave "and + with/by the + book";
+  - root families for Hans Wehr and al-Ghanī;
+  - a word looked up from a real Arabic PDF;
+  - the ر-ح-م and ك-ت-ب root cards carry the Maqāyīs text;
+  - a 30-word al-Ghanī deck, with one card of each kind reviewed;
+  - no renderer errors.
+  - Evidence: `.baglib-data/key413-evidence/`.
+- The first live attempt failed only because Claude edited `translations.ts` mid-run, which made Next reload the page. The re-run without edits passed.
+
+**Limits:**
+- Lookups of homographs, root families and English searches scan unindexed pack columns. This is fine at the measured 69-91 ms.
+- `mujamul_shihah` is labelled al-Ṣiḥāḥ (al-Jawharī), following the pack's `Sources.md`. The app's README calls it Mukhtār al-Ṣiḥāḥ.
+- Nothing from the pack is committed.
+
+**Files:** src/main/services/dictionary/arabic-lexicons.ts, src/main/services/dictionary/aramorph.ts, src/main/arabic-lexicons-worker.ts, src/main/services/dictionary/dictionary.service.ts, src/main/ipc/dictionary.ts, src/main/services/lexicon-decks.ts, src/preload/index.ts, src/shared/types/dictionary.ts, src/renderer/components/knowledge/DictionariesPanel.tsx, src/renderer/components/knowledge/KnowledgeCardPopover.tsx, src/renderer/components/reader/DictionaryLookupModal.tsx, src/renderer/translations.ts, tsup.config.ts, tests/services/arabic-lexicons.test.ts, scripts/arabic-lexicons-live/main.cjs, scripts/arabic-lexicons-live/run.mjs, docs/features/feature - Pluggable Offline Dictionary and Encyclopedia Lookup.md, docs/data-dictionary.md, CURRENT_TASK.md.
+
 ## KEY-400 Revision Task 9: Lexicon vocabulary, translation cards, quick-add from lookups, Quranic roots and tafsir (no hifz) - 2026-11-18 - Agent: Antigravity
 
 **Request.** Build lexicon vocabulary deck imports, automatic bidirectional translation cards, one-click quick-add from dictionary and Quran word lookups, Quranic root (ishtiqaq) cards and decks, and tafsir highlight/comment cards (strictly no hifz).

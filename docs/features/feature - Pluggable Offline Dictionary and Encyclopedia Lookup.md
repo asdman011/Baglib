@@ -124,3 +124,38 @@ To bridge the gap between inflected text in books and root-based lexicons, Bagli
   - `tests/services/dictionary.service.test.ts`: 2/2 passing with SQLite in-memory benchmarking (< 10ms execution).
   - `tests/services/wikipedia.service.test.ts`: 2/2 passing against live REST API endpoints.
 - **Type Checking:** `npx tsc --noEmit` exited with 0 errors.
+
+---
+
+## 5. Arabic Lexicons Pack (KEY-413, 2026-11-18)
+
+### A. Verified Findings
+- **Source structure (`wizsk/arabic_lexicons`):**
+  - `assets/data/db/db.sqlite.zip` (47.7 MB compressed, 171.36 MB uncompressed `db.sqlite`) holds 10 Arabic lexicon tables:
+    1. `lisanularab` (9,352 root rows; `|` line breaks) — *Lisān al-ʿArab*, Ibn Manẓūr (d. 711 AH / 1311 CE)
+    2. `mujamul_shihah` (5,650 rows; `|` line breaks) — *Al-Ṣiḥāḥ*, al-Jawharī (d. 393 AH / 1002 CE)
+    3. `maqayeesul_luga` (5,274 rows; `|` line breaks) — *Maqāyīs al-Lugha*, Ibn Fāris (d. 395 AH / 1004 CE)
+    4. `mujamul_muhith` (38,944 rows) — *Al-Qāmūs al-Muḥīṭ*, al-Fīrūzābādī (d. 817 AH / 1414 CE)
+    5. `mujamul_wasith` (6,763 rows; `<br>` line breaks) — *Al-Muʿjam al-Wasīṭ*, Academy of the Arabic Language in Cairo
+    6. `mujamul_muashiroh` (32,297 rows; `<br>` line breaks) — *Al-Muʿjam al-Muʿāṣir*, Aḥmad Mukhtār ʿUmar (d. 1424 AH / 2003 CE)
+    7. `mufradat_alfajul_quran` (1,631 rows; `|` line breaks and `﴿ayah﴾` Quranic quotes) — *Mufradāt Alfāẓ al-Qurʾān*, al-Rāghib al-Iṣfahānī (d. 502 AH / 1108 CE)
+    8. `ghani` (29,844 rows with `root_id` / `root_secondary_id`) + `ghani_words` (91,305 surface/root forms pointing at `word_id` with `is_root`) — *Muʿjam al-Ghanī*, ʿAbd al-Ghanī Abū al-ʿAzm
+    9. `hanswehr` (24,799 rows with `is_root`, `parent_id`, and `│` separators, plus `hanswehr_fts`) — *Hans Wehr Dictionary* (`ar`→`en`)
+    10. `lanelexcon` (52,914 rows with `is_root`, `parent_id`, and inline `<i>` markup) — *Lane’s Arabic–English Lexicon*, Edward William Lane (d. 1876 CE, `ar`→`en`)
+  - **Root family grouping nuances verified in `db.sqlite`:**
+    - In `lanelexcon`, root entries have `parent_id = id` (e.g. `كتب` has `id = 42630, is_root = 1, parent_id = 42630`, and its derived children share `parent_id = 42630`). The root row itself holds only the bare root word in `meanings`, while children hold the definitions.
+    - In `hanswehr`, root entries (`is_root = 1`) and their derived children share a common group `parent_id` that does not equal `id` (e.g. `كتب` has `id = 18380, is_root = 1, parent_id = 18460`, and derived words `id = 18381..18400` all share `parent_id = 18460`).
+    - In `ghani`, `root_id` is an abstract group number (e.g. `2713` for `كتب`), not a foreign key to `ghani.id` (`ghani.id = 2713` is an unrelated word `مجنح`). The canonical root string for a `root_id` group is stored in `ghani_words` where `is_root = 1` joined on `ghani_words.word_id = ghani.id`.
+  - **11th dictionary ("Direct", Buckwalter AraMorph 1.2.1):**
+    - `assets/data/ar_en/` holds `dictprefixes` (78 unvocalized keys), `dictstems` (82,158 stem entries across 38,600 `;; ` lemmas and 5,630 `;--- ` roots), `dictsuffixes` (206 unvocalized keys), and compatibility tables `tableab` (1,648 pairs), `tableac` (598 pairs), and `tablebc` (1,285 pairs).
+    - The files are ASCII Buckwalter transliteration with 89 proper-noun gloss lines in `dictstems` containing Latin-1 / Windows-1256 bytes (e.g., `Abbé`, `Español`).
+
+### B. Assumptions vs. Verified Implementation
+- **No schema changes:** `dictionaries.format` has no SQLite `CHECK` constraint, so `'arabic-lexicons'` is added in TypeScript (`DictionaryFormat`) and `headword_index.offset` stores the source row `id` (`word_id` for `ghani_words`).
+- **Fixed table whitelist:** SQL table names are never read from user or database data; they are resolved strictly from `ARABIC_LEXICON_TABLES` in `src/main/services/dictionary/arabic-lexicons.ts`.
+- **Clean-room Buckwalter analyzer (`src/main/services/dictionary/aramorph.ts`):** Written from scratch from the published LDC/Buckwalter specification (prefix 0–4 chars + stem ≥ 1 char + suffix 0–6 chars, checked against `tableAB`, `tableAC`, `tableBC`). Parses lazily in ~80 ms and answers individual word lookups in < 1 ms.
+- **KEY-400 Root Card Integration:** `LexiconDeckService.buildRootCardFields` now prioritizes *Maqāyīs al-Lugha* first (root-based), then *Lisān al-ʿArab*, *Mufradāt*, *Al-Ṣiḥāḥ*, and *al-Ghanī*.
+
+### C. Licensing & Data Boundary Note
+- The `wizsk/arabic_lexicons` Flutter application code is licensed under **GPL-3.0**, and the Buckwalter AraMorph data files carry a GPLv2 notice (`GPL.redistributable.txt`).
+- **No code or text from the Flutter app is copied or translated into BagLib**, and **none of the pack's database or data files are bundled or committed to the repository**. The user imports their local pack file at runtime into `<userData>/dictionaries/arabic-lexicons/`.

@@ -74,9 +74,13 @@ export function KnowledgeCardPopover({ request, onClose, onPointerEnter, onPoint
     const load = async () => {
       const [special, dictionary] = await Promise.all([
         context.kind === 'quran' ? quranSections(request, t).catch(() => []) : context.kind === 'hadith' ? narratorSections(request, t).catch(() => []) : Promise.resolve([]),
-        (window.electronAPI.dictionaryLookup(text, { lang, includeWikipedia: false, ...cardScience(context) }) as Promise<AggregateDictionaryLookupResult>).catch(() => null),
+        (window.electronAPI.dictionaryLookup(text, { lang, uiLang: lang === 'en' ? 'en' : 'ar', includeWikipedia: false, ...cardScience(context) }) as Promise<AggregateDictionaryLookupResult>).catch(() => null),
       ]);
-      const entries: CardSection[] = (dictionary?.entries ?? []).slice(0, 3).map(entry => ({ title: entry.headword, text: clip(entry.definitionText), source: entry.dictTitle }));
+      const entries: CardSection[] = (dictionary?.entries ?? []).slice(0, 3).map(entry => ({
+        title: entry.headword,
+        text: clip(entry.definitionText),
+        source: entry.attribution ? `${entry.dictTitle}, ${entry.attribution}` : entry.dictTitle,
+      }));
       if (active) setSections([...special, ...entries]);
     };
     void load();

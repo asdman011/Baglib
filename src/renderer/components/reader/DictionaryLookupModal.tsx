@@ -133,7 +133,8 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
     if (!isOpen || !word || !window.electronAPI?.dictionaryLookup) return;
     let alive = true;
     const lang = bookLang === 'العربية' || bookLang === 'ar' || /[\u0600-\u06FF]/.test(word) ? 'ar' : 'en';
-    void window.electronAPI.dictionaryLookup(word.trim(), { lang, includeWikipedia: true }).then(data => { if (alive) setResult(data); }).catch(console.warn).finally(() => { if (alive) setIsLoading(false); });
+    const uiLang: 'ar' | 'en' = typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ar';
+    void window.electronAPI.dictionaryLookup(word.trim(), { lang, uiLang, includeWikipedia: true }).then(data => { if (alive) setResult(data); }).catch(console.warn).finally(() => { if (alive) setIsLoading(false); });
     return () => { alive = false; };
   }, [isOpen, word, bookLang]);
 
@@ -145,10 +146,12 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
     try {
       const isArabic = /[\u0600-\u06FF]/.test(trimmed);
       const normalizedLang = (bookLang === 'العربية' || bookLang === 'ar' || isArabic) ? 'ar' : 'en';
+      const uiLang: 'ar' | 'en' = typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ar';
       const windowAPI = (window).electronAPI;
       if (windowAPI?.dictionaryLookup) {
         const data = await windowAPI.dictionaryLookup(trimmed, {
           lang: normalizedLang,
+          uiLang,
           includeWikipedia: true,
         });
         setResult(data);
@@ -364,19 +367,33 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                   {result.entries.map((entry, idx) => {
                     const entryKey = `entry-${idx}`;
                     const qStatus = quickAddStatus[entryKey];
+                    const fullSourceTitle = entry.attribution
+                      ? `${entry.dictTitle}, ${entry.attribution}`
+                      : entry.dictTitle;
                     return (
                     <div
                       key={idx}
+                      data-dictionary-entry={entry.dictId}
                       className="p-4 rounded-2xl bg-canvas/60 border border-subtle space-y-2.5 transition-all hover:border-pale-sky-500/30"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-main font-serif text-sm">
-                            {entry.headword}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-lg text-[10px] uppercase font-mono font-bold bg-surface border border-subtle text-muted">
-                            {entry.dictTitle} ({entry.dictFormat})
-                          </span>
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              dir="auto"
+                              className="font-bold text-main font-reading text-base leading-relaxed"
+                              style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}
+                            >
+                              {entry.headword}
+                            </span>
+                            <span
+                              dir="auto"
+                              data-entry-dict-title={entry.dictId}
+                              className="px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-surface border border-subtle text-muted"
+                            >
+                              {fullSourceTitle}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -415,10 +432,48 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
 
                       {/* Render formatted definition HTML */}
                       <div
-                        className="text-xs text-main leading-relaxed font-serif prose prose-sm dark:prose-invert max-w-none break-words"
-                        dir={/[\u0600-\u06FF]/.test(entry.definitionText) ? 'rtl' : 'ltr'}
+                        className="text-sm text-main leading-[2.1] font-reading prose prose-sm dark:prose-invert max-w-none break-words"
+                        style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}
+                        dir={entry.dictId === 'arlex-direct' || entry.dictId === 'arlex-hanswehr' || entry.dictId === 'arlex-lane' ? 'auto' : /[\u0600-\u06FF]/.test(entry.definitionText) ? 'rtl' : 'ltr'}
                         dangerouslySetInnerHTML={{ __html: entry.definitionHtml }}
                       />
+
+                      {/* Root family ("Other words from this root") for Hans Wehr, Lane, and al-Ghani */}
+                      {entry.rootFamily && entry.rootFamily.members.length > 1 && (
+                        <div
+                          data-entry-root-family={entry.dictId}
+                          className="pt-2 border-t border-subtle/70 space-y-1.5"
+                        >
+                          <p className="text-[11px] font-semibold text-muted">
+                            {t('arlexOtherWordsFromRoot', {
+                              root: entry.rootFamily.rootWord || entry.headword,
+                            })}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {entry.rootFamily.members.slice(0, 24).map((member) => (
+                              <button
+                                key={`${member.id}-${member.word}`}
+                                type="button"
+                                data-root-family-word={member.word}
+                                onClick={() => {
+                                  setActiveWord(member.word);
+                                  void performLookup(member.word);
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-xs border transition-colors cursor-pointer ${
+                                  member.isRoot
+                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold'
+                                    : 'bg-surface border-subtle text-main hover:bg-canvas'
+                                }`}
+                                dir="rtl"
+                                lang="ar"
+                                style={{ fontFamily: "var(--font-amiri, 'Amiri', 'Traditional Arabic', serif)" }}
+                              >
+                                {member.word}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                   })}

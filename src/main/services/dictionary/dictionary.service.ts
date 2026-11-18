@@ -15,6 +15,8 @@ import type {
   DictionaryEntryMatch,
   AggregateDictionaryLookupResult,
   ImportDictionaryOptions,
+  ArabicLexiconsImportProgress,
+  DictionaryRootFamily,
 } from '../../../shared/types/dictionary';
 import { BIOGRAPHY_SCIENCE } from '../../../shared/types/dictionary';
 import {
@@ -27,23 +29,50 @@ import { BglReader } from './bgl-reader';
 import { SlobReader } from './slob-reader';
 import { MdictReader } from './mdict-reader';
 import { WikipediaService } from './wikipedia.service';
+import {
+  ArabicLexiconsService,
+  ARABIC_LEXICON_SPECS,
+  getArabicLexiconLabels,
+  isArabicLexiconId,
+} from './arabic-lexicons';
 
 const SCIENCES_KEY = 'dictionary.sciences.v1';
+const ARABIC_LEXICON_ORDER = new Map<string, number>(
+  ARABIC_LEXICON_SPECS.map((s, idx) => [s.id, idx])
+);
 
 export class DictionaryService {
   private db: Database.Database;
   private wikipediaService: WikipediaService;
   private readers = new Map<string, StarDictReader | BglReader | SlobReader | MdictReader>();
+  private arabicLexicons: ArabicLexiconsService;
 
-  constructor(db: Database.Database) {
+  constructor(db: Database.Database, packRootDir?: string) {
     this.db = db;
     this.wikipediaService = new WikipediaService();
+    const resolvedPackRoot =
+      packRootDir || path.resolve(process.env.BAGLIB_USER_DATA || '.baglib-data', 'dictionaries', 'arabic-lexicons');
+    this.arabicLexicons = new ArabicLexiconsService(db, resolvedPackRoot);
+  }
+
+  get arabicLexiconsService(): ArabicLexiconsService {
+    return this.arabicLexicons;
+  }
+
+  close(): void {
+    this.arabicLexicons.close();
+    for (const reader of this.readers.values()) {
+      if (reader && 'close' in reader && typeof reader.close === 'function') {
+        reader.close();
+      }
+    }
+    this.readers.clear();
   }
 
   /**
    * List all registered dictionaries.
    */
-  listDictionaries(): DictionaryItem[] {
+  listDictionaries(lang: 'ar' | 'en' = 'ar'): DictionaryItem[] {
     const rows = this.db
       .prepare(
         `SELECT id, title, format, source_path as sourcePath, source_lang as sourceLang,
@@ -55,11 +84,68 @@ export class DictionaryService {
       .all() as DictionaryItem[];
 
     const sciences = this.sciences();
-    return rows.map((r) => ({
-      ...r,
-      isEnabled: Boolean(r.isEnabled),
-      science: sciences[r.id],
-    }));
+    const mapped = rows.map((r) => {
+      const labels = isArabicLexiconId(r.id) ? getArabicLexiconLabels(r.id, lang) : null;
+      return {
+        ...r,
+        title: labels ? labels.title : r.title,
+        attribution: labels ? labels.attribution : undefined,
+        isEnabled: Boolean(r.isEnabled),
+        science: sciences[r.id],
+      };
+    });
+
+    return mapped.sort((a, b) => {
+      const orderA = ARABIC_LEXICON_ORDER.get(a.id);
+      const orderB = ARABIC_LEXICON_ORDER.get(b.id);
+      if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
+      return 0;
+    });
+  }
+
+  /**
+   * Import the 11-dictionary Arabic Lexicons pack from a user-selected zip or db.sqlite file.
+   */
+  async importArabicLexiconsPack(options: {
+    sourcePath: string;
+    arEnDir?: string | null;
+    lang?: 'ar' | 'en';
+    onProgress?: (progress: ArabicLexiconsImportProgress) => void;
+  }): Promise<DictionaryItem[]> {
+    return await this.arabicLexicons.importPack(options);
+  }
+
+  /**
+   * Remove the Arabic Lexicons pack (`arlex-*` rows and folder).
+   */
+  removeArabicLexiconsPack(): boolean {
+    const sciences = this.sciences();
+    let changedSciences = false;
+    for (const id of Object.keys(sciences)) {
+      if (id.startsWith('arlex-')) {
+        delete sciences[id];
+        changedSciences = true;
+      }
+    }
+    if (changedSciences) {
+      this.db
+        .prepare(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+        )
+        .run(SCIENCES_KEY, JSON.stringify(sciences), new Date().toISOString());
+    }
+    return this.arabicLexicons.removePack();
+  }
+
+  /**
+   * Get the root family (`is_root` / `parent_id` for Hans Wehr and Lane; `root_id` for al-Ghani)
+   * for a given dictionary and entry row ID.
+   */
+  rootFamily(dictId: string, entryId: number): DictionaryRootFamily | null {
+    const dict = this.listDictionaries().find((d) => d.id === dictId);
+    const customDbPath = dict && dict.sourcePath && fs.existsSync(dict.sourcePath) ? dict.sourcePath : undefined;
+    return this.arabicLexicons.rootFamily(dictId, entryId, customDbPath);
   }
 
   /** Science tags live in settings because `dictionaries` has no field for them. */
@@ -257,23 +343,29 @@ export class DictionaryService {
   private async getReader(dict: DictionaryItem): Promise<StarDictReader | BglReader | SlobReader | MdictReader | undefined> {
     let reader = this.readers.get(dict.id);
     if (reader) return reader;
+    if (!dict.sourcePath || !fs.existsSync(dict.sourcePath)) return undefined;
 
-    if (dict.format === 'stardict') {
-      const r = new StarDictReader();
-      await r.loadFromFiles(dict.sourcePath);
-      reader = r;
-    } else if (dict.format === 'bgl') {
-      const r = new BglReader();
-      r.loadFromFile(dict.sourcePath);
-      reader = r;
-    } else if (dict.format === 'slob') {
-      const r = new SlobReader();
-      r.loadFromFile(dict.sourcePath);
-      reader = r;
-    } else if (dict.format === 'mdict') {
-      const r = new MdictReader();
-      r.loadFromFile(dict.sourcePath);
-      reader = r;
+    try {
+      if (dict.format === 'stardict') {
+        const r = new StarDictReader();
+        await r.loadFromFiles(dict.sourcePath);
+        reader = r;
+      } else if (dict.format === 'bgl') {
+        const r = new BglReader();
+        r.loadFromFile(dict.sourcePath);
+        reader = r;
+      } else if (dict.format === 'slob') {
+        const r = new SlobReader();
+        r.loadFromFile(dict.sourcePath);
+        reader = r;
+      } else if (dict.format === 'mdict') {
+        const r = new MdictReader();
+        r.loadFromFile(dict.sourcePath);
+        reader = r;
+      }
+    } catch (err) {
+      console.warn(`[DictionaryService] Failed to load reader for ${dict.title}:`, err);
+      return undefined;
     }
 
     if (reader) {
@@ -286,6 +378,27 @@ export class DictionaryService {
    * Read the raw definition string (HTML or plain text) for a single headword in a dictionary.
    */
   async readEntry(dict: DictionaryItem, headword: string): Promise<string | null> {
+    if (dict.format === 'arabic-lexicons') {
+      try {
+        const indexed = this.db
+          .prepare(
+            `SELECT offset FROM headword_index
+             WHERE dict_id = ? AND (headword = ? OR normalized_headword = ?)
+             ORDER BY id ASC LIMIT 1`
+          )
+          .get(
+            dict.id,
+            headword,
+            normalizeArabicLetters(stripArabicDiacritics(headword.trim().toLowerCase()))
+          ) as { offset: number | null } | undefined;
+        const entry = this.arabicLexicons.readEntryByOffsetOrWord(dict, headword, indexed?.offset);
+        return entry ? entry.definitionText : null;
+      } catch (err) {
+        console.warn(`[DictionaryService] Error reading ${headword} in ${dict.title}:`, err);
+        return null;
+      }
+    }
+
     const reader = await this.getReader(dict);
     if (!reader) return null;
     try {
@@ -324,14 +437,16 @@ export class DictionaryService {
    */
   async lookup(
     word: string,
-    options?: { lang?: string; includeWikipedia?: boolean; maxCandidates?: number; science?: string; workId?: string }
+    options?: { lang?: string; uiLang?: 'ar' | 'en'; includeWikipedia?: boolean; maxCandidates?: number; science?: string; workId?: string }
   ): Promise<AggregateDictionaryLookupResult> {
     const startTime = performance.now();
     const candidates = buildLookupCandidates(word, options?.lang);
     const entries: DictionaryEntryMatch[] = [];
     const seenEntries = new Set<string>();
 
-    const enabledDicts = this.listDictionaries().filter((d) => d.isEnabled);
+    const uiLang: 'ar' | 'en' =
+      options?.uiLang ?? (options?.lang === 'en' ? 'en' : 'ar');
+    const enabledDicts = this.listDictionaries(uiLang).filter((d) => d.isEnabled);
 
     if (enabledDicts.length > 0 && candidates.length > 0) {
       // Prepared statement for sub-10ms headword lookup using SQLite index
@@ -342,6 +457,95 @@ export class DictionaryService {
       );
 
       for (const dict of enabledDicts) {
+        if (dict.format === 'arabic-lexicons') {
+          try {
+            if (dict.id === 'arlex-direct') {
+              const directMatch = this.arabicLexicons.lookupDirect(dict, word);
+              if (directMatch) {
+                entries.push({
+                  dictId: dict.id,
+                  dictTitle: dict.title,
+                  dictFormat: dict.format,
+                  headword: directMatch.headword,
+                  matchedCandidate: word.trim(),
+                  definitionHtml: directMatch.definitionHtml,
+                  definitionText: directMatch.definitionText,
+                  attribution: dict.attribution,
+                });
+              }
+              continue;
+            }
+
+            let foundInLexicon = false;
+            for (const candidate of candidates) {
+              const normCandidate = normalizeArabicLetters(
+                stripArabicDiacritics(candidate.token.trim().toLowerCase())
+              );
+              const indexedMatches = queryStmt.all(dict.id, normCandidate, candidate.token) as Array<{
+                headword: string;
+                offset: number | null;
+                size: number | null;
+              }>;
+              if (!indexedMatches.length) continue;
+
+              for (const idxRow of indexedMatches) {
+                const entryKey = `${dict.id}:${idxRow.offset ?? idxRow.headword}`;
+                if (seenEntries.has(entryKey)) continue;
+
+                const lexEntry = this.arabicLexicons.readEntryByOffsetOrWord(
+                  dict,
+                  idxRow.headword,
+                  idxRow.offset
+                );
+                if (lexEntry && lexEntry.definitionHtml) {
+                  seenEntries.add(entryKey);
+                  foundInLexicon = true;
+                  entries.push({
+                    dictId: dict.id,
+                    dictTitle: dict.title,
+                    dictFormat: dict.format,
+                    headword: lexEntry.headword,
+                    matchedCandidate: candidate.token,
+                    definitionHtml: lexEntry.definitionHtml,
+                    definitionText: lexEntry.definitionText,
+                    attribution: dict.attribution,
+                    entryId: lexEntry.entryId,
+                    rootFamily: lexEntry.rootFamily,
+                  });
+                  break;
+                }
+              }
+              if (foundInLexicon) break;
+            }
+
+            // English-side search fallback for Hans Wehr and Lane's Lexicon
+            if (
+              !foundInLexicon &&
+              (dict.id === 'arlex-hanswehr' || dict.id === 'arlex-lane') &&
+              !/[\u0600-\u06FF]/u.test(word)
+            ) {
+              const engEntry = this.arabicLexicons.lookupEnglishInBilingualLexicon(dict, word);
+              if (engEntry) {
+                entries.push({
+                  dictId: dict.id,
+                  dictTitle: dict.title,
+                  dictFormat: dict.format,
+                  headword: engEntry.headword,
+                  matchedCandidate: word.trim(),
+                  definitionHtml: engEntry.definitionHtml,
+                  definitionText: engEntry.definitionText,
+                  attribution: dict.attribution,
+                  entryId: engEntry.entryId,
+                  rootFamily: engEntry.rootFamily,
+                });
+              }
+            }
+          } catch (err) {
+            console.warn(`[DictionaryService] Error looking up ${word} in ${dict.title}:`, err);
+          }
+          continue;
+        }
+
         const reader = await this.getReader(dict);
         if (!reader) continue;
 

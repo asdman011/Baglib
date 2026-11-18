@@ -2,7 +2,7 @@
  * Baglib — Dictionary and Encyclopedia Domain Types (KEY-142)
  */
 
-export type DictionaryFormat = 'mdict' | 'stardict' | 'bgl' | 'slob' | 'dictzip';
+export type DictionaryFormat = 'mdict' | 'stardict' | 'bgl' | 'slob' | 'dictzip' | 'arabic-lexicons';
 
 export interface DictionaryItem {
   id: string;
@@ -16,6 +16,28 @@ export interface DictionaryItem {
   createdAt: string;
   /** A category id, or BIOGRAPHY_SCIENCE. Empty for a general dictionary. */
   science?: string;
+  /** Attribution line (author & death date), populated for built-in/pack dictionaries. */
+  attribution?: string;
+}
+
+export interface DictionaryRootFamilyMember {
+  id: number;
+  word: string;
+  isRoot: boolean;
+}
+
+export interface DictionaryRootFamily {
+  dictId: string;
+  rootId: number | null;
+  rootWord: string | null;
+  members: DictionaryRootFamilyMember[];
+}
+
+export interface ArabicLexiconsImportProgress {
+  stage: 'reading' | 'unzipping' | 'validating' | 'indexing' | 'done';
+  current?: number;
+  total?: number;
+  dictId?: string;
 }
 
 /** A dictionary of people, consulted alongside any science. */
@@ -47,6 +69,10 @@ export interface DictionaryEntryMatch {
   definitionText: string;
   audioUrl?: string;
   alternates?: string[];
+  attribution?: string;
+  entryId?: number;
+  rootFamily?: DictionaryRootFamily;
+  science?: string;
 }
 
 export interface WikipediaSummaryCard {

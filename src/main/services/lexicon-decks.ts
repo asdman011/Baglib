@@ -694,10 +694,22 @@ export class LexiconDeckService {
     // Look up the root in installed Arabic dictionaries (exact headword match on joined or spaced root, not prefix stem guess)
     const lookups = await this.readers.lookupDictionary(joinedRoot, { lang: 'ar' });
     const normTarget = normalizeArabicLetters(stripArabicDiacritics(joinedRoot));
-    const exactEntry = lookups.find(e => {
+    const exactMatches = lookups.filter(e => {
       const normHw = normalizeArabicLetters(stripArabicDiacritics(e.headword.replace(/[-–—\s]/gu, '')));
       return normHw === normTarget && stripDictionaryHtml(e.definitionText || e.definitionHtml).length > 0;
     });
+    const rootDictRank = (e: { dictId: string; dictTitle: string }): number => {
+      const id = e.dictId.toLowerCase();
+      const title = e.dictTitle.toLowerCase();
+      if (id === 'arlex-maqayis' || title.includes('مقاييس') || title.includes('maqayis') || title.includes('maqāyīs')) return 0;
+      if (id === 'arlex-lisan' || title.includes('لسان') || title.includes('lisan') || title.includes('lisān')) return 1;
+      if (id === 'arlex-mufradat' || title.includes('مفردات') || title.includes('mufradat') || title.includes('mufradāt')) return 2;
+      if (id === 'arlex-sihah' || title.includes('صحاح') || title.includes('sihah') || title.includes('ṣiḥāḥ')) return 3;
+      if (id === 'arlex-ghani' || title.includes('غني') || title.includes('ghani') || title.includes('ghanī')) return 4;
+      if (id.startsWith('arlex-') && id !== 'arlex-hanswehr' && id !== 'arlex-lane' && id !== 'arlex-direct') return 5;
+      return 6;
+    };
+    const exactEntry = [...exactMatches].sort((a, b) => rootDictRank(a) - rootDictRank(b))[0];
 
     const backParts: string[] = [];
     let hasLexiconSource = false;

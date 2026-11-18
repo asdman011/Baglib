@@ -2,18 +2,24 @@
  * Baglib — Dictionary and Encyclopedia IPC Handlers (KEY-142)
  */
 
-import { BrowserWindow, dialog, ipcMain } from 'electron';
+import path from 'node:path';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { getDatabase } from '../database/connection';
 import { DictionaryService } from '../services/dictionary/dictionary.service';
 import { WikipediaService } from '../services/dictionary/wikipedia.service';
+import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import type { ImportDictionaryOptions } from '../../shared/types/dictionary';
+import { translations } from '../../renderer/translations';
 
 let dictionaryServiceInstance: DictionaryService | null = null;
 let wikipediaServiceInstance: WikipediaService | null = null;
 
 function getDictService(): DictionaryService {
   if (!dictionaryServiceInstance) {
-    dictionaryServiceInstance = new DictionaryService(getDatabase());
+    const userDataDir = app?.getPath?.('userData') || path.resolve(process.env.BAGLIB_USER_DATA || '.baglib-data');
+    const packRootDir = path.join(userDataDir, 'dictionaries', 'arabic-lexicons');
+    dictionaryServiceInstance = new DictionaryService(getDatabase(), packRootDir);
+    confirmedQuitCleanup.register(() => dictionaryServiceInstance?.close());
   }
   return dictionaryServiceInstance;
 }
@@ -59,10 +65,10 @@ export function registerDictionaryIpc(): void {
   });
 
   // List registered dictionaries
-  ipcMain.handle('dictionary:list', async () => {
+  ipcMain.handle('dictionary:list', async (_, lang?: 'ar' | 'en') => {
     try {
       const service = getDictService();
-      return service.listDictionaries();
+      return service.listDictionaries(lang === 'en' ? 'en' : 'ar');
     } catch (err) {
       console.warn('[IPC:dictionary:list] Error:', err);
       return [];
@@ -85,6 +91,77 @@ export function registerDictionaryIpc(): void {
     const item = await service.importDictionary({ sourcePath: choice.filePaths[0] });
     if (typeof science === 'string' && science) service.setScience(item.id, science);
     return service.listDictionaries().find(dictionary => dictionary.id === item.id) ?? item;
+  });
+
+  // KEY-413: Import the 11-dictionary Arabic Lexicons pack from a user-selected file (repo zip or db.sqlite)
+  ipcMain.handle(
+    'dictionary:import-arabic-lexicons',
+    async (event, options?: { sourcePath?: string; arEnDir?: string | null; lang?: 'ar' | 'en' }) => {
+      const service = getDictService();
+      const lang: 'ar' | 'en' = options?.lang === 'en' ? 'en' : 'ar';
+      const t = translations[lang];
+      // A path from the renderer (live harnesses) must be a plain string to a .zip/.sqlite/.db file;
+      // the ar_en folder only ever has its known AraMorph files copied out of it.
+      const validPath = (value: unknown, pattern?: RegExp) =>
+        typeof value === 'string' && value.length > 0 && value.length < 4096 && !value.includes('\0') && (!pattern || pattern.test(value));
+      if (options?.sourcePath !== undefined && !validPath(options.sourcePath, /\.(?:zip|sqlite|db)$/iu)) throw new Error('invalid-pack');
+      if (options?.arEnDir !== undefined && options.arEnDir !== null && !validPath(options.arEnDir)) throw new Error('invalid-pack');
+      let sourcePath = options?.sourcePath;
+      let arEnDir = options?.arEnDir ?? null;
+      const owner = BrowserWindow.fromWebContents(event.sender);
+
+      if (!sourcePath) {
+        const dialogOpts = {
+          properties: ['openFile' as const],
+          filters: [
+            { name: t.arlexPackFileFilter, extensions: ['zip', 'sqlite', 'db'] },
+          ],
+        };
+        const choice = await (owner ? dialog.showOpenDialog(owner, dialogOpts) : dialog.showOpenDialog(dialogOpts));
+        if (choice.canceled || !choice.filePaths[0]) return null;
+        sourcePath = choice.filePaths[0];
+
+        // If user picked a raw .sqlite/.db file directly, also offer picking the ar_en folder
+        if (/\.(?:sqlite|db)$/iu.test(sourcePath) && !arEnDir) {
+          const folderOpts = {
+            title: t.arlexPickArEnFolder,
+            properties: ['openDirectory' as const],
+          };
+          const folderChoice = await (owner ? dialog.showOpenDialog(owner, folderOpts) : dialog.showOpenDialog(folderOpts));
+          if (!folderChoice.canceled && folderChoice.filePaths[0]) {
+            arEnDir = folderChoice.filePaths[0];
+          }
+        }
+      }
+
+      return await service.importArabicLexiconsPack({
+        sourcePath,
+        arEnDir,
+        lang,
+        onProgress: (progress) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('dictionary:arabic-lexicons-progress', progress);
+          }
+        },
+      });
+    }
+  );
+
+  // KEY-413: Remove the Arabic Lexicons pack (rows + folder)
+  ipcMain.handle('dictionary:remove-arabic-lexicons', async () => {
+    const service = getDictService();
+    return service.removeArabicLexiconsPack();
+  });
+
+  // KEY-413: Get root family for an entry in Hans Wehr, Lane, or al-Ghani
+  ipcMain.handle('dictionary:root-family', async (_, dictId: string, entryId: number) => {
+    try {
+      const service = getDictService();
+      return service.rootFamily(dictId, entryId);
+    } catch (err) {
+      console.warn('[IPC:dictionary:root-family] Error:', err);
+      return null;
+    }
   });
 
   ipcMain.handle('dictionary:set-science', async (_, id: string, science: string | null) => getDictService().setScience(id, science));

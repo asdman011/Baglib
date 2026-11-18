@@ -250,19 +250,30 @@ export const API = {
     return () => { ipcRenderer.removeListener('ocr:progress', subscription); };
   },
 
-  // Pluggable Offline Dictionary & Encyclopedia Lookup (Story 3.3 / KEY-142)
-  dictionaryLookup: (word: string, options?: { lang?: string; includeWikipedia?: boolean; science?: string; workId?: string }) =>
+  // Pluggable Offline Dictionary & Encyclopedia Lookup (Story 3.3 / KEY-142 / KEY-413)
+  dictionaryLookup: (word: string, options?: { lang?: string; uiLang?: 'ar' | 'en'; includeWikipedia?: boolean; science?: string; workId?: string }) =>
     ipcRenderer.invoke('dictionary:lookup', word, options),
   dictionaryChooseImport: (science?: string) => ipcRenderer.invoke('dictionary:choose-import', science),
   dictionarySetScience: (id: string, science: string | null) => ipcRenderer.invoke('dictionary:set-science', id, science),
   dictionaryWikipedia: (word: string, lang?: string) =>
     ipcRenderer.invoke('dictionary:wikipedia', word, lang),
-  dictionaryList: () => ipcRenderer.invoke('dictionary:list'),
+  dictionaryList: (lang?: 'ar' | 'en') => ipcRenderer.invoke('dictionary:list', lang),
   dictionaryImport: (options: import('../shared/types/dictionary').ImportDictionaryOptions) =>
     ipcRenderer.invoke('dictionary:import', options),
   dictionaryDelete: (id: string) => ipcRenderer.invoke('dictionary:delete', id),
   dictionaryToggle: (id: string, isEnabled: boolean) =>
     ipcRenderer.invoke('dictionary:toggle', id, isEnabled),
+  dictionaryImportArabicLexicons: (options?: { sourcePath?: string; arEnDir?: string | null; lang?: 'ar' | 'en' }) =>
+    ipcRenderer.invoke('dictionary:import-arabic-lexicons', options) as Promise<import('../shared/types/dictionary').DictionaryItem[] | null>,
+  dictionaryRemoveArabicLexicons: () =>
+    ipcRenderer.invoke('dictionary:remove-arabic-lexicons') as Promise<boolean>,
+  dictionaryRootFamily: (dictId: string, entryId: number) =>
+    ipcRenderer.invoke('dictionary:root-family', dictId, entryId) as Promise<import('../shared/types/dictionary').DictionaryRootFamily | null>,
+  onArabicLexiconsImportProgress: (callback: (progress: import('../shared/types/dictionary').ArabicLexiconsImportProgress) => void) => {
+    const sub = (_: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
+    ipcRenderer.on('dictionary:arabic-lexicons-progress', sub);
+    return () => { ipcRenderer.removeListener('dictionary:arabic-lexicons-progress', sub); };
+  },
 
   // Story 9 Pagination & Bulk Operations
   getPaginatedWorks: (options: unknown) =>
