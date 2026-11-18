@@ -1,6 +1,6 @@
 # Revision recommendations: what to revise next (TBD-3, KEY-404)
 
-- **Status:** a comparison for the user's decision. No approach is chosen and nothing is built.
+- **Status:** decided 2026-11-18. The user chose: "Layer them: rules first, graph later, AI coach on demand." Layer 1 (rules) is built in KEY-412; layers 2 and 3 are not built yet.
 - **Written:** 2026-11-18 by Claude Code.
 - **Related:**
   - `feature - Revision System Investigation.md` §5 TBD-3, which this expands;
@@ -110,3 +110,27 @@ This is a suggestion only. The decision, including "none of these", stays with t
 2. Where should it appear first: the Dashboard, the empty review screen, or both?
 3. Should dismissed suggestions be remembered, and for how long?
 4. For the AI coach: aggregates only, or may it ever see card text with consent?
+
+## Decision and what was built (2026-11-18)
+
+**Decision (the user's words):** "Layer them: rules first, graph later, AI coach on demand."
+
+**Defaults chosen while the user was away** for open questions 2-4. These are not the user's decisions and can be changed:
+- the list appears in both places, the Today panel on the Dashboard and the empty review screen;
+- a dismissal lasts 7 days;
+- the coach, when built, sends aggregates only.
+
+**Layer 1, built in KEY-412.** Implemented by `RevisionRecommendationService` (`src/main/services/revision-recommendations.ts`). It works offline, reads only existing tables, and needs no schema change.
+
+| Rule | Exactly what it checks | Action |
+|---|---|---|
+| Backlog | Learning, review and relearning cards due before today's start (the SRS rollover), per normal deck. It counts those with retrievability below 0.7 and suggests at most 20 for today. A backlog with likely-forgotten cards ranks first. | Review that deck |
+| Leeches | Cards tagged `leech`, or rated "Again" twice or more in the last 14 days; suspended cards are excluded. It points at the deck holding most of them. | Review that deck |
+| Finished book | `reading_status = completed`, with highlights or comments, and no book deck subscription | Opens the book deck dialog on that book |
+| Narrators | At least 5 mastered hadith cards (stability ≥ 21 days), and no `narrator:` card at all | Opens the narrator deck dialog |
+| AI questions | A book with a deck, and 3 or more highlights with no accepted `ai-question:` note | Opens the AI questions dialog |
+| New cards waiting | A deck older than 3 days, with new cards, where none was introduced in 3 days and the preset allows new cards | Review that deck |
+
+- **The Weakest-first rule** became part of Backlog: it is how many overdue cards are likely forgotten, and it decides the order. As a separate item it would repeat the same cards.
+- **The narrator rule** is simpler than first described. It doesn't check each chapter's chains; it fires once, from mastered hadith, until any narrator card exists.
+- **UI.** The list sits inside the Today panel rather than as a new module, because KEY-311 keeps a fresh Dashboard to Today, calendar and prayer. It also appears under the empty review screen, but only when there are suggestions.

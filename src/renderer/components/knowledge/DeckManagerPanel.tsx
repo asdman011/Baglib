@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
+import { REVISION_INTENT_EVENT, takeRevisionIntent } from '../../libs/revision-intent';
 import { Button } from '../ui/Button';
 import { DeckOptionsModal } from './DeckOptionsModal';
 import { FilteredDeckModal } from './FilteredDeckModal';
@@ -48,6 +49,13 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
   const [subscriptionsDeck, setSubscriptionsDeck] = useState<DeckTreeNode | null>(null);
   const [syncReviewOpen, setSyncReviewOpen] = useState(false);
   const [narratorDialogOpen, setNarratorDialogOpen] = useState(false);
+  // KEY-412: "Revise next" can ask for the narrator deck dialog.
+  useEffect(() => {
+    const open = () => { if (takeRevisionIntent('narrators')) setNarratorDialogOpen(true); };
+    open();
+    window.addEventListener(REVISION_INTENT_EVENT, open);
+    return () => window.removeEventListener(REVISION_INTENT_EVENT, open);
+  }, []);
   const [personDialogOpen, setPersonDialogOpen] = useState(false);
   const [pendingSync, setPendingSync] = useState({ changed: 0, orphaned: 0 });
   const [busy, setBusy] = useState(false);

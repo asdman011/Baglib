@@ -1,5 +1,6 @@
 'use client';
 import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
+import { ReviseNextList } from '../knowledge/ReviseNextList';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -737,6 +738,9 @@ export function TodayStudyPanel() {
           </div>
         )}
       </div>
+
+      {/* KEY-412: "Revise next" — rule-based suggestions, worked out locally */}
+      <ReviseNextList />
 
       {/* Settings Modal */}
       {isSettingsOpen && (

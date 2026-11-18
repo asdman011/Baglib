@@ -27,6 +27,7 @@ import { useAssistant } from '../ai/AssistantContext';
 import { BoardsWorkspace } from './BoardsWorkspace';
 import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
+import { peekRevisionIntent, REVISION_INTENT_EVENT, takeRevisionIntent } from '../../libs/revision-intent';
 import { NoteEditorPane } from './NoteEditorPane';
 import type { LectureSeries } from '../../../shared/lecture-series';
 import { NotesFolderTree, folderName } from './NotesFolderTree';
@@ -199,6 +200,19 @@ export const NotesOverviewView: React.FC = () => {
       setActiveTab('cards');
     };
 
+    // KEY-412: "Revise next" asks to review a deck, or to open the narrator deck dialog (in the cards tab).
+    const handleRevisionIntent = () => {
+      const review = takeRevisionIntent('review');
+      if (review) {
+        setReviewDeckId(review.deckId);
+        setActiveTab('review');
+      } else if (peekRevisionIntent()?.kind === 'narrators') {
+        setActiveTab('cards');
+      }
+    };
+    handleRevisionIntent();
+
+    window.addEventListener(REVISION_INTENT_EVENT, handleRevisionIntent);
     window.addEventListener('baglib:open-boards', handleOpenBoards);
     window.addEventListener('baglib:open-cards', handleOpenCards);
     window.addEventListener('baglib:start-review', handleStartReview);
@@ -206,6 +220,7 @@ export const NotesOverviewView: React.FC = () => {
     window.addEventListener('baglib:new-card', handleNewCard);
 
     return () => {
+      window.removeEventListener(REVISION_INTENT_EVENT, handleRevisionIntent);
       window.removeEventListener('baglib:open-boards', handleOpenBoards);
       window.removeEventListener('baglib:open-cards', handleOpenCards);
       window.removeEventListener('baglib:start-review', handleStartReview);

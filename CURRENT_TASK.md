@@ -1,3 +1,58 @@
+## KEY-412 "Revise next": rule-based recommendations (layer 1 of KEY-404) - 2026-11-18 - Agent: Claude Code
+
+**Request.** The user decided KEY-404: "Layer them: rules first, graph later, AI coach on demand." This task builds the rules layer.
+
+**What changed:**
+- **`services/revision-recommendations.ts` (new).** It is local and reads existing tables only.
+  - **Rules:**
+    - backlog per deck, with likely-forgotten cards (R < 0.7) and a chunk of 20;
+    - leeches (the leech tag, or two or more "Again" in 14 days);
+    - a finished book with highlights but no deck;
+    - 5 or more mastered hadith and no narrator cards;
+    - a book deck with 3 or more highlights that have no AI questions;
+    - new cards idle for 3 days.
+  - At most 6 items, ranked.
+  - A dismissal is stored in `revision.recommendations.dismissed` (an app setting, not a field) for 7 days.
+- **Shared and wiring:**
+  - `shared/revision-recommendations.ts` (new): types, limits, id validation and dismissal pruning;
+  - `ipc/revision-recommendations.ts` (new), registered in `main/index.ts`;
+  - preload `revisionRecommendations.list/dismiss`.
+- **UI:**
+  - `ReviseNextList.tsx` (new) sits in the Dashboard's Today panel (`TodayStudyPanel.tsx`) and under the empty review screen (`SrsReviewScreen.tsx`). There it shows only when there are items.
+  - Each item explains its rule, has one action and a "hide for a week" button.
+  - The actions are:
+    - review the deck;
+    - book deck dialog on that book;
+    - AI questions dialog;
+    - narrator dialog.
+  - **`libs/revision-intent.ts` (new):** a one-shot request kept until the Notes view or the deck manager takes it. `NotesOverviewView.tsx` and `DeckManagerPanel.tsx` consume it.
+  - Strings in ar and en.
+- **Placement decision:** no new Dashboard module. `statistics-workspace.test.ts` (KEY-311) requires a fresh Dashboard to show only Today, calendar and prayer, so the list sits in the Today panel.
+- **Defaults chosen while the user was away** (TBD-3 open questions 2-4): both places, 7-day dismissal, and the coach to send aggregates only. They are recorded in the TBD-3 note and on KEY-404/412.
+- **Docs:** the TBD-3 note (decision and what was built), `docs/data-dictionary.md`, and the settings coverage test, which lists the dismissal key as operational data.
+
+**Verified (2026-11-18):**
+- **New `tests/services/revision-recommendations.test.ts` (4 tests):**
+  - backlog counts, R and the chunk, ignoring cards due later today and suspended cards;
+  - leeches, from the tag and from recent lapses, with old lapses ignored;
+  - each coverage gap, and that it goes away;
+  - dismissal expiry, id validation and pruning.
+- tsc and eslint are clean; the full suite passes (2600/2600).
+- **`revise-next-live` passed in ar and en** with a real Arabic and a real English PDF, two real passages each, and the book marked finished.
+  - Old review history was written to the throwaway profile, because the rules need days to pass.
+  - On the Dashboard: the backlog came first ("6 overdue, 4 likely forgotten"), then the finished book with its real title, then narrators. RTL and LTR were correct.
+  - The actions opened, in turn: the deck in the review screen, the book deck dialog on that book, and the narrator dialog.
+  - A dismissal survived a reload, and the empty review screen showed the list.
+  - No renderer errors.
+  - Evidence is in `.baglib-data/key412-evidence/`.
+
+**Limits.**
+- The graph ordering (layer 2) and the AI coach (layer 3) are not built.
+- The narrator rule is global, not per chapter.
+- Arabic counts use the app's existing "N بطاقة" form without plural agreement.
+
+**Files:** src/shared/revision-recommendations.ts, src/main/services/revision-recommendations.ts, src/main/ipc/revision-recommendations.ts, src/main/index.ts, src/preload/index.ts, src/renderer/libs/revision-intent.ts, src/renderer/components/knowledge/ReviseNextList.tsx, src/renderer/components/dashboard/TodayStudyPanel.tsx, src/renderer/components/knowledge/SrsReviewScreen.tsx, src/renderer/components/knowledge/DeckManagerPanel.tsx, src/renderer/components/notes/NotesOverviewView.tsx, src/renderer/translations.ts, tests/services/revision-recommendations.test.ts, tests/ui/settings-directory-coverage.test.ts, scripts/revise-next-live/run.mjs, scripts/revise-next-live/main.cjs, docs/features/feature - Revision Recommendations (TBD-3).md, docs/data-dictionary.md, CURRENT_TASK.md.
+
 ## KEY-403 Anki add-ons and AnkiConnect API research (TBD-2) - 2026-11-18 - Agent: Claude Code
 
 **Request.** A design note on Anki add-on compatibility, native replacements and an optional AnkiConnect-compatible API. No code; the decision is the user's.

@@ -958,6 +958,11 @@ export const API = {
     authorDeck: (input: { deckName: string; categoryId?: string | null; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; people: number; added: number; updated: number; linked: number } } | { ok: false; error: string }> => ipcRenderer.invoke('person-decks:author-deck', input),
     wikipediaCard: (input: { title: string; lang: string; language: 'ar' | 'en'; deckId?: string | null }): Promise<{ ok: true; data: { deckId: string; noteId: string; created: boolean; title: string } } | { ok: false; error: string }> => ipcRenderer.invoke('person-decks:wikipedia-card', input),
   },
+  // KEY-412: "Revise next" rule-based recommendations.
+  revisionRecommendations: {
+    list: (): Promise<{ ok: true; data: import('../shared/revision-recommendations').Recommendation[] } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:list'),
+    dismiss: (id: string): Promise<{ ok: true; data: null } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:dismiss', id),
+  },
   // KEY-398: book revision — book/category decks, AI questions (accepted before saving), "time to revise".
   bookRevision: {
     bookDeck: (workId: string): Promise<{ ok: true; data: { deckId: string; added: number; created: boolean } } | { ok: false; error: string; detail?: string }> => ipcRenderer.invoke('book-revision:book-deck', workId),

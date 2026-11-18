@@ -6,6 +6,7 @@ import { CheckCircle, ArrowLeft, ArrowRight, Sparkles, RotateCw, ExternalLink, M
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
+import { ReviseNextList } from './ReviseNextList';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { MISTAKE_CATEGORIES, kindKey, mistakeKey, type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
@@ -871,6 +872,11 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
               </Button>
             }
           />
+        )}
+        {queue && !card && !busy && (
+          <div className="mx-auto mt-6 w-full max-w-2xl px-4">
+            <ReviseNextList hideWhenEmpty />
+          </div>
         )}
       </div>
     </div>
