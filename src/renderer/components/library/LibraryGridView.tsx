@@ -1,5 +1,6 @@
 'use client';
 
+import { requestBookRevision } from '../knowledge/BookRevisionHost';
 import React, { createElement, useState, useRef, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { ContextMenu } from '../ui/ContextMenu';
 import { Menu } from '../ui/Menu';
@@ -38,6 +39,8 @@ import {
   CopyCheck,
   Download,
   type LucideIcon,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { recentlyOpenedBooks, recentlyImportedBooks, type RecentReadingActivity } from '../../../shared/recent-books';
 import { isTextEntry } from '../actions/context-actions';
@@ -1062,6 +1065,9 @@ export const LibraryGridView: React.FC = () => {
     }, t);
     const items = actions.map(action => ({ id: action.id, label: action.label, icon: createElement(CARD_ACTION_ICONS[action.icon] ?? Info, { size: 14 }), danger: action.danger, disabled: !!action.disabledReason, disabledReason: action.disabledReason, onClick: action.onSelect }));
     if (book.workType === 'lecture' && book.filePath && isLectureFormat(book.digitalFormat)) items.push({ id: 'lecture-series', label: t('lectureAddToSeries'), icon: createElement(Info, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => setSeriesWork(book.id) });
+    // KEY-398: revise this book.
+    items.push({ id: 'revise-deck', label: t('bookReviseDeck'), icon: createElement(Layers, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => requestBookRevision({ mode: 'deck', workId: book.id }) });
+    items.push({ id: 'revise-questions', label: t('bookReviseQuestions'), icon: createElement(Sparkles, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => requestBookRevision({ mode: 'questions', workId: book.id, title: book.title }) });
     return items;
   };
   const exportBooks = (items: BookItem[]) => {

@@ -16,6 +16,7 @@ import * as ipcModule3 from '../database/repositories/content-fts.repository';
 import { ipcMain } from 'electron';
 import { getDatabase, getDatabasePath } from '../database/connection';
 import { WorkRepository } from '../database/repositories/work.repository';
+import { notifyIfBookFinished } from './book-revision';
 import { coverResolverService } from '../services/metadata/cover-resolver.service';
 
 function normalizeIpcError(err: unknown, fallbackMessage: string): Error {
@@ -243,7 +244,11 @@ export function setupDatabaseIPC() {
     try {
       const db = getDatabase();
       const repo = new WorkRepository(db);
-      return repo.updateReadingStatus(workId, status, progress);
+      // KEY-398: finishing a book offers to make a revision deck.
+      const before = (db.prepare('SELECT reading_status FROM work WHERE id = ?').get(workId) as { reading_status: string | null } | undefined)?.reading_status;
+      const changed = repo.updateReadingStatus(workId, status, progress);
+      if (changed) notifyIfBookFinished(workId, before, status);
+      return changed;
     } catch (err) {
       console.error('[baglib/db-ipc] Failed to update reading status:', err);
       throw normalizeIpcError(err, 'Failed to update reading status');

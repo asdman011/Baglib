@@ -188,7 +188,7 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
       {panel === 'lock' && <Lock {...modalProps} lang={lang} />}
       {panel === 'plugins' && <Plugins {...modalProps} lang={lang} />}
       {panel === 'wird' && <Wird {...modalProps} />}
-      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'rss', 'prayer', 'searchProviders', 'srsRollover'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
+      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'rss', 'prayer', 'searchProviders', 'srsRollover', 'bookFinished'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
         {panel === 'searchProviders' && <SearchProviderSettings />}
         {panel === 'srsRollover' && <SrsRolloverPreference />}
         {panel === 'advanced' && <AdvancedSettings />}
@@ -197,6 +197,7 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
         {panel === 'packs' && <PackStatus />}
         {panel === 'folder' && <div className="space-y-4"><p className="text-sm leading-loose">{t('firstRunFolderHint')}</p><p dir="auto" className="break-all">{folder}</p><Button variant="secondary" onClick={() => void chooseFolder()}>{t('settingFolder')}</Button></div>}
         {panel === 'reader' && <p className="leading-loose">{t('settingsReaderRequired')}</p>}
+        {panel === 'bookFinished' && <PreferenceToggle settingKey="revision.finishedPrompt" fallback />}
         {panel === 'honorifics' && <PreferenceToggle settingKey="notes.honorifics.autoExpand.v1" fallback />}
         {panel === 'questions' && <PreferenceToggle settingKey="knowledge.questions.enabled" fallback={false} />}
         {panel === 'rss' && <PreferenceToggle settingKey="rss.notify.v1" fallback={false} />}

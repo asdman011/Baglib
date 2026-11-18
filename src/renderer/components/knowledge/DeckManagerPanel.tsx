@@ -1,5 +1,6 @@
 'use client';
 
+import { requestBookRevision } from './BookRevisionHost';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FolderTree,
@@ -15,6 +16,7 @@ import {
   Link2,
   AlertTriangle,
   Users,
+  BookOpenCheck,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
@@ -450,6 +452,9 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
             icon={<Users className="size-3.5" />}
           >
             {t('narratorDeckOpen')}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" data-open-book-deck-btn onClick={() => requestBookRevision({ mode: 'deck' })} icon={<BookOpenCheck className="size-3.5" />}>
+            {t('bookDeckOpen')}
           </Button>
           <Button
             type="button"

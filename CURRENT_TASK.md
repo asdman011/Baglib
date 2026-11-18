@@ -1,3 +1,66 @@
+## KEY-398 Book decks, AI questions from highlights and comments, "time to revise" - 2026-11-18 - Agent: Claude Code
+
+**Request.** Book or category to deck; AI Q&A and multiple-choice questions from the user's highlights and comments, unpublished until accepted (ADR-013); a "Time to revise!" prompt when a book is finished.
+
+**What changed (no schema change):**
+- **`shared/book-questions.ts` (new):** the AI prompt, strict output parsing, and request validators.
+  - A question must name one of the given annotations (A1, A2…).
+  - Text is bounded; a choice question needs 3-5 distinct options and a valid index; duplicates are dropped.
+  - The quote and page always come from the database, never from the AI.
+- **`services/book-revision.ts` (new):**
+  - `bookDeck` follows the book's highlights and comments through KEY-393 live sync, and reuses the book's deck if there is one.
+  - `categoryDeck` makes "Category::Title" sub-decks for the books whose primary category it is (up to 200).
+  - `questionSources` offers up to 20 annotations that have no accepted question yet.
+  - `generate` returns suggestions only; nothing is saved.
+  - `accept` saves the accepted questions:
+    - Q&A becomes `stock-basic`; multiple choice becomes `stock-multiple-choice` with a `{options, correctIndex}` payload.
+    - The back quotes the passage verbatim, with the book title and page, and the label "AI-generated question — check it against the passage".
+    - The notes are tagged `ai-generated`, with `source_ref` `ai-question:<work>/<annotation>/<n>`.
+  - `finishesBook` detects the transition to finished.
+- **`ipc/book-revision.ts` (new):**
+  - Uses the same frame authorisation as the study assistant.
+  - The AI goes through `AIProviderService` with the KEY-383/385 consent rule: a remote provider needs `allowRemote`; a local Ollama does not.
+  - `notifyIfBookFinished` is called from `library:update-reading-status` and from a single-book bulk update. It sends `book-revision:finished` unless `revision.finishedPrompt` is off.
+  - Wired in `main/index.ts` and the preload (`bookRevision.*`).
+- **UI:**
+  - `BookRevisionHost.tsx` (new, mounted in `AppLayout`):
+    - the "Time to revise!" prompt, with Make the deck, Not now and Don't ask again;
+    - the book/category deck dialog;
+    - the `baglib:book-revision` event.
+  - `BookQuestionsDialog.tsx` (new):
+    - the consent checkbox and the question kinds;
+    - each suggestion carries an AI-generated badge, Accept and Reject buttons, and the verbatim quote with its page;
+    - "Add accepted questions" saves only what was accepted.
+  - The library book menu gets "Make a revision deck from this book" and "Suggest revision questions (AI)".
+  - The deck manager gets a "From a book or category" button.
+  - Settings → Notes gets "Revise after finishing a book", so the prompt can be switched back on.
+  - All strings are in ar and en.
+
+**Verified (2026-11-18):**
+- Full suite: 2592/2592 pass. tsc and eslint are clean.
+- New `tests/services/book-revision.test.ts` (5 tests):
+  - AI output filtering;
+  - the book deck and its reuse;
+  - category sub-decks;
+  - generate (nothing saved) then accept (verbatim quote, page, AI label, choice payload, tag; another book's annotation refused);
+  - the finish trigger and the validators.
+- `book-revision-live` passed in ar and en, with a real Arabic and a real English text-layer PDF from `tests/real-files`. The highlights were real sentences read from the PDF text layer, with their real pages. In each language:
+  - finishing the book showed the prompt;
+  - the deck held 2 cards;
+  - a fake local Ollama suggested 3 questions;
+  - accepting 2 and rejecting 1 saved exactly 2, labelled and with the page;
+  - the deck-manager dialog reused the same deck;
+  - "Don't ask again" stopped the prompt;
+  - no renderer errors.
+
+**Limitations:**
+- Rejected suggestions are not remembered (nothing is stored before acceptance), so they can be suggested again next time.
+- The category deck uses each book's primary category only.
+- New highlights are offered on the next "Suggest questions" run. There is no automatic AI call, which would send data without the user asking.
+- The Arabic test PDF's text layer uses presentation forms in visual order, and that text is quoted as stored.
+
+**Files:** scripts/book-revision-live/run.mjs, scripts/book-revision-live/main.cjs, src/main/index.ts, src/main/ipc/book-revision.ts, src/main/ipc/database.ts, src/main/ipc/library-views.ts, src/main/services/book-revision.ts, src/preload/index.ts, src/renderer/components/knowledge/BookQuestionsDialog.tsx, src/renderer/components/knowledge/BookRevisionHost.tsx, src/renderer/components/knowledge/DeckManagerPanel.tsx, src/renderer/components/layout/AppLayout.tsx, src/renderer/components/layout/SettingsDirectory.tsx, src/renderer/components/layout/settings-directory-model.ts, src/renderer/components/library/LibraryGridView.tsx, src/renderer/translations.ts, src/shared/book-questions.ts, tests/services/book-revision.test.ts, docs/data-dictionary.md, CURRENT_TASK.md.
+
 ## KEY-397 Poetry decks, daily verse chunking and progressive context cloze - 2026-11-18 - Agent: Claude Code
 
 **Request.** Revision decks from al-Bayan: right-click a poem or a poet; whole poem, or verse by verse with a progressive context cloze and a daily quota of new verses.
@@ -27,6 +90,8 @@
   - the poet's whole-poem deck held 443 poems;
   - no renderer errors.
 - `sunnah-decks-live` and `deck-sync-live` were re-run and passed in ar and en.
+
+**Git/Jira:** commit 532b1a90 pushed to origin/feature/library-domain; KEY-397 commented and moved to Done (2026-11-18).
 
 **Limitations:**
 - Two decks following the same poem share one note, so a different prompt or chunk in the second deck updates the shared note's option fields.

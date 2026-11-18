@@ -29,6 +29,7 @@ import { SettingsDirectory } from './SettingsDirectory';
 import { useAppCloseBridge } from '../../utils/close-guard';
 import { StudyDeepLinkBridge } from '../notes/StudyDeepLinkBridge';
 import { StartupSplash } from '../StartupSplash';
+import { BookRevisionHost } from '../knowledge/BookRevisionHost';
 
 // Lazy-loaded secondary views to dramatically accelerate initial application boot time (<1.5s cold compilation)
 const ResearchEditorView = React.lazy(() => import('../research/ResearchEditorView').then(module => ({ default: module.ResearchEditorView })));
@@ -270,6 +271,7 @@ const AppLayoutContent: React.FC = () => {
       <ActionOverlays />
       <SendToManuscriptDialog />
       <GlobalAssistant />
+      <BookRevisionHost />
       <KnowledgeCardLayer />
 
       {/* Global Book Discovery & Search Hub (Story 11) */}

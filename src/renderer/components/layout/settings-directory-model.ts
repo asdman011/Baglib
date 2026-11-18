@@ -37,6 +37,7 @@ export const SETTINGS_DIRECTORY: readonly SettingEntry[] = [
   { id: 'plugins', group: 'reader', label: 'settingPlugins', description: 'settingPluginsDescription', action: 'plugins', keys: ["reader_plugins:state"] },
   { id: 'notes', group: 'notes', label: 'settingNotes', description: 'settingNotesDescription', action: 'notes', keys: ["baglib-knowledge-card-hover", "baglib.wordLayout.v1", "baglib:sunnah:isnad-scope"] },
   { id: 'srsRollover', group: 'notes', label: 'settingSrsRollover', description: 'settingSrsRolloverDescription', action: 'srsRollover', keys: ["srs.rolloverHour"] },
+  { id: 'bookFinished', group: 'notes', label: 'settingBookFinished', description: 'settingBookFinishedDescription', action: 'bookFinished', keys: ['revision.finishedPrompt'] },
   { id: 'honorifics', group: 'notes', label: 'settingHonorifics', description: 'settingHonorificsDescription', action: 'honorifics', keys: ["notes.honorifics.autoExpand.v1"] },
   { id: 'questions', group: 'notes', label: 'settingQuestions', description: 'settingQuestionsDescription', action: 'questions', keys: ["knowledge.questions.enabled"] },
   { id: 'quran', group: 'islamic', label: 'settingProfile', description: 'settingProfileDescription', action: 'quran', keys: [] },

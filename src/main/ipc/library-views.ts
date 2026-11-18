@@ -1,3 +1,4 @@
+import { notifyIfBookFinished } from './book-revision';
 import { errorMessage } from '../../shared/errors';
 /**
  * Baglib — Library Views & Bulk Operations IPC Handlers
@@ -89,7 +90,12 @@ export function setupLibraryViewsIPC() {
     try {
       const db = getDatabase();
       const repo = new SqliteWorkRepository(db);
+      // KEY-398: a bulk change that finishes one book offers a revision deck (not for many at once).
+      const before = Array.isArray(input?.workIds) && input.workIds.length === 1
+        ? (db.prepare('SELECT reading_status FROM work WHERE id = ?').get(input.workIds[0]) as { reading_status: string | null } | undefined)?.reading_status
+        : undefined;
       const affected = repo.bulkUpdateReadingStatus(input.workIds, input.readingStatus, input.readingProgress);
+      if (affected === 1 && input.workIds.length === 1) notifyIfBookFinished(input.workIds[0], before, input.readingStatus);
       return { success: true, affectedCount: affected };
     } catch (err: unknown) {
       console.error('[baglib/library-views-ipc] Failed to bulk update reading status:', err);

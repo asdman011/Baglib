@@ -953,6 +953,20 @@ export const API = {
     getDecks: (noteId: string) => ipcRenderer.invoke('card-notes:get-decks', noteId),
     linkDeck: (noteId: string, deckId: string) => ipcRenderer.invoke('card-notes:link-deck', noteId, deckId),
   } satisfies import('../shared/types/card-notes').CardNotesAPI,
+  // KEY-398: book revision — book/category decks, AI questions (accepted before saving), "time to revise".
+  bookRevision: {
+    bookDeck: (workId: string): Promise<{ ok: true; data: { deckId: string; added: number; created: boolean } } | { ok: false; error: string; detail?: string }> => ipcRenderer.invoke('book-revision:book-deck', workId),
+    categoryDeck: (categoryId: string, language: 'ar' | 'en'): Promise<{ ok: true; data: { deckId: string; books: number; added: number } } | { ok: false; error: string; detail?: string }> => ipcRenderer.invoke('book-revision:category-deck', categoryId, language),
+    sources: (workId: string): Promise<{ ok: true; data: { count: number } } | { ok: false; error: string }> => ipcRenderer.invoke('book-revision:sources', workId),
+    generate: (input: { workId: string; language: 'ar' | 'en'; allowRemote: boolean; kinds: Array<'qa' | 'choice'> }): Promise<{ ok: true; data: { suggestions: import('../shared/book-questions').BookQuestionSuggestion[]; sources: number } } | { ok: false; error: string; detail?: string }> => ipcRenderer.invoke('book-revision:generate', input),
+    accept: (input: { workId: string; deckId?: string | null; language: 'ar' | 'en'; questions: import('../shared/book-questions').AcceptedQuestion[] }): Promise<{ ok: true; data: { deckId: string; added: number } } | { ok: false; error: string; detail?: string }> => ipcRenderer.invoke('book-revision:accept', input),
+    finishedPrompt: (value?: boolean): Promise<boolean> => ipcRenderer.invoke('book-revision:finished-prompt', value),
+    onBookFinished: (callback: (event: { workId: string; title: string }) => void): (() => void) => {
+      const listener = (_event: unknown, payload: { workId: string; title: string }) => callback(payload);
+      ipcRenderer.on('book-revision:finished', listener);
+      return () => ipcRenderer.removeListener('book-revision:finished', listener);
+    },
+  },
   deckSync: {
     list: (deckId?: string): Promise<import('../main/services/deck-sync').DeckSubscription[]> => ipcRenderer.invoke('deck-sync:list', deckId),
     subscribe: (input: { deckId: string; sourceKind: 'book_highlights' | 'book_comments' | 'sunnah_book' | 'sunnah_bab' | 'hadith_collection' | 'poem' | 'poet'; sourceRef: string; newItems: 'silent' | 'toast'; cards?: Array<'full' | 'matn' | 'isnad'>; noteTypeId?: 'stock-context-cloze' | 'stock-poem-whole'; prompt?: 'ajuz' | 'verse'; chunk?: number }): Promise<{ subscription: import('../main/services/deck-sync').DeckSubscription; result: import('../main/services/deck-sync').SyncResult }> => ipcRenderer.invoke('deck-sync:subscribe', input),
