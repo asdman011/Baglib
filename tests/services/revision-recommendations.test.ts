@@ -96,7 +96,7 @@ test('coverage gaps: finished book without a deck, highlights without questions,
 
   // Once a narrator card exists, or a new card was introduced recently, those items go away.
   db.prepare(`UPDATE card_detail SET source_ref = 'narrator:42' WHERE knowledge_id = 'h0'`).run();
-  db.prepare(`INSERT INTO srs_review_log (id, knowledge_id, reviewed_at, rating, state_before) VALUES ('rn', 'n0', '2026-11-17T00:00:00.000Z', 3, 'new')`).run();
+  db.prepare(`INSERT INTO srs_review_log (id, knowledge_id, reviewed_at, rating, state_before) VALUES ('rn', 'n0', '2026-11-17T00:00:00.000Z', 3, '{"version":1,"before":{"state":0,"reps":0},"after":{"state":1,"reps":1}}')`).run();
   const kinds = service.list().map(i => i.kind);
   assert.ok(!kinds.includes('narrators'));
   assert.ok(!kinds.includes('new-waiting'));

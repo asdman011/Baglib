@@ -205,7 +205,10 @@ export class RevisionRecommendationService {
          WHERE d.kind = 'normal' AND d.created_at < ?
            AND NOT EXISTS (
              SELECT 1 FROM deck_card dc2 JOIN srs_review_log r ON r.knowledge_id = dc2.knowledge_id
-             WHERE dc2.deck_id = d.id AND r.state_before = 'new' AND r.reviewed_at >= ?
+             WHERE dc2.deck_id = d.id AND r.reviewed_at >= ?
+               AND (r.state_before = 'new'
+                 -- What srs.ts really writes: {"version":1,"before":<ts-fsrs Card>,…}; State.New is 0.
+                 OR (json_valid(r.state_before) AND json_extract(r.state_before, '$.before.state') = 0))
            )
          GROUP BY d.id ORDER BY n DESC`
       )

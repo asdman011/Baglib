@@ -1,3 +1,13 @@
+## KEY-412 fix: "New cards waiting" never saw real introductions - 2026-11-18 - Agent: Claude Code
+
+**Found while building KEY-392.** The rule checked `srs_review_log.state_before = 'new'`, but `srs.ts` writes `state_before` as JSON (`{"version":1,"before":<ts-fsrs Card>,…}`). So a deck whose new cards were introduced yesterday was still suggested as "new cards waiting". The KEY-412 test seeded the string `'new'`, which hid the bug.
+
+**Fix:** the rule also matches `json_extract(state_before, '$.before.state') = 0` (ts-fsrs State.New). The test now seeds the real JSON shape.
+
+**Verified:** `tests/services/revision-recommendations.test.ts` 4/4; eslint clean.
+
+**Files:** src/main/services/revision-recommendations.ts, tests/services/revision-recommendations.test.ts, CURRENT_TASK.md.
+
 ## KEY-413 Arabic Lexicons pack: 11 dictionaries from a local file - 2026-11-18 - Agents: Antigravity (gemini-4-argon-medium, stages 1-4) and Claude Code (review, fixes, verification)
 
 **Request.** The user supplied `repos/arabic_lexicons-main.zip` (github.com/wizsk/arabic_lexicons): "use the ones in here … they are 11 dictionaries". Antigravity built stages 1-4, then ran out of quota (it resets in about 161 h). By the user's instruction ("after the argon finishes you handle any remaining tasks"), Claude Code reviewed it, fixed it and verified it in place.
