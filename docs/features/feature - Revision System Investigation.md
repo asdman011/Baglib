@@ -239,6 +239,8 @@ Two options, both within reach:
 
 They can be layered (1 as the base, 2 for ranking, 3 on demand), but the choice is the user's.
 
+The full comparison (data needed, UI placement, privacy, cost) is in `feature - Revision Recommendations (TBD-3).md` (KEY-404, 2026-11-18).
+
 ### TBD-4: a long-term policy on Quran memorization
 - **Proposed boundary text:** "BagLib does not provide Quran hifz features (memorising the script or verses), because that requires instruction from qualified scholars. Quranic roots, vocabulary and tafsir highlights are in scope."
 - **Conflict found, which needs the user's decision.** These shipped features already serve hifz-style revision:

@@ -1,3 +1,18 @@
+## KEY-404 Revision recommendations research (TBD-3) - 2026-11-18 - Agent: Claude Code
+
+**Request.** A research and design comparison of three ways BagLib could suggest what to revise next. No code; the decision is the user's.
+
+**Done:** `docs/features/feature - Revision Recommendations (TBD-3).md` (new). It covers:
+- the signals that already exist (FSRS state, source refs, subscriptions, reading status, study-note links, planner and pathways, AI consent);
+- for each approach (rules, graph, AI coach): the data it needs, UI placement, privacy, cost and limits;
+- a comparison table, a suggested layering (marked as a suggestion only) and open questions.
+
+The investigation doc's TBD-3 section links to it.
+
+**Waiting on the user:** the choice of approach. Jira: KEY-404 commented and moved to In Review.
+
+**Files:** docs/features/feature - Revision Recommendations (TBD-3).md, docs/features/feature - Revision System Investigation.md, CURRENT_TASK.md.
+
 ## KEY-411 Filename parser: stray "ال" after an Arabic honorific - 2026-11-18 - Agent: Claude Code
 
 **Request.** A bug found during the KEY-401 live run. Importing `…فروض الاعيان للشيخ عبدالله عزام.pdf` linked the author "العبدالله عزام".
