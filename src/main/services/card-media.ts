@@ -22,9 +22,17 @@ const MIME: Record<string, string> = {
   gif: 'image/gif',
   webp: 'image/webp',
   bmp: 'image/bmp',
+  // KEY-392: Anki's collection.media maps one to one (ADR-017 3.12), so audio and other files are kept too.
+  mp3: 'audio/mpeg',
+  ogg: 'audio/ogg',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  flac: 'audio/flac',
+  webm: 'audio/webm',
+  bin: 'application/octet-stream',
 };
 
-export const CARD_MEDIA_NAME = /^[a-f0-9]{40}\.(png|jpg|gif|webp|bmp)$/u;
+export const CARD_MEDIA_NAME = /^[a-f0-9]{40}\.(png|jpg|gif|webp|bmp|mp3|ogg|wav|m4a|flac|webm|bin)$/u;
 
 /** Recognises the image type from its first bytes; the file name is never trusted. */
 export function sniffImageType(bytes: Uint8Array): keyof typeof MIME | null {
@@ -35,6 +43,25 @@ export function sniffImageType(bytes: Uint8Array): keyof typeof MIME | null {
   if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'webp';
   if (b.length >= 2 && b[0] === 0x42 && b[1] === 0x4d) return 'bmp';
   return null;
+}
+
+/**
+ * KEY-392: the type of any card-media file, from its first bytes: the image types above, common
+ * audio formats, and `bin` for anything else (fonts, SVG, video), so an Anki round-trip loses nothing.
+ */
+export function sniffMediaType(bytes: Uint8Array): keyof typeof MIME {
+  const image = sniffImageType(bytes);
+  if (image) return image;
+  const b = bytes;
+  const ascii = (at: number, text: string) => b.length >= at + text.length && [...text].every((ch, i) => b[at + i] === ch.charCodeAt(0));
+  if (ascii(0, 'ID3')) return 'mp3';
+  if (b.length >= 2 && b[0] === 0xff && (b[1]! & 0xe0) === 0xe0) return 'mp3';
+  if (ascii(0, 'OggS')) return 'ogg';
+  if (ascii(0, 'RIFF') && ascii(8, 'WAVE')) return 'wav';
+  if (ascii(0, 'fLaC')) return 'flac';
+  if (ascii(4, 'ftyp')) return 'm4a';
+  if (b.length >= 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'webm';
+  return 'bin';
 }
 
 export interface StoredCardMedia {
@@ -101,13 +128,30 @@ export class CardMediaStore {
   /** Restores one file from a backup. Names are content hashes, so an existing file is already right. */
   restore(name: string, bytes: Uint8Array): boolean {
     if (!CARD_MEDIA_NAME.test(name)) return false;
-    const type = sniffImageType(bytes);
-    if (!type || !name.endsWith(`.${type}`)) return false;
+    if (!name.endsWith(`.${sniffMediaType(bytes)}`)) return false;
     if (crypto.createHash('sha1').update(bytes).digest('hex') !== name.slice(0, 40)) return false;
     this.ensureDir();
     const target = path.join(this.directory, name);
     if (!fs.existsSync(target)) fs.writeFileSync(target, bytes);
     return true;
+  }
+
+  /**
+   * KEY-392: stores any media file (Anki import), named by content hash like the images.
+   * Returns the stored name.
+   */
+  saveAny(bytes: Uint8Array): string {
+    if (!(bytes instanceof Uint8Array) || bytes.length === 0) throw new Error('card-media-empty');
+    if (bytes.length > MAX_CARD_MEDIA_BYTES) throw new Error('card-media-too-large');
+    const name = `${crypto.createHash('sha1').update(bytes).digest('hex')}.${sniffMediaType(bytes)}`;
+    this.ensureDir();
+    const target = path.join(this.directory, name);
+    if (!fs.existsSync(target)) {
+      const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
+      fs.writeFileSync(temp, bytes);
+      fs.renameSync(temp, target);
+    }
+    return name;
   }
 
   private toDataUrl(name: string, bytes: Uint8Array): string {

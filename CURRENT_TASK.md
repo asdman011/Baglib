@@ -1,3 +1,83 @@
+## KEY-392 Lossless .apkg import and export - 2026-11-18 - Agent: Claude Code
+
+**Request.** Revision Task 1E (ADR-017). The user approved the `fzstd` dependency on 2026-11-18 ("i approve").
+
+**Dependency:** `fzstd` 0.1.1, pinned exactly. It is MIT-licensed and 65 KB unpacked, by the author of `fflate`, and only decompresses. Recorded in `package.json` and `package-lock.json`.
+
+**What changed:**
+- **`services/anki/protobuf.ts`:** a minimal wire-format reader for Anki's settings blobs.
+  - 64-bit Anki ids (field and template ids) travel as exact `__i64:` markers and are written back as bare integers (`parseAnkiJson` / `stringifyAnkiJson`, using V8's JSON.parse source access).
+- **`services/anki/apkg-reader.ts`:** reads `.apkg` and `.colpkg` in all three layouts.
+  - **Latest:** `collection.anki21b` (zstd, schema 18) plus the protobuf media list and zstd media.
+  - **Legacy:** `collection.anki21` and `collection.anki2`.
+  - Schema-18 note types, fields, templates, decks and deck options are turned into Anki's own schema-11 JSON (mirroring rslib's conversions).
+  - Anki's `unicase` collation can't be registered in better-sqlite3, so those tables are read with `NOT INDEXED`.
+- **`services/anki/apkg-import.ts`:** every Anki item gets its ADR-017 home.
+  - **Note types, deck options, decks, notes:** card_note_type/field/template; srs_preset; the deck tree from `A::B`; card_note with Anki's GUID.
+  - **Cards:** knowledge, card_detail (note_id, ord, rendered front and back), deck_card and srs_state.
+    - Due days come from `crt`; learning cards use the epoch or a day number.
+    - FSRS S/D/dr/lrt come from `cards.data`; SM-2 cards use their interval as stability.
+    - Suspended cards stay suspended, and buried cards stay buried until the next day.
+  - **History:** srs_review_log with `anki_id` unique and Anki's type in `state_before`; reset markers have rating 0. History of deleted cards goes to `anki_orphan_revlog`.
+  - **Media:** files go to `card-media/<sha1>`, fields are rewritten keeping their quoting, and the original names are kept in the note's `anki_extra.media`.
+  - **Tags** go to every card of the note.
+  - **Re-import** matches by GUID (policies: if-newer, always, never), with an optional note-type merge.
+- **`services/anki/apkg-export.ts`:** writes Legacy2 (`collection.anki21`, schema 11).
+  - It starts from the stored Anki JSON, so unused Anki settings survive.
+  - Cards whose schedule hasn't changed since import (checked by a fingerprint) keep Anki's exact type/queue/due/ivl/factor/left/data; changed cards are translated from BagLib's FSRS state.
+  - Each Anki table gets its own id allocator.
+  - Media gets its original names back.
+  - A whole-collection export also writes the orphan history.
+  - A card shared by several decks is written into each, with a GUID derived from the note GUID and the deck (ADR-017 3.8).
+- **Migration 037:** `anki_orphan_revlog`, as approved in ADR-017; KEY-389 left it to this task.
+- **`card-media.ts`:** also stores audio and other files (`sniffMediaType`, `saveAny`), named by SHA-1 as before; ADR-017 3.12 planned for `collection.media` to map one to one.
+- **UI and wiring:**
+  - `ipc/anki-package.ts` (frame-authorized; file dialogs in main);
+  - preload `ankiPackage.import/export`;
+  - `AnkiPackageDialog.tsx`: import with the re-import policy and merge option; export with or without scheduling and media;
+  - in the deck manager, a toolbar button plus a per-deck `.apkg` export button;
+  - ar and en strings.
+- **`scripts/anki-roundtrip/check.ts`:** a losslessness checker. It imports into a throwaway database, exports, and compares item by item. It can take an Anki media folder, read only.
+
+**Verified (2026-11-18):**
+- `tests/services/anki-package.test.ts`: 8/8.
+  - protobuf and int64 handling;
+  - a legacy package with media;
+  - export, then re-import, lossless and with no duplicates;
+  - a modern zstd package;
+  - re-import policies, and a changed card exported from BagLib's state;
+  - a shared card written into two decks;
+  - media name rewriting, including names with spaces.
+- tsc 0; eslint clean on all KEY-392 files; settings coverage updated.
+- **The real collection** (a copy of the user's newest Anki backup, 2026-11-18; the profile was only read):
+  - 3,061 notes, 6,523 cards, 46,622 history rows (31,732 for deleted cards), 44 decks, 27 note types, 5 presets;
+  - `check.ts` result: **lossless: true, 0 problems**;
+  - every revlog row identical, every card's ids, due, ivl, factor, left, flags and FSRS memory identical; notes, fields, tags and note types identical;
+  - import 0.65-0.9 s, export 1.4-1.6 s, re-import adds nothing.
+- **With the 2,066 real media files** the notes refer to (read from `collection.media`): lossless, with all 2,066 stored and exported under their original names (a 61.8 MB `.apkg`).
+- **`scripts/anki-package-live` passed in ar and en:**
+  - the dialog is RTL/LTR;
+  - the real backup copy imports through IPC in 1.0-1.2 s;
+  - the four Arabic hadith decks appear with live counts;
+  - "74 - كتاب الأشربة" is studied in the review screen;
+  - that deck exports to a valid `.apkg` (31 notes, 261 history rows);
+  - re-importing it adds nothing;
+  - the per-deck export dialog works;
+  - no renderer errors.
+  - Evidence: `.baglib-data/key392-evidence/`.
+
+**Limits / notes:**
+- The user's "حديث" note type has its own script that wraps digits in `<span class="number">` on `DOMContentLoaded`. In BagLib's per-card frame it runs, and it breaks inline styles that contain digits (`rgb(0, 109, 152)`). Anki's reviewer probably never fires that event. This is a template matter for the user, not an import bug.
+- Imports run on the main thread. 0.7-3 s for this collection; a much larger one would pause the UI briefly.
+- Filtered decks come in as BagLib filtered decks without a search; Anki's search terms are kept in `anki_extra` (the user has none).
+- BagLib's own note kinds (`choice`, `context_cloze`) export as normal Anki note types.
+- The final check, importing the exported `.apkg` into Anki itself, is the user's: Anki can't be scripted here.
+
+**Files:** package.json, package-lock.json, src/main/services/anki/protobuf.ts, src/main/services/anki/apkg-reader.ts, src/main/services/anki/apkg-import.ts, src/main/services/anki/apkg-export.ts, src/main/ipc/anki-package.ts, src/main/index.ts, src/preload/index.ts, src/main/services/card-media.ts, src/main/database/migrations/037_anki_orphan_revlog.ts, src/main/database/migrations/index.ts, src/renderer/components/knowledge/AnkiPackageDialog.tsx, src/renderer/components/knowledge/DeckManagerPanel.tsx, src/renderer/translations.ts, tests/services/anki-package.test.ts, tests/ui/settings-directory-coverage.test.ts, scripts/anki-roundtrip/check.ts, scripts/anki-package-live/run.mjs, scripts/anki-package-live/main.cjs, docs/data-dictionary.md, CURRENT_TASK.md.
+
+
+**Commit:** see the KEY-392 commit on origin/feature/library-domain (full suite 2,620/2,620 on 2026-11-18).
+
 ## KEY-412 fix: "New cards waiting" never saw real introductions - 2026-11-18 - Agent: Claude Code
 
 **Found while building KEY-392.** The rule checked `srs_review_log.state_before = 'new'`, but `srs.ts` writes `state_before` as JSON (`{"version":1,"before":<ts-fsrs Card>,…}`). So a deck whose new cards were introduced yesterday was still suggested as "new cards waiting". The KEY-412 test seeded the string `'new'`, which hid the bug.

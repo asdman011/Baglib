@@ -39,6 +39,7 @@
     "electron-serve": "^3.0.1",
     "fflate": "^0.8.3",
     "foliate-js": "^1.0.1",
+    "fzstd": "0.1.1",
     "highlight.js": "^11.12.0",
     "js-mdict": "^7.0.0",
     "linkedom": "^0.18.13",

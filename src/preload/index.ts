@@ -980,6 +980,13 @@ export const API = {
     tafsirDeck: (input: { deckName: string; workId?: string | null; includeQuranAnnotations?: boolean; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; total: number; added: number; updated: number; linked: number } } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:tafsir-deck', input),
   },
   // KEY-412: "Revise next" rule-based recommendations.
+  // KEY-392: lossless Anki package (.apkg/.colpkg) import and .apkg export.
+  ankiPackage: {
+    import: (input?: { filePath?: string; policy?: 'if-newer' | 'always' | 'never'; mergeNoteTypes?: boolean; language?: 'ar' | 'en' }): Promise<{ ok: true; data: import('../main/services/anki/apkg-import').AnkiImportReport | null } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('anki-package:import', input ?? {}),
+    export: (input?: { filePath?: string; deckIds?: string[]; includeScheduling?: boolean; includeMedia?: boolean; defaultName?: string; language?: 'ar' | 'en' }): Promise<{ ok: true; data: import('../main/services/anki/apkg-export').AnkiExportReport | null } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('anki-package:export', input ?? {}),
+  },
   revisionRecommendations: {
     list: (): Promise<{ ok: true; data: import('../shared/revision-recommendations').Recommendation[] } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:list'),
     dismiss: (id: string): Promise<{ ok: true; data: null } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:dismiss', id),

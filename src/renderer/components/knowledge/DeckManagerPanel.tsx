@@ -21,7 +21,9 @@ import {
   BookOpenCheck,
   UserRound,
   BookA,
+  Package,
 } from 'lucide-react';
+import { AnkiPackageDialog } from './AnkiPackageDialog';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { REVISION_INTENT_EVENT, takeRevisionIntent } from '../../libs/revision-intent';
@@ -60,6 +62,8 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
   }, []);
   const [personDialogOpen, setPersonDialogOpen] = useState(false);
   const [lexiconDialogOpen, setLexiconDialogOpen] = useState(false);
+  // KEY-392: null = closed; { deck: null } = import or export everything; { deck } = export that deck.
+  const [ankiDialog, setAnkiDialog] = useState<{ deck: { id: string; name: string } | null } | null>(null);
   const [pendingSync, setPendingSync] = useState({ changed: 0, orphaned: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -346,6 +350,19 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
               />
             )}
 
+            {node.kind === 'normal' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                data-deck-export-apkg={node.id}
+                onClick={() => setAnkiDialog({ deck: { id: node.id, name: node.name } })}
+                title={t('ankiPkgExportDeckButton')}
+                aria-label={t('ankiPkgExportDeckButton')}
+                icon={<Package className="size-3.5" />}
+              />
+            )}
+
             {!isBuiltIn && (
               <>
                 <Button
@@ -476,6 +493,9 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
           <Button type="button" variant="secondary" size="sm" data-open-lexicon-deck-btn onClick={() => setLexiconDialogOpen(true)} icon={<BookA className="size-3.5" />}>
             {t('lexiconDeckOpen')}
           </Button>
+          <Button type="button" variant="secondary" size="sm" data-open-anki-package onClick={() => setAnkiDialog({ deck: null })} icon={<Package className="size-3.5" />}>
+            {t('ankiPkgOpen')}
+          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -559,6 +579,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
       <SyncReviewModal open={syncReviewOpen} onClose={() => setSyncReviewOpen(false)} onChanged={() => void refresh()} />
       {personDialogOpen && <PersonDeckDialog onClose={() => setPersonDialogOpen(false)} />}
       {lexiconDialogOpen && <LexiconDeckDialog onClose={() => setLexiconDialogOpen(false)} />}
+      {ankiDialog && <AnkiPackageDialog deck={ankiDialog.deck} onClose={() => setAnkiDialog(null)} />}
       {narratorDialogOpen && <SunnahDeckDialog open source={null} initialMode="narrator" onClose={() => setNarratorDialogOpen(false)} />}
 
       <DeckOptionsModal
