@@ -25,6 +25,7 @@ type Action =
   | { action: 'topics'; pack?: string; ids: number[] }
   | { action: 'frequency'; query: QuranFrequencyQuery }
   | { action: 'frequency-places'; family: QuranFrequencyFamily; text: string }
+  | { action: 'root-words'; text: string; limit?: number }
   | { action: 'structure' }
   | { action: 'similar-ayahs'; pack?: string; surah: number; ayah: number };
 export type QuranReaderRequest = Action & { id: number; root: string; packs: QuranPack[] };

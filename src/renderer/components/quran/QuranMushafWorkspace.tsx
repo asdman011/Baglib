@@ -33,6 +33,99 @@ import { groupThemeLabels } from './quran-theme-labels';
 import { quranStudyReferences } from '../../../shared/quran-study-scope';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
 
+function QuranWordQuickAddButton({ word, meaning, reference, lang, t }: { word: string; meaning: string; reference: string; lang: 'ar' | 'en'; t: Props['t'] }) {
+  const [state, setState] = useState<{ busy: boolean; message: string | null; failed?: boolean }>({ busy: false, message: null });
+  const add = async () => {
+    setState({ busy: true, message: null });
+    try {
+      const r = await window.electronAPI.lexiconDecks.quickAdd({
+        word,
+        meaning,
+        source: reference,
+        kind: 'quran-word',
+        deckId: null,
+        reversed: true,
+        language: lang,
+      });
+      if (!r.ok) throw new Error(r.error);
+      setState({
+        busy: false,
+        message: t(r.data.duplicate ? 'quickAddAlreadyInDeck' : 'quickAddSavedToDeck', { deck: r.data.deckName }),
+      });
+      window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
+    } catch {
+      setState({ busy: false, failed: true, message: t('lexiconDeckFailed') });
+    }
+  };
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <button
+        type="button"
+        data-quran-word-quick-add={`${reference}:${word}`}
+        disabled={state.busy}
+        onClick={() => void add()}
+        className="rounded border border-subtle px-2 py-0.5 text-xs font-semibold hover:bg-canvas disabled:opacity-50"
+      >
+        {t('quickAddToRevision')}
+      </button>
+      {state.message && (
+        <span
+          role={state.failed ? 'alert' : 'status'}
+          data-quran-word-quick-add-status={`${reference}:${word}`}
+          className={`text-xs ${state.failed ? 'text-danger' : 'text-emerald-600 dark:text-emerald-400'}`}
+        >
+          {state.message}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function QuranMakeRootCardButton({ root, lang, t }: { root: string; lang: 'ar' | 'en'; t: Props['t'] }) {
+  const [state, setState] = useState<{ busy: boolean; message: string | null; failed?: boolean }>({ busy: false, message: null });
+  const make = async () => {
+    setState({ busy: true, message: null });
+    try {
+      const r = await window.electronAPI.lexiconDecks.rootCard({
+        root,
+        deckId: null,
+        deckName: null,
+        language: lang,
+      });
+      if (!r.ok) throw new Error(r.error);
+      setState({
+        busy: false,
+        message: t(r.data.created ? 'quranRootCardCreated' : 'quranRootCardUpdated', { root: r.data.dashedRoot }),
+      });
+      window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
+    } catch {
+      setState({ busy: false, failed: true, message: t('lexiconDeckFailed') });
+    }
+  };
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      <button
+        type="button"
+        data-quran-make-root-card={root}
+        disabled={state.busy}
+        onClick={() => void make()}
+        className="rounded border border-subtle px-2 py-0.5 text-xs font-semibold hover:bg-canvas disabled:opacity-50"
+      >
+        {t('quranMakeRootCard')}
+      </button>
+      {state.message && (
+        <span
+          role={state.failed ? 'alert' : 'status'}
+          data-quran-make-root-card-status={root}
+          className={`text-xs ${state.failed ? 'text-danger' : 'text-emerald-600 dark:text-emerald-400'}`}
+        >
+          {state.message}
+        </span>
+      )}
+    </div>
+  );
+}
+
 type Reference = { surah: number; ayah: number; wordText?: string; wholePage?: boolean };
 type Tool = 'translation' | 'meanings' | 'tafsir' | 'topics' | 'themes' | 'transliteration' | 'similar' | 'morphology' | 'mutashabihat' | 'explore';
 type WindowState = { id: number; tool: Tool; reference: Reference; side: 'left' | 'right' };
@@ -115,7 +208,7 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
           const result = await api.read({ script: selection.script, surah: location.surah, from: location.ayah, meanings: selection.meanings });
           if (!result.ok) throw new Error(result.error);
           const words = result.data.ayahs.find(value => value.number === location.ayah)?.words.filter(word => !word.marker && (!wordPosition || word.position === wordPosition)) || [];
-          body = <dl data-quran-word-meanings>{words.map(word => <div data-quran-word-location={`${location.surah}:${location.ayah}:${word.position}`} key={word.position} className="flex flex-wrap items-baseline justify-between gap-3 border-b border-subtle py-1"><dt dir="rtl" lang="ar" className="font-reading text-xl leading-loose">{word.text}</dt><dd dir={word.meaning || lang === 'en' ? 'ltr' : 'rtl'} lang={word.meaning ? 'en' : lang} className="text-sm text-end">{word.meaning || <span data-quran-word-missing>{t('quranWordNoAnnotation')} <bdi>({location.surah}:{location.ayah}:{word.position})</bdi></span>}</dd></div>)}</dl>;
+          body = <dl data-quran-word-meanings>{words.map(word => <div data-quran-word-location={`${location.surah}:${location.ayah}:${word.position}`} key={word.position} className="flex flex-wrap items-baseline justify-between gap-3 border-b border-subtle py-1"><dt dir="rtl" lang="ar" className="font-reading text-xl leading-loose">{word.text}</dt><dd dir={word.meaning || lang === 'en' ? 'ltr' : 'rtl'} lang={word.meaning ? 'en' : lang} className="text-sm text-end flex flex-wrap items-center justify-end gap-2"><span>{word.meaning || <span data-quran-word-missing>{t('quranWordNoAnnotation')} <bdi>({location.surah}:{location.ayah}:{word.position})</bdi></span>}</span>{word.meaning && <QuranWordQuickAddButton word={word.text} meaning={word.meaning} reference={citation} lang={lang} t={t} />}</dd></div>)}</dl>;
         } else if (tool === 'themes') {
           const result = await api.ayahThemes({ ...location, pack: metadata.themes });
           if (!result.ok) throw new Error(result.error);
@@ -151,7 +244,7 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
           const result = await api.morphology({ script: selection.script, ...location });
           if (!result.ok) throw new Error(result.error);
           const words = result.data.filter(word => !wordPosition || Number(word.location.split(':')[2]) === wordPosition);
-          body = words.length ? <div>{words.map(word => <section key={word.location} className="py-2 border-b border-subtle"><p dir="ltr">{word.location}</p><dl>{([['root', 'quranMorphologyRoot'], ['lemma', 'quranMorphologyLemma'], ['stem', 'quranMorphologyStem']] as const).map(([field, label]) => <div key={field}><dt className="text-xs">{t(label)}</dt><dd dir={word[field] ? 'rtl' : undefined} className={word[field] ? 'font-reading text-xl leading-loose' : 'text-xs text-muted'}>{word[field] || t(word.uninstalled?.includes(field) ? 'quranWordPackNotInstalled' : 'quranWordNoAnnotation')}</dd>{(field === 'root' || field === 'lemma') && word[field] && <QuranWordOccurrences key={`${word.location}:${field}:${word[field]}`} family={field} text={word[field]!} t={t} onNavigateAyah={onNavigateAyah} />}{field === 'root' && word.root && <RootHadiths root={word.root} t={t} />}</div>)}</dl></section>)}</div> : <p>{t('quranWordNoAnnotation')}</p>;
+          body = words.length ? <div>{words.map(word => <section key={word.location} className="py-2 border-b border-subtle"><p dir="ltr">{word.location}</p><dl>{([['root', 'quranMorphologyRoot'], ['lemma', 'quranMorphologyLemma'], ['stem', 'quranMorphologyStem']] as const).map(([field, label]) => <div key={field}><dt className="text-xs">{t(label)}</dt><dd dir={word[field] ? 'rtl' : undefined} className={word[field] ? 'font-reading text-xl leading-loose' : 'text-xs text-muted'}>{word[field] || t(word.uninstalled?.includes(field) ? 'quranWordPackNotInstalled' : 'quranWordNoAnnotation')}</dd>{field === 'root' && word.root && <QuranMakeRootCardButton root={word.root} lang={lang} t={t} />}{(field === 'root' || field === 'lemma') && word[field] && <QuranWordOccurrences key={`${word.location}:${field}:${word[field]}`} family={field} text={word[field]!} t={t} onNavigateAyah={onNavigateAyah} />}{field === 'root' && word.root && <RootHadiths root={word.root} t={t} />}</div>)}</dl></section>)}</div> : <p>{t('quranWordNoAnnotation')}</p>;
         } else if (tool === 'mutashabihat') {
           const result = await api.mutashabihat({ script: selection.script, ...location });
           if (!result.ok) throw new Error(result.error);

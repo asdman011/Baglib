@@ -18,6 +18,7 @@ import type {
   AggregateDictionaryLookupResult,
   DictionaryLookupCandidate,
 } from '../../../shared/types/dictionary';
+import type { DeckTreeNode } from '../../../shared/srs';
 import { TranslationKey } from '../../translations';
 import { Modal } from '../ui/Modal';
 
@@ -51,6 +52,73 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
       window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
     } catch {
       setWikiCard({ busy: false, message: t('wikipediaCardFailed'), failed: true });
+    }
+  };
+  // KEY-400: quick-add word ↔ meaning from dictionary or lookup to a chosen revision deck (remembers last deck).
+  const [decks, setDecks] = useState<Array<{ id: string; fullName: string }>>([]);
+  const [selectedDeckId, setSelectedDeckId] = useState<string>('');
+  const [quickAddStatus, setQuickAddStatus] = useState<Record<string, { busy: boolean; message: string | null; duplicate?: boolean; failed?: boolean }>>({});
+
+  useEffect(() => {
+    if (!isOpen || !window.electronAPI?.knowledgeCards?.deckTree) return;
+    let alive = true;
+    void Promise.all([
+      window.electronAPI.knowledgeCards.deckTree().catch(() => []),
+      window.electronAPI.lexiconDecks?.lastDeck().catch(() => null),
+    ]).then(([tree, lastRes]) => {
+      if (!alive) return;
+      const flat: Array<{ id: string; fullName: string }> = [];
+      const walk = (list: DeckTreeNode[]) => {
+        for (const n of list) {
+          if (n.kind === 'normal') {
+            flat.push({ id: n.id, fullName: n.fullName });
+            walk(n.children);
+          }
+        }
+      };
+      if (Array.isArray(tree)) walk(tree);
+      setDecks(flat);
+      const lastId = lastRes && lastRes.ok ? lastRes.data : null;
+      if (lastId && flat.some(d => d.id === lastId)) {
+        setSelectedDeckId(lastId);
+      } else if (flat[0]) {
+        setSelectedDeckId(prev => (prev && flat.some(d => d.id === prev) ? prev : flat[0].id));
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isOpen]);
+
+  const handleQuickAdd = async (key: string, targetWord: string, meaningText: string, sourceTitle: string) => {
+    setQuickAddStatus(prev => ({ ...prev, [key]: { busy: true, message: null } }));
+    const uiLang = typeof document !== 'undefined' && document.documentElement.lang === 'ar' ? 'ar' : 'en';
+    try {
+      const r = await window.electronAPI.lexiconDecks.quickAdd({
+        word: targetWord,
+        meaning: meaningText,
+        source: sourceTitle,
+        kind: 'dictionary',
+        deckId: selectedDeckId || null,
+        reversed: true,
+        language: uiLang,
+      });
+      if (!r.ok) throw new Error(r.error);
+      setSelectedDeckId(r.data.deckId);
+      setQuickAddStatus(prev => ({
+        ...prev,
+        [key]: {
+          busy: false,
+          duplicate: r.data.duplicate,
+          message: t(r.data.duplicate ? 'quickAddAlreadyInDeck' : 'quickAddSavedToDeck', { deck: r.data.deckName }),
+        },
+      }));
+      window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
+    } catch {
+      setQuickAddStatus(prev => ({
+        ...prev,
+        [key]: { busy: false, failed: true, message: t('lexiconDeckFailed') },
+      }));
     }
   };
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -148,7 +216,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
     >
-      <Modal asChild open={true} onClose={onClose} label={t('dictionaryLookupTitle')}><div className="bg-surface text-main border border-subtle w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+      <Modal asChild open={true} onClose={onClose} label={t('dictionaryLookupTitle')}><div data-dictionary-lookup-modal className="bg-surface text-main border border-subtle w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-subtle bg-canvas/50">
           <div className="flex items-center gap-3">
@@ -173,6 +241,8 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
+            data-dictionary-close
             onClick={onClose}
             aria-label={t('dictionaryClose')}
             className="p-2 rounded-xl text-muted hover:text-main hover:bg-canvas transition-colors cursor-pointer"
@@ -180,6 +250,43 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Search Input Bar */}
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            const inputEl = e.currentTarget.querySelector<HTMLInputElement>('[data-dictionary-search-input]');
+            const q = inputEl ? inputEl.value : activeWord;
+            setActiveWord(q);
+            void performLookup(q);
+          }}
+          className="flex items-center gap-2 px-4 py-2.5 border-b border-subtle bg-canvas/30"
+        >
+          <Search className="size-4 text-muted shrink-0" />
+          <input
+            type="text"
+            dir="auto"
+            data-dictionary-search-input
+            value={activeWord}
+            onChange={e => setActiveWord(e.target.value)}
+            placeholder={t('dictionaryLookupTitle')}
+            aria-label={t('dictionaryLookupTitle')}
+            className="flex-1 bg-transparent text-xs text-main outline-none"
+          />
+          <button
+            type="button"
+            data-dictionary-search-btn
+            onClick={e => {
+              const inputEl = e.currentTarget.closest('form')?.querySelector<HTMLInputElement>('[data-dictionary-search-input]');
+              const q = inputEl ? inputEl.value : activeWord;
+              setActiveWord(q);
+              void performLookup(q);
+            }}
+            className="rounded-lg border border-subtle bg-surface px-2.5 py-1 text-xs font-medium text-main hover:bg-canvas cursor-pointer"
+          >
+            {t('search')}
+          </button>
+        </form>
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -224,6 +331,24 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
               )}
 
               {/* Local Dictionary Entries */}
+              {decks.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-subtle bg-canvas/50 px-3 py-2 text-xs">
+                  <span className="font-semibold text-muted">{t('quickAddTargetDeck')}:</span>
+                  <select
+                    value={selectedDeckId}
+                    data-quick-add-deck-select
+                    aria-label={t('quickAddTargetDeck')}
+                    onChange={e => setSelectedDeckId(e.target.value)}
+                    className="rounded-lg border border-subtle bg-surface px-2 py-1 text-xs text-main"
+                  >
+                    {decks.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.fullName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {result && result.entries && result.entries.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-xs font-bold text-muted border-b border-subtle pb-1.5">
@@ -236,12 +361,15 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                     </span>
                   </div>
 
-                  {result.entries.map((entry, idx) => (
+                  {result.entries.map((entry, idx) => {
+                    const entryKey = `entry-${idx}`;
+                    const qStatus = quickAddStatus[entryKey];
+                    return (
                     <div
                       key={idx}
                       className="p-4 rounded-2xl bg-canvas/60 border border-subtle space-y-2.5 transition-all hover:border-pale-sky-500/30"
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-main font-serif text-sm">
                             {entry.headword}
@@ -250,18 +378,40 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                             {entry.dictTitle} ({entry.dictFormat})
                           </span>
                         </div>
-                        <button
-                          onClick={() => handleCopy(entry.definitionText, idx)}
-                          title={t('dictionaryCopyDefinition')}
-                          className="p-1 rounded-lg text-muted hover:text-main hover:bg-surface transition-colors cursor-pointer"
-                         aria-label={t('dictionaryCopyDefinition')}>
-                          {copiedIndex === idx ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            data-dictionary-quick-add={idx}
+                            disabled={qStatus?.busy}
+                            onClick={() => void handleQuickAdd(entryKey, entry.headword, entry.definitionText || entry.definitionHtml, entry.dictTitle)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-subtle bg-surface px-2 py-1 text-xs font-semibold text-main hover:bg-canvas disabled:opacity-50 cursor-pointer"
+                          >
+                            <Layers className="w-3 h-3" />
+                            <span>{t('quickAddToRevision')}</span>
+                          </button>
+                          <button
+                            onClick={() => handleCopy(entry.definitionText, idx)}
+                            title={t('dictionaryCopyDefinition')}
+                            className="p-1 rounded-lg text-muted hover:text-main hover:bg-surface transition-colors cursor-pointer"
+                           aria-label={t('dictionaryCopyDefinition')}>
+                            {copiedIndex === idx ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
+
+                      {qStatus?.message && (
+                        <p
+                          role={qStatus.failed ? 'alert' : 'status'}
+                          data-dictionary-quick-add-status={idx}
+                          className={`text-xs ${qStatus.failed ? 'text-danger' : 'text-emerald-600 dark:text-emerald-400'}`}
+                        >
+                          {qStatus.message}
+                        </p>
+                      )}
 
                       {/* Render formatted definition HTML */}
                       <div
@@ -270,7 +420,8 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                         dangerouslySetInnerHTML={{ __html: entry.definitionHtml }}
                       />
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               ) : (
                 <div className="py-4 px-3 rounded-2xl bg-canvas/40 border border-subtle text-center text-xs text-muted">
@@ -322,16 +473,28 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                     </p>
 
                     <div className="pt-2 flex flex-wrap items-center justify-between gap-2 relative z-10">
-                      <button
-                        type="button"
-                        data-wikipedia-make-card
-                        disabled={wikiCard.busy}
-                        onClick={() => void makeWikipediaCard(result.wikipedia!.title, result.wikipedia!.lang)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas disabled:opacity-50 cursor-pointer"
-                      >
-                        <Layers className="w-3 h-3" />
-                        <span>{t('wikipediaMakeCard')}</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          data-wikipedia-make-card
+                          disabled={wikiCard.busy}
+                          onClick={() => void makeWikipediaCard(result.wikipedia!.title, result.wikipedia!.lang)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas disabled:opacity-50 cursor-pointer"
+                        >
+                          <Layers className="w-3 h-3" />
+                          <span>{t('wikipediaMakeCard')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-wikipedia-quick-add
+                          disabled={quickAddStatus['wiki']?.busy}
+                          onClick={() => void handleQuickAdd('wiki', result.wikipedia!.title, result.wikipedia!.extract, `${t('dictionaryWikipediaCard')} (${result.wikipedia!.lang})`)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas disabled:opacity-50 cursor-pointer"
+                        >
+                          <Layers className="w-3 h-3" />
+                          <span>{t('quickAddToRevision')}</span>
+                        </button>
+                      </div>
                       <a
                         href={result.wikipedia.articleUrl}
                         target="_blank"
@@ -343,6 +506,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                       </a>
                     </div>
                     {wikiCard.message && <p role={wikiCard.failed ? 'alert' : 'status'} data-wikipedia-card-message className={`text-xs relative z-10 ${wikiCard.failed ? 'text-danger' : 'text-main'}`}>{wikiCard.message}</p>}
+                    {quickAddStatus['wiki']?.message && <p role={quickAddStatus['wiki']?.failed ? 'alert' : 'status'} data-wikipedia-quick-add-message className={`text-xs relative z-10 ${quickAddStatus['wiki']?.failed ? 'text-danger' : 'text-main'}`}>{quickAddStatus['wiki']?.message}</p>}
                   </div>
                 </div>
               )}

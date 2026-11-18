@@ -160,6 +160,8 @@ export type QuranFrequencyFamily = 'root' | 'lemma';
 export interface QuranFrequencyQuery { family: QuranFrequencyFamily; surah?: number; text?: string; limit?: number }
 export interface QuranFrequency { family: QuranFrequencyFamily; total: number; distinct: number; rows: { text: string; count: number; stated?: number }[] }
 export interface QuranFrequencyPlace { surah: number; ayah: number; count: number }
+export interface QuranRootWordStat { word: string; count: number; meaning?: string }
+export interface QuranRootWordsResult { root: string; total: number; words: QuranRootWordStat[] }
 export interface QuranPhraseMatch { id: number; text: string; source: string; ranges: [number, number][]; references: string[]; total: number; }
 export interface QuranMushafWord { id: string; surah: number; ayah: number; wordIndex: number; type?: 'text' | 'aya-mark'; line?: number; textHafs?: string; canonicalText?: string; imlaey?: string; }
 export interface QuranMushafPage { pageNumber: number; totalPages: number; surahStart: number; ayahStart: number; surahEnd: number; ayahEnd: number; svg: string; profile: 'hafs' | 'warsh'; layoutMode?: 'adapted'; words: QuranMushafWord[]; fontUrl?: string; basmala?: string; glyphLines?: { number: number; type: string; centered: boolean; surah: number; words: { surah: number; ayah: number; position: number; glyph: string; text: string; marker?: boolean }[] }[]; }

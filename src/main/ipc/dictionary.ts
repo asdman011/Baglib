@@ -17,6 +17,7 @@ function getDictService(): DictionaryService {
   }
   return dictionaryServiceInstance;
 }
+export { getDictService as getDictionaryService };
 
 function getWikiService(): WikipediaService {
   if (!wikipediaServiceInstance) {

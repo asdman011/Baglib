@@ -958,6 +958,16 @@ export const API = {
     authorDeck: (input: { deckName: string; categoryId?: string | null; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; people: number; added: number; updated: number; linked: number } } | { ok: false; error: string }> => ipcRenderer.invoke('person-decks:author-deck', input),
     wikipediaCard: (input: { title: string; lang: string; language: 'ar' | 'en'; deckId?: string | null }): Promise<{ ok: true; data: { deckId: string; noteId: string; created: boolean; title: string } } | { ok: false; error: string }> => ipcRenderer.invoke('person-decks:wikipedia-card', input),
   },
+  // KEY-400: lexicon vocabulary decks, translation cards, quick-add lookups, Quranic roots & tafsir cards.
+  lexiconDecks: {
+    importDictionary: (input: { dictId: string; deckId?: string | null; deckName?: string | null; filterMode?: 'prefix' | 'list'; prefix?: string; wordList?: string[] | string; limit?: number; reversed?: boolean | null; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; noteTypeId: 'stock-basic' | 'stock-basic-reversed'; reversed: boolean; totalMatched: number; added: number; updated: number; skipped: number } } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:import-dictionary', input),
+    quickAdd: (input: { word: string; meaning: string; source: string; kind?: 'dictionary' | 'quran-word'; deckId?: string | null; reversed?: boolean; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; deckName: string; noteId: string; duplicate: boolean } } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:quick-add', input),
+    lastDeck: (): Promise<{ ok: true; data: string | null } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:last-deck'),
+    rootCard: (input: { root: string; deckId?: string | null; deckName?: string | null; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; noteId: string; dashedRoot: string; created: boolean; hasLexiconSource: boolean; wordCount: number } } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:root-card', input),
+    rootDeck: (input: { deckName: string; surah?: number | null; limit?: number; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; roots: number; added: number; updated: number; linked: number } } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:root-deck', input),
+    tafsirWorks: (): Promise<{ ok: true; data: Array<{ id: string; title: string; annotationCount: number; isTafsirCategory: boolean }> } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:tafsir-works'),
+    tafsirDeck: (input: { deckName: string; workId?: string | null; includeQuranAnnotations?: boolean; language: 'ar' | 'en' }): Promise<{ ok: true; data: { deckId: string; total: number; added: number; updated: number; linked: number } } | { ok: false; error: string }> => ipcRenderer.invoke('lexicon-decks:tafsir-deck', input),
+  },
   // KEY-412: "Revise next" rule-based recommendations.
   revisionRecommendations: {
     list: (): Promise<{ ok: true; data: import('../shared/revision-recommendations').Recommendation[] } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:list'),

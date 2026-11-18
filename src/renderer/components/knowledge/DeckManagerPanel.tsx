@@ -2,6 +2,7 @@
 
 import { requestBookRevision } from './BookRevisionHost';
 import { PersonDeckDialog } from './PersonDeckDialog';
+import { LexiconDeckDialog } from './LexiconDeckDialog';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FolderTree,
@@ -19,6 +20,7 @@ import {
   Users,
   BookOpenCheck,
   UserRound,
+  BookA,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
@@ -57,6 +59,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
     return () => window.removeEventListener(REVISION_INTENT_EVENT, open);
   }, []);
   const [personDialogOpen, setPersonDialogOpen] = useState(false);
+  const [lexiconDialogOpen, setLexiconDialogOpen] = useState(false);
   const [pendingSync, setPendingSync] = useState({ changed: 0, orphaned: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -470,6 +473,9 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
           <Button type="button" variant="secondary" size="sm" data-open-person-deck-btn onClick={() => setPersonDialogOpen(true)} icon={<UserRound className="size-3.5" />}>
             {t('personDeckOpen')}
           </Button>
+          <Button type="button" variant="secondary" size="sm" data-open-lexicon-deck-btn onClick={() => setLexiconDialogOpen(true)} icon={<BookA className="size-3.5" />}>
+            {t('lexiconDeckOpen')}
+          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -552,6 +558,7 @@ export const DeckManagerPanel: React.FC<DeckManagerPanelProps> = ({ onStudyDeck 
       <DeckSubscriptionsModal deck={subscriptionsDeck} onClose={() => setSubscriptionsDeck(null)} onChanged={() => void refresh()} />
       <SyncReviewModal open={syncReviewOpen} onClose={() => setSyncReviewOpen(false)} onChanged={() => void refresh()} />
       {personDialogOpen && <PersonDeckDialog onClose={() => setPersonDialogOpen(false)} />}
+      {lexiconDialogOpen && <LexiconDeckDialog onClose={() => setLexiconDialogOpen(false)} />}
       {narratorDialogOpen && <SunnahDeckDialog open source={null} initialMode="narrator" onClose={() => setNarratorDialogOpen(false)} />}
 
       <DeckOptionsModal

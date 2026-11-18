@@ -30,6 +30,7 @@ const operational = new Set([
   'baglib.notes.folder', // The Notes tab's last open folder, so a return visit opens where the user left (KEY-338).
   'baglib:last-manuscript-id', 'baglib:last-chapter-id', // Last manuscript and chapter used by "Send to manuscript", preselected in its picker (KEY-370).
   'revision.recommendations.dismissed', // "Revise next" items the user hid; each entry expires after 7 days (KEY-412).
+  'revision.quickAdd.lastDeckId', // Last deck chosen in the lookup "Add to revision" quick-add action (KEY-400).
   'baglib.poetry.size', // Verse size, changed inside the poem's reading options or with Ctrl+wheel, like the Sunnah text size kept with its reading position (KEY-339).
 ]);
 

@@ -20,7 +20,7 @@ import { qulPresetFile, qulResourceRoot, suppliedRecitationFile } from '../servi
 import { khatmahService } from '../services/quran/khatmah-reminders';
 import { KHATMAH_JUZ_ENDS, KHATMAH_JUZ_STARTS } from '../../shared/khatmah';
 import type { KhatmahMutation } from '../../shared/types/khatmah';
-import type { QuranMushafPage, QuranReaderCatalog } from '../../shared/types/quran';
+import type { QuranMushafPage, QuranReaderCatalog, QuranFrequency, QuranFrequencyQuery, QuranRootWordsResult } from '../../shared/types/quran';
 
 const allowedDownloadOrigins = new Set([QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
 const allowedAudioOrigins = new Set(['https://audio-cdn.tarteel.ai', QUL_ORIGIN, 'https://s3.us-east-1.wasabisys.com']);
@@ -103,7 +103,11 @@ export const runQuranInstaller: QuranInstaller = (request, signal) => new Promis
 
 let ayahReader: ((surah: number, from: number, to: number, options: { profile: 'hafs' | 'warsh' }) => Promise<{ number: number; text: string }[]>) | null = null;
 let quranSourceReader: ((query: AssistantQuranQuery) => Promise<AssistantQuranSource[]>) | null = null;
+let quranFrequencyReader: ((query: QuranFrequencyQuery) => Promise<QuranFrequency>) | null = null;
+let quranRootWordsReader: ((text: string, limit?: number) => Promise<QuranRootWordsResult>) | null = null;
 export const readQuranSources = (query: AssistantQuranQuery) => quranSourceReader ? quranSourceReader(query) : Promise.reject(new Error('invalid-resource'));
+export const readQuranFrequency = (query: QuranFrequencyQuery) => quranFrequencyReader ? quranFrequencyReader(query) : Promise.reject(new Error('invalid-resource'));
+export const readQuranRootWords = (text: string, limit?: number) => quranRootWordsReader ? quranRootWordsReader(text, limit) : Promise.reject(new Error('invalid-resource'));
 /** Read installed text for the requested profile; never substitute Hafs for Warsh. */
 export const readAyahTexts = (surah: number, from: number, to: number, options: { profile: 'hafs' | 'warsh' } = { profile: 'hafs' }) => ayahReader ? ayahReader(surah, from, to, options) : options.profile === 'warsh' ? Promise.reject(new Error('warsh-not-installed')) : Promise.resolve([]);
 
@@ -203,6 +207,8 @@ export function registerQuranIpc(): void {
   ipcMain.handle('quran:reader-catalog', event => result(event, () => readRequest({ action: 'catalog' })));
   ayahReader = (surah, from, to, { profile }) => readRequest({ action: 'assistant-ayahs', query: { surah, from, to, profile } });
   quranSourceReader = query => readRequest({ action: 'assistant-sources', query });
+  quranFrequencyReader = query => readRequest({ action: 'frequency', query });
+  quranRootWordsReader = (text, limit) => readRequest({ action: 'root-words', text, limit });
   const khatmahState = () => ({ plans: khatmahService.list(), notificationsSupported: Notification.isSupported() });
   ipcMain.handle('quran:khatmah-list', event => result(event, async () => khatmahState()));
   ipcMain.handle('quran:khatmah-mutate', (event, query: KhatmahMutation) => result(event, async () => {

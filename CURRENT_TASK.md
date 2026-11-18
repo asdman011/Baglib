@@ -1,3 +1,36 @@
+## KEY-400 Revision Task 9: Lexicon vocabulary, translation cards, quick-add from lookups, Quranic roots and tafsir (no hifz) - 2026-11-18 - Agent: Antigravity
+
+**Request.** Build lexicon vocabulary deck imports, automatic bidirectional translation cards, one-click quick-add from dictionary and Quran word lookups, Quranic root (ishtiqaq) cards and decks, and tafsir highlight/comment cards (strictly no hifz).
+
+**What changed:**
+- **`src/main/services/lexicon-decks.ts` (new) & `src/main/ipc/lexicon-decks.ts` (new):**
+  - **Stage 1 & 2 (Lexicon import & translation cards):** `importDictionaryDeck` imports entries from any installed dictionary (`dictionaries` / `headword_index`) filtered by prefix or pasted word list (default 200, max 5000), querying in pages of 250 (`LEXICON_PAGE_SIZE = 250`) and writing each batch in one transaction while yielding between pages. Safely strips `<script>`, `<style>`, `<iframe>`, and event attributes via `stripDictionaryHtml`. Uses `stock-basic-reversed` ("Basic (and reversed card)") automatically when `source_lang !== target_lang`. Re-importing uses `card_note.source_ref = lexicon:<dictId>:<headword>` so existing notes and their FSRS schedules (`srs_state`) are preserved.
+  - **Stage 3 (Quick-add from lookups):** `quickAddLookup` saves `word ↔ meaning` to a chosen deck, remembers the last deck in `app_settings` (`revision.quickAdd.lastDeckId`), and checks for duplicates (same word and meaning in the target deck) before inserting.
+  - **Stage 4 (Quranic root cards / ishtiqaq):** `makeRootCard` and `makeRootDeck` build root cards with dashed root letters on the front (`أ-ل-ه`, `ر-ح-م`) and installed Arabic lexicon definitions (never AI-generated or handwritten) plus Quran word occurrences and counts on the back (or an explicit notice when no lexicon source text is installed).
+  - **Stage 5 (Tafsir cards):** `makeTafsirDeck` and `listTafsirWorks` generate `stock-basic` cards from the user's highlights and comments in library tafsir works (`annotations`) and Quran commentary notes (`commentary:quran:...`), preserving schedules on regeneration (`tafsir-highlight:<workId>/<annotationId>`, `tafsir-commentary:<knowledgeId>`).
+  - **No-Hifz guardrail:** `isSafeNonHifzVocabularyWord` rejects multi-word ayah strings or `﴿...﴾` verse brackets on `quran-word` quick-add inputs; root and quick-add cards never contain a full ayah as prompt or answer.
+- **Dictionary & Quran reader plumbing:**
+  - `src/main/services/dictionary/dictionary.service.ts` & `src/main/ipc/dictionary.ts`: added `readEntry(dict, headword)` (reading StarDict entries directly by indexed `offset`/`size` from `headword_index` when present) and exported `getDictionaryService`.
+  - `src/shared/types/quran.ts`, `src/main/services/quran/quran-reader.ts`, `src/main/services/quran/quran-reader-process.ts`, `src/main/quran-reader-worker.ts`, `src/main/ipc/quran.ts`: added `QuranReader.rootWords(text, limit)` and exported `readQuranFrequency` and `readQuranRootWords`.
+  - `src/main/index.ts` & `src/preload/index.ts`: registered `registerLexiconDeckIpc()` and exposed `window.electronAPI.lexiconDecks`.
+- **Renderer UI & i18n:**
+  - `src/renderer/components/knowledge/LexiconDeckDialog.tsx` (new) & `src/renderer/components/knowledge/DeckManagerPanel.tsx`: 3-tab dialog (`lexicon`, `roots`, `tafsir`) opened from `[data-open-lexicon-deck-btn]`.
+  - `src/renderer/components/reader/DictionaryLookupModal.tsx`: added search input bar (`[data-dictionary-search-input]`), target deck picker (`[data-quick-add-deck-select]`), and one-click "Add to revision" buttons (`[data-dictionary-quick-add]`, `[data-wikipedia-quick-add]`) with duplicate status feedback.
+  - `src/renderer/components/quran/QuranMushafWorkspace.tsx` & `src/renderer/components/quran/QuranFrequencyPanel.tsx`: added `QuranWordQuickAddButton` (`[data-quran-word-quick-add]`) in word meanings, `QuranMakeRootCardButton` (`[data-quran-make-root-card]`) in morphology, per-root `[data-frequency-make-root-card]` and `[data-open-root-deck-dialog]` in `QuranFrequencyPanel.tsx`.
+  - `src/renderer/translations.ts`: 51 bilingual Arabic and English keys.
+- **Docs & settings coverage:** updated `docs/data-dictionary.md` (section 5.4) and `tests/ui/settings-directory-coverage.test.ts` (`revision.quickAdd.lastDeckId`).
+
+**Verified (2026-11-18):**
+- `node scripts/test-runner.js tests/services/lexicon-decks.test.ts tests/ui/translation-keys.test.ts tests/ui/settings-directory-coverage.test.ts` → **11/11 passed** (7 in `lexicon-decks.test.ts`, 2 in `settings-directory-coverage.test.ts`, 2 in `translation-keys.test.ts`).
+- `node scripts/test-runner.js --test-concurrency=2` → **2,607/2,607 passed across 360 suites (0 failed)**.
+- `npx tsc --noEmit` → **0 errors**; `npx eslint` on all 21 changed/created files → **0 errors**.
+- `node scripts/lexicon-decks-live/run.mjs` → **passed in `ar` (RTL) and `en` (LTR)** with real Arabic and English PDFs from `tests/real-files/`, Readest StarDict fixture (`eng-nld.ifo`), disposable Quran corpus copy (`copiesDeleted: true`, `originalsUnchanged: true`), SrsReviewScreen card review across all created decks, and `rendererErrors: []`. Evidence in `.baglib-data/key400-evidence/`.
+
+**Limits / Open points:**
+- Test with a real Arabic lexicon (for example Lisan al-Arab in StarDict/MDict).
+
+**Files:** src/main/services/lexicon-decks.ts, src/main/ipc/lexicon-decks.ts, src/main/services/dictionary/dictionary.service.ts, src/main/ipc/dictionary.ts, src/shared/types/quran.ts, src/main/services/quran/quran-reader.ts, src/main/services/quran/quran-reader-process.ts, src/main/quran-reader-worker.ts, src/main/ipc/quran.ts, src/main/index.ts, src/preload/index.ts, src/renderer/components/knowledge/LexiconDeckDialog.tsx, src/renderer/components/knowledge/DeckManagerPanel.tsx, src/renderer/components/reader/DictionaryLookupModal.tsx, src/renderer/components/quran/QuranMushafWorkspace.tsx, src/renderer/components/quran/QuranFrequencyPanel.tsx, src/renderer/translations.ts, tests/services/lexicon-decks.test.ts, tests/ui/settings-directory-coverage.test.ts, scripts/lexicon-decks-live/main.cjs, scripts/lexicon-decks-live/run.mjs, docs/data-dictionary.md, CURRENT_TASK.md.
+
 ## KEY-412 "Revise next": rule-based recommendations (layer 1 of KEY-404) - 2026-11-18 - Agent: Claude Code
 
 **Request.** The user decided KEY-404: "Layer them: rules first, graph later, AI coach on demand." This task builds the rules layer.

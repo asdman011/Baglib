@@ -9,7 +9,7 @@ import path from 'node:path';
 import { parseHTML } from 'linkedom';
 import type { QuranAudioSegment, QuranAyah, QuranAyahAudio, QuranAyahTheme, QuranCommentary, QuranDivision, QuranMushafPage, QuranMushafWord, QuranPack, QuranPassage, QuranReadQuery, QuranReaderCatalog, QuranRichNode, QuranSearchQuery, QuranSearchHit, QuranSimilarAyah, QuranStructure, QuranSurahIntro, QuranTopic } from '../../../shared/types/quran';
 import { normalizeQuranSearch, quranSearchText } from './qul-catalog';
-import type { QuranFrequency, QuranFrequencyFamily, QuranFrequencyPlace, QuranFrequencyQuery } from '../../../shared/types/quran';
+import type { QuranFrequency, QuranFrequencyFamily, QuranFrequencyPlace, QuranFrequencyQuery, QuranRootWordStat, QuranRootWordsResult } from '../../../shared/types/quran';
 import { readerPreset, readerPresets } from './reader-resources';
 import { buildWarshLayout, type WarshLayout, type WarshLayoutWord } from './warsh-layout';
 
@@ -661,6 +661,43 @@ export class QuranReader {
       places.set(key, { surah, ayah, count: (places.get(key)?.count ?? 0) + 1 });
     }
     return [...places.values()].sort((first, second) => first.surah - second.surah || first.ayah - second.ayah);
+  }
+  async rootWords(text: string, limit = 10): Promise<QuranRootWordsResult> {
+    const { database } = await this.frequencySource('root');
+    const wanted = frequencyText(text);
+    if (!wanted) throw new Error('invalid-resource');
+    const rootEntries = database.prepare(`SELECT id, arabic_trilateral AS text, words_count AS stated FROM roots`).all() as { id: number; text: string; stated?: number }[];
+    const entry = rootEntries.find(r => frequencyText(r.text) === wanted);
+    if (!entry) return { root: text.trim(), total: 0, words: [] };
+    const rows = database.prepare(`SELECT word_location AS location FROM root_words WHERE root_id=?`).all(entry.id) as { location: string }[];
+    const script = this.catalog().sources.find(source => source.kind === 'script' && source.profile === 'hafs');
+    if (!script) throw new Error('missing-resource');
+    const scriptDb = await this.database(script.id, 'script');
+    const lexical = await this.lexicalIndex(script.id);
+    const wordStmt = scriptDb.prepare(`SELECT text FROM words WHERE surah=? AND ayah=? AND word=?`);
+    const meaningsSource = this.catalog().sources.find(source => source.kind === 'word-translation' && source.profile === 'hafs');
+    const meaningsDb = meaningsSource ? await this.database(meaningsSource.id, 'word-translation') : null;
+    const meaningStmt = meaningsDb ? meaningsDb.prepare(`SELECT text FROM word_translation WHERE surah_number=? AND ayah_number=? AND word_number=? LIMIT 1`) : null;
+    const counts = new Map<string, { word: string; count: number; meaning?: string }>();
+    let total = 0;
+    for (const { location } of rows) {
+      const valid = validateQuranWordLocation(location, lexical);
+      if (!valid) continue;
+      const wRow = wordStmt.get(valid.surah, valid.ayah, valid.word) as { text: string } | undefined;
+      if (!wRow?.text || marker(wRow.text)) continue;
+      total += 1;
+      const item = counts.get(wRow.text) ?? { word: wRow.text, count: 0 };
+      item.count += 1;
+      if (!item.meaning && meaningStmt) {
+        const mRow = meaningStmt.get(valid.surah, valid.ayah, String(valid.word)) as { text: string } | undefined;
+        if (mRow?.text?.trim()) item.meaning = mRow.text.trim();
+      }
+      counts.set(wRow.text, item);
+    }
+    const words: QuranRootWordStat[] = [...counts.values()]
+      .sort((a, b) => b.count - a.count || a.word.localeCompare(b.word))
+      .slice(0, Math.max(1, Math.min(50, limit)));
+    return { root: entry.text, total: entry.stated ?? total, words };
   }
   private warshLayout(packId: string, scriptId: string): Promise<WarshLayout> {
     this.source(packId, 'mushaf-layout');

@@ -283,6 +283,42 @@ export class DictionaryService {
   }
 
   /**
+   * Read the raw definition string (HTML or plain text) for a single headword in a dictionary.
+   */
+  async readEntry(dict: DictionaryItem, headword: string): Promise<string | null> {
+    const reader = await this.getReader(dict);
+    if (!reader) return null;
+    try {
+      if (dict.format === 'stardict' && reader instanceof StarDictReader) {
+        const indexed = this.db
+          .prepare(
+            `SELECT offset, size FROM headword_index
+             WHERE dict_id = ? AND headword = ? AND offset IS NOT NULL AND size IS NOT NULL
+             LIMIT 1`
+          )
+          .get(dict.id, headword) as { offset: number; size: number } | undefined;
+        if (indexed && indexed.size > 0) {
+          return await reader.readDefinition({ word: headword, offset: indexed.offset, size: indexed.size });
+        }
+        const match = reader.lookup(headword);
+        return match ? await reader.readDefinition(match) : null;
+      }
+      if (dict.format === 'bgl' && reader instanceof BglReader) {
+        return reader.lookup(headword)?.definition ?? null;
+      }
+      if (dict.format === 'slob' && reader instanceof SlobReader) {
+        return reader.lookup(headword)?.text ?? null;
+      }
+      if (dict.format === 'mdict' && reader instanceof MdictReader) {
+        return reader.lookup(headword)?.definitionHtml ?? null;
+      }
+    } catch (err) {
+      console.warn(`[DictionaryService] Error reading ${headword} in ${dict.title}:`, err);
+    }
+    return null;
+  }
+
+  /**
    * Look up a word across all enabled offline dictionaries and online Wikipedia.
    * Leverages Arabic root stripping & prioritized candidate generation.
    */
@@ -315,7 +351,11 @@ export class DictionaryService {
           );
 
           // Fast SQLite B-tree query (< 0.5ms)
-          const indexedMatches = queryStmt.all(dict.id, normCandidate, candidate.token) as { headword: string }[];
+          const indexedMatches = queryStmt.all(dict.id, normCandidate, candidate.token) as Array<{
+            headword: string;
+            offset: number | null;
+            size: number | null;
+          }>;
 
           const wordsToLookup = indexedMatches.length > 0
             ? indexedMatches.map((m) => m.headword)
@@ -332,7 +372,12 @@ export class DictionaryService {
 
             try {
               if (dict.format === 'stardict' && reader instanceof StarDictReader) {
-                const match = reader.lookup(wordToLookup);
+                const idxRow = indexedMatches.find(
+                  (m) => m.headword === wordToLookup && m.offset !== null && m.size !== null && m.size > 0
+                );
+                const match = idxRow
+                  ? { word: wordToLookup, offset: idxRow.offset!, size: idxRow.size! }
+                  : reader.lookup(wordToLookup);
                 if (match) {
                   const raw = await reader.readDefinition(match);
                   defHtml = raw.replace(/\r\n/g, '<br>').replace(/\n/g, '<br>');
