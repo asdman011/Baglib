@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { BookA, Loader2, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookA, GripVertical, Loader2, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import {
   BIOGRAPHY_SCIENCE,
@@ -61,6 +61,29 @@ export function DictionariesPanel() {
     } catch {
       setFailed(true);
     }
+  };
+
+  // KEY-414: the user's dictionary order; lookups and the lookup window follow it.
+  const [dragging, setDragging] = useState<string | null>(null);
+  const saveOrder = (ids: string[]) =>
+    act(async () => {
+      const r = await window.electronAPI.dictionaryFeatures.setOrder(ids);
+      if (!r.ok) throw new Error(r.error);
+    });
+  const move = (id: string, by: -1 | 1) => {
+    const ids = dictionaries.map((d) => d.id);
+    const at = ids.indexOf(id);
+    const to = at + by;
+    if (at < 0 || to < 0 || to >= ids.length) return;
+    [ids[at], ids[to]] = [ids[to], ids[at]];
+    void saveOrder(ids);
+  };
+  const dropOn = (targetId: string) => {
+    if (!dragging || dragging === targetId) return setDragging(null);
+    const ids = dictionaries.map((d) => d.id).filter((id) => id !== dragging);
+    ids.splice(ids.indexOf(targetId), 0, dragging);
+    setDragging(null);
+    void saveOrder(ids);
   };
 
   const handleImportPack = async () => {
@@ -175,15 +198,30 @@ export function DictionariesPanel() {
             {t('knowledgeCardFailed')}
           </p>
         )}
-        <ul className="space-y-1">
-          {dictionaries.map((item) => (
+        {dictionaries.length > 1 && <p className="text-xs leading-loose text-muted">{t('dictionaryOrderHint')}</p>}
+        <ul className="space-y-1" data-dictionary-order>
+          {dictionaries.map((item, index) => (
             <li
               key={item.id}
               data-dictionary={item.id}
-              className="space-y-1 rounded border border-subtle p-2"
+              draggable
+              onDragStart={(event) => {
+                setDragging(item.id);
+                event.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(event) => {
+                if (dragging) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                dropOn(item.id);
+              }}
+              onDragEnd={() => setDragging(null)}
+              className={`space-y-1 rounded border p-2 ${dragging === item.id ? 'border-accent opacity-60' : 'border-subtle'}`}
             >
               <div className="flex items-center justify-between gap-2">
-                <label className="flex min-w-0 items-center gap-2">
+                <GripVertical className="size-3.5 shrink-0 cursor-grab text-muted" aria-hidden="true" />
+                <label className="flex min-w-0 flex-1 items-center gap-2">
                   <input
                     type="checkbox"
                     checked={item.isEnabled}
@@ -197,6 +235,14 @@ export function DictionariesPanel() {
                     {item.title} · {item.entryCount}
                   </span>
                 </label>
+                <span className="flex shrink-0 items-center">
+                  <button type="button" data-dictionary-move-up={item.id} disabled={index === 0} onClick={() => move(item.id, -1)} title={t('dictionaryMoveUp')} aria-label={t('dictionaryMoveUp')} className="rounded p-1 text-muted hover:bg-canvas disabled:opacity-30">
+                    <ArrowUp className="size-3.5" />
+                  </button>
+                  <button type="button" data-dictionary-move-down={item.id} disabled={index === dictionaries.length - 1} onClick={() => move(item.id, 1)} title={t('dictionaryMoveDown')} aria-label={t('dictionaryMoveDown')} className="rounded p-1 text-muted hover:bg-canvas disabled:opacity-30">
+                    <ArrowDown className="size-3.5" />
+                  </button>
+                </span>
                 <button
                   type="button"
                   onClick={() => void act(() => window.electronAPI.dictionaryDelete(item.id))}

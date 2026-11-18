@@ -159,3 +159,39 @@ To bridge the gap between inflected text in books and root-based lexicons, Bagli
 ### C. Licensing & Data Boundary Note
 - The `wizsk/arabic_lexicons` Flutter application code is licensed under **GPL-3.0**, and the Buckwalter AraMorph data files carry a GPLv2 notice (`GPL.redistributable.txt`).
 - **No code or text from the Flutter app is copied or translated into BagLib**, and **none of the pack's database or data files are bundled or committed to the repository**. The user imports their local pack file at runtime into `<userData>/dictionaries/arabic-lexicons/`.
+
+## 6. Lookup features (KEY-414, 2026-11-18)
+
+Ideas came from the GPL-3.0 Arabic Lexicons Flutter app (suggestions, dictionary order, history, paste-and-read reader). Its behaviour was read for ideas only; no code or text was copied or translated. Everything below is BagLib's own design. No tables, columns, migrations or dependencies were added.
+
+### A. Verified implementation
+- **Multi-word search** (`DictionaryLookupModal.tsx`, `splitLookupWords`):
+  - typed or pasted words are split on spaces, commas, Arabic commas, semicolons and new lines, de-duplicated by their suggestion form, and capped at 12;
+  - each word is a tab (`role=tablist`), with arrow keys mirrored in RTL plus Home and End;
+  - each word is looked up once while the window is open;
+  - when more than one dictionary answers, chips switch between "All" and each answering dictionary.
+- **Suggestions** (`dictionary:suggest`, `DictionaryService.suggest`):
+  - the stored `normalized_headword` index gives the prefix range, with the enabled dictionaries only;
+  - results are then filtered with `suggestionKey`, which strips tashkeel and tatweel, unifies alef forms and reads final ى as ي, but keeps **ة and ه apart** (the index form merges them);
+  - up to 10 results, shortest first;
+  - about 150 ms debounce; the input is a combobox with a listbox, arrow keys and Enter;
+  - measured under 30 ms on a 60,000-headword index (unit test).
+- **Dictionary order** (setting `dictionary.order.v1`, an id list):
+  - `listDictionaries` applies it after the built-in pack order, so lookups, the modal's chips and the panel all follow it;
+  - set from the Dictionaries panel by drag or by up/down buttons;
+  - unknown ids are dropped when saved.
+- **Root family:** the KEY-413 "Other words from this root" list is now expandable (`<details>`), and a word from it opens in a new tab.
+- **History** (setting `dictionary.history.v1`):
+  - the last 100 lookups (word, time, the dictionary that answered first), newest first;
+  - looking a word up again moves it to the top;
+  - shown when the search is empty, with re-open, remove one, and clear all.
+- **Reading pad** ("لوح القراءة", `ReadingPad.tsx`, setting `dictionary.readingPad.v1`):
+  - opened from the lookup window and from the command palette (both through `DictionaryHost` window events);
+  - paste text, then read it with every word clickable. A click shows the top three results, "Add to revision" (KEY-400 quick-add) and "open in the dictionary window";
+  - Ctrl/Alt/⌘ + click, or the popover button, highlights the word everywhere;
+  - **Qasidah mode:** when most lines split into two hemistichs (by a tab, three or more spaces, `*`, `…` or `...`), verses are laid out in two columns, sadr then ajuz in reading direction;
+  - only the text (at most 50,000 characters, longer text refused in IPC) and the highlighted words are kept. It is not a library item.
+
+### B. Verification
+- `tests/services/dictionary-features.test.ts`: 8/8.
+- `scripts/dictionary-features-live` runs in ar and en, with the real `repos/arabic_lexicons-main.zip` and two real verses from a poetry corpus copy. Evidence: `.baglib-data/key414-evidence/`.

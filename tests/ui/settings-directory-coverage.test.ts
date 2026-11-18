@@ -31,6 +31,8 @@ const operational = new Set([
   'baglib:last-manuscript-id', 'baglib:last-chapter-id', // Last manuscript and chapter used by "Send to manuscript", preselected in its picker (KEY-370).
   'revision.recommendations.dismissed', // "Revise next" items the user hid; each entry expires after 7 days (KEY-412).
   'anki.collection.v1', // the imported Anki collection's crt and config, kept so .apkg export writes them back (KEY-392).
+  'dictionary.history.v1', // The last 100 lookups, shown in the lookup window when its search is empty (KEY-414).
+  'dictionary.readingPad.v1', // The Reading pad's current text and highlighted words, edited inside the pad (KEY-414).
   'revision.quickAdd.lastDeckId', // Last deck chosen in the lookup "Add to revision" quick-add action (KEY-400).
   'baglib.poetry.size', // Verse size, changed inside the poem's reading options or with Ctrl+wheel, like the Sunnah text size kept with its reading position (KEY-339).
 ]);

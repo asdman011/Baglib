@@ -52,7 +52,7 @@ export const SETTINGS_DIRECTORY: readonly SettingEntry[] = [
   { id: 'sync', group: 'sync', label: 'settingSync', description: 'settingSyncDescription', action: 'sync', keys: ["cloud_storage_config", "koreader_sync_config"] },
   { id: 'lock', group: 'privacy', label: 'settingLock', description: 'settingLockDescription', action: 'lock', keys: ["app_lock:config"] },
   { id: 'ocr', group: 'advanced', label: 'settingOcr', description: 'settingOcrDescription', action: 'ocr', keys: ["ocr.engine.v1", "ocr.layout.v1"] },
-  { id: 'dictionary', group: 'reader', label: 'settingDictionary', description: 'settingDictionaryDescription', action: 'reader', keys: ["dictionary.sciences.v1"] },
+  { id: 'dictionary', group: 'reader', label: 'settingDictionary', description: 'settingDictionaryDescription', action: 'reader', keys: ["dictionary.sciences.v1", "dictionary.order.v1"] },
   { id: 'companion', group: 'reader', label: 'settingCompanion', description: 'settingCompanionDescription', action: 'reader', keys: ["baglib.companion.v1"] },
   { id: 'actions', group: 'advanced', label: 'settingActions', description: 'settingActionsDescription', action: 'ocr', keys: ["pdf.actions.v1", "baglib_stirling_favorites"] },
   { id: 'courses', group: 'advanced', label: 'settingCourses', description: 'settingCoursesDescription', action: 'pathways', keys: ["courses.coursera.account.v1"] },

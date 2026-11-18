@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   BookA,
+  BookOpenText,
+  History,
+  Trash2,
   Globe,
   X,
   ExternalLink,
@@ -21,6 +24,17 @@ import type {
 import type { DeckTreeNode } from '../../../shared/srs';
 import { TranslationKey } from '../../translations';
 import { Modal } from '../ui/Modal';
+import {
+  OPEN_READING_PAD_EVENT,
+  revisionMeaning,
+  splitLookupWords,
+  type LookupHistoryEntry,
+} from '../../../shared/dictionary-features';
+
+const SUGGEST_DELAY_MS = 150;
+const lookupLang = (word: string, bookLang: string) => (bookLang === 'العربية' || bookLang === 'ar' || /[\u0600-\u06FF]/.test(word) ? 'ar' : 'en');
+const uiLanguage = (): 'ar' | 'en' => (typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ar');
+const EMPTY_RESULT = (word: string): AggregateDictionaryLookupResult => ({ query: word, candidates: [], entries: [], wikipedia: null, durationMs: 0 });
 
 interface DictionaryLookupModalProps {
   isOpen: boolean;
@@ -37,9 +51,22 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
   bookLang = 'ar',
   t,
 }) => {
-  const [activeWord, setActiveWord] = useState<string>(word);
-  const [result, setResult] = useState<AggregateDictionaryLookupResult | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // KEY-414: several words at once (one tab each), suggestions while typing, dictionary chips,
+  // and the lookup history when the search is empty.
+  const [query, setQuery] = useState<string>(word);
+  const [tabs, setTabs] = useState<string[]>(() => splitLookupWords(word));
+  const [active, setActive] = useState(0);
+  const [results, setResults] = useState<Record<string, AggregateDictionaryLookupResult>>({});
+  const [dictFilter, setDictFilter] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestActive, setSuggestActive] = useState(-1);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [history, setHistory] = useState<LookupHistoryEntry[]>([]);
+  const pending = useRef(new Set<string>());
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const currentWord = tabs[active] ?? '';
+  const result = currentWord ? results[currentWord] ?? null : null;
+  const isLoading = Boolean(currentWord) && !result;
   // KEY-401: make a revision card from the Wikipedia summary.
   const [wikiCard, setWikiCard] = useState<{ busy: boolean; message: string | null; failed: boolean }>({ busy: false, message: null, failed: false });
   const makeWikipediaCard = async (title: string, lang: string) => {
@@ -96,7 +123,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
     try {
       const r = await window.electronAPI.lexiconDecks.quickAdd({
         word: targetWord,
-        meaning: meaningText,
+        meaning: revisionMeaning(meaningText),
         source: sourceTitle,
         kind: 'dictionary',
         deckId: selectedDeckId || null,
@@ -127,63 +154,104 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
   const inputsLookupWord = [isOpen, word];
   if (previousLookupWord === null || inputsLookupWord.some((value, index) => !Object.is(value, previousLookupWord[index]))) {
     setPreviousLookupWord(inputsLookupWord);
-    if (isOpen && word) { setActiveWord(word); setIsLoading(Boolean(typeof window !== 'undefined' && window.electronAPI?.dictionaryLookup)); }
-  }
-  useEffect(() => {
-    if (!isOpen || !word || !window.electronAPI?.dictionaryLookup) return;
-    let alive = true;
-    const lang = bookLang === 'العربية' || bookLang === 'ar' || /[\u0600-\u06FF]/.test(word) ? 'ar' : 'en';
-    const uiLang: 'ar' | 'en' = typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ar';
-    void window.electronAPI.dictionaryLookup(word.trim(), { lang, uiLang, includeWikipedia: true }).then(data => { if (alive) setResult(data); }).catch(console.warn).finally(() => { if (alive) setIsLoading(false); });
-    return () => { alive = false; };
-  }, [isOpen, word, bookLang]);
-
-  async function performLookup(targetWord: string) {
-    const trimmed = targetWord.trim();
-    if (!trimmed) return;
-
-    setIsLoading(true);
-    try {
-      const isArabic = /[\u0600-\u06FF]/.test(trimmed);
-      const normalizedLang = (bookLang === 'العربية' || bookLang === 'ar' || isArabic) ? 'ar' : 'en';
-      const uiLang: 'ar' | 'en' = typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ar';
-      const windowAPI = (window).electronAPI;
-      if (windowAPI?.dictionaryLookup) {
-        const data = await windowAPI.dictionaryLookup(trimmed, {
-          lang: normalizedLang,
-          uiLang,
-          includeWikipedia: true,
-        });
-        setResult(data);
-      } else {
-        // Fallback for browser preview / mock mode
-        const isArabic = /[\u0600-\u06FF]/.test(trimmed);
-        setResult({
-          query: trimmed,
-          candidates: [
-            { token: trimmed, type: 'exact', weight: 100 },
-            { token: trimmed.replace(/[\u064B-\u065F\u0670]/g, ''), type: 'stripped_diacritics', weight: 80 },
-          ],
-          entries: [],
-          wikipedia: {
-            title: trimmed,
-            displayTitle: trimmed,
-            extract: isArabic
-              ? `ملخص توضيحي من ويكيبيديا العربية حول مادة (${trimmed}) وسياق استخدامها التاريخي واللغوي.`
-              : `Summary excerpt from Wikipedia regarding (${trimmed}) and its contextual usage.`,
-            articleUrl: `https://${isArabic ? 'ar' : 'en'}.wikipedia.org/wiki/${encodeURIComponent(trimmed)}`,
-            lang: isArabic ? 'ar' : 'en',
-            dir: isArabic ? 'rtl' : 'ltr',
-          },
-          durationMs: 4.8,
-        });
-      }
-    } catch (err) {
-      console.warn('[DictionaryLookupModal] Lookup failed:', err);
-    } finally {
-      setIsLoading(false);
+    if (isOpen) {
+      setQuery(word);
+      setTabs(splitLookupWords(word));
+      setActive(0);
+      setDictFilter(null);
     }
   }
+
+  /** Looks up the active tab's word once; the result is kept while the window is open. */
+  useEffect(() => {
+    if (!isOpen || !currentWord || results[currentWord] || pending.current.has(currentWord)) return;
+    const target = currentWord;
+    pending.current.add(target);
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+    const lookup = api?.dictionaryLookup
+      ? api.dictionaryLookup(target, { lang: lookupLang(target, bookLang), uiLang: uiLanguage(), includeWikipedia: true })
+      : Promise.resolve(EMPTY_RESULT(target));
+    void lookup
+      .then(data => {
+        setResults(previous => ({ ...previous, [target]: data ?? EMPTY_RESULT(target) }));
+        const first = data?.entries?.[0]?.dictTitle;
+        return api?.dictionaryFeatures?.addHistory({ word: target, ...(first ? { dictionary: first } : {}) });
+      })
+      .then(saved => { if (saved && saved.ok) setHistory(saved.data); })
+      .catch(error => {
+        console.warn('[DictionaryLookupModal] Lookup failed:', error);
+        setResults(previous => ({ ...previous, [target]: EMPTY_RESULT(target) }));
+      })
+      .finally(() => pending.current.delete(target));
+  }, [isOpen, currentWord, results, bookLang]);
+
+  useEffect(() => {
+    if (!isOpen || !window.electronAPI?.dictionaryFeatures) return;
+    let alive = true;
+    void window.electronAPI.dictionaryFeatures.history().then(r => { if (alive && r.ok) setHistory(r.data); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [isOpen]);
+
+  /** Suggestions for the word being typed (the last one), about 150 ms after typing stops. */
+  useEffect(() => {
+    if (!isOpen || !suggestOpen) return;
+    const last = query.split(/[\s,،;؛]+/u).pop()?.trim() ?? '';
+    const timer = setTimeout(() => {
+      if (!last || !window.electronAPI?.dictionaryFeatures) { setSuggestions([]); return; }
+      void window.electronAPI.dictionaryFeatures.suggest(last).then(r => {
+        setSuggestions(r.ok ? r.data : []);
+        setSuggestActive(-1);
+      }).catch(() => setSuggestions([]));
+    }, SUGGEST_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isOpen, query, suggestOpen]);
+
+  /** Starts a new search: each word gets a tab. */
+  function search(text: string) {
+    setQuery(text);
+    setTabs(splitLookupWords(text));
+    setActive(0);
+    setDictFilter(null);
+    setSuggestOpen(false);
+    setSuggestions([]);
+  }
+
+  /** Opens a word in a tab of its own (root family, candidates), or switches to it if it is open. */
+  function openTab(target: string) {
+    const clean = splitLookupWords(target)[0];
+    if (!clean) return;
+    const at = tabs.indexOf(clean);
+    setDictFilter(null);
+    if (at >= 0) { setActive(at); return; }
+    const next = [...tabs, clean].slice(-12);
+    setTabs(next);
+    setActive(next.length - 1);
+  }
+
+  const pickSuggestion = (picked: string) => {
+    const parts = query.split(/([\s,،;؛]+)/u);
+    parts[parts.length - 1] = picked;
+    search(parts.join(''));
+  };
+
+  const onTabKey = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    // The tab bar's direction (the UI's), not the tab's: an Arabic word makes its own tab dir=rtl.
+    const rtl = getComputedStyle(event.currentTarget.parentElement ?? event.currentTarget).direction === 'rtl';
+    const forward = (event.key === 'ArrowRight') !== rtl;
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (forward ? 1 : -1) + tabs.length) % tabs.length;
+    setActive(next);
+    setDictFilter(null);
+    tabRefs.current[next]?.focus();
+  };
+
+  const removeHistory = (target: string) => {
+    void window.electronAPI?.dictionaryFeatures?.removeHistory(target).then(r => { if (r.ok) setHistory(r.data); });
+  };
+  const clearHistory = () => {
+    void window.electronAPI?.dictionaryFeatures?.clearHistory().then(r => { if (r.ok) setHistory(r.data); });
+  };
 
   if (!isOpen) return null;
 
@@ -228,8 +296,8 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-main font-serif">
-                  {activeWord}
+                <h2 className="text-base font-bold text-main font-serif" dir="auto">
+                  {currentWord || t('dictionaryLookupTitle')}
                 </h2>
                 {result && result.durationMs !== undefined && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
@@ -245,6 +313,16 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
           </div>
           <button
             type="button"
+            data-open-reading-pad
+            onClick={() => { onClose(); window.dispatchEvent(new CustomEvent(OPEN_READING_PAD_EVENT)); }}
+            title={t('readingPadOpen')}
+            className="ms-auto me-1 inline-flex items-center gap-1.5 rounded-xl border border-subtle px-2.5 py-1.5 text-xs font-semibold text-main hover:bg-canvas cursor-pointer"
+          >
+            <BookOpenText className="w-3.5 h-3.5" />
+            <span>{t('readingPadTitle')}</span>
+          </button>
+          <button
+            type="button"
             data-dictionary-close
             onClick={onClose}
             aria-label={t('dictionaryClose')}
@@ -254,46 +332,115 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
           </button>
         </div>
 
-        {/* Search Input Bar */}
+        {/* Search Input Bar: several words make several tabs; suggestions while typing (KEY-414) */}
         <form
           onSubmit={e => {
             e.preventDefault();
-            const inputEl = e.currentTarget.querySelector<HTMLInputElement>('[data-dictionary-search-input]');
-            const q = inputEl ? inputEl.value : activeWord;
-            setActiveWord(q);
-            void performLookup(q);
+            if (suggestOpen && suggestActive >= 0 && suggestions[suggestActive]) pickSuggestion(suggestions[suggestActive]);
+            else search(query);
           }}
-          className="flex items-center gap-2 px-4 py-2.5 border-b border-subtle bg-canvas/30"
+          className="relative flex items-center gap-2 px-4 py-2.5 border-b border-subtle bg-canvas/30"
         >
           <Search className="size-4 text-muted shrink-0" />
           <input
             type="text"
             dir="auto"
             data-dictionary-search-input
-            value={activeWord}
-            onChange={e => setActiveWord(e.target.value)}
-            placeholder={t('dictionaryLookupTitle')}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={suggestOpen && suggestions.length > 0}
+            aria-controls="dictionary-suggestions"
+            aria-activedescendant={suggestOpen && suggestActive >= 0 ? `dictionary-suggestion-${suggestActive}` : undefined}
+            value={query}
+            onChange={e => { setQuery(e.target.value); setSuggestOpen(true); }}
+            onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+            onKeyDown={e => {
+              if (!suggestOpen || suggestions.length === 0) return;
+              if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestActive(i => (i + 1) % suggestions.length); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); setSuggestActive(i => (i <= 0 ? suggestions.length - 1 : i - 1)); }
+              else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSuggestOpen(false); }
+            }}
+            placeholder={t('dictionaryMultiWordPlaceholder')}
             aria-label={t('dictionaryLookupTitle')}
             className="flex-1 bg-transparent text-xs text-main outline-none"
           />
           <button
-            type="button"
+            type="submit"
             data-dictionary-search-btn
-            onClick={e => {
-              const inputEl = e.currentTarget.closest('form')?.querySelector<HTMLInputElement>('[data-dictionary-search-input]');
-              const q = inputEl ? inputEl.value : activeWord;
-              setActiveWord(q);
-              void performLookup(q);
-            }}
             className="rounded-lg border border-subtle bg-surface px-2.5 py-1 text-xs font-medium text-main hover:bg-canvas cursor-pointer"
           >
             {t('search')}
           </button>
+          {suggestOpen && suggestions.length > 0 && (
+            <ul id="dictionary-suggestions" role="listbox" aria-label={t('dictionarySuggestions')} data-dictionary-suggestions className="absolute inset-x-4 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-subtle bg-surface p-1 shadow-xl">
+              {suggestions.map((item, index) => (
+                <li
+                  key={item}
+                  id={`dictionary-suggestion-${index}`}
+                  role="option"
+                  aria-selected={index === suggestActive}
+                  data-dictionary-suggestion={item}
+                  dir="auto"
+                  onMouseDown={e => { e.preventDefault(); pickSuggestion(item); }}
+                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-reading ${index === suggestActive ? 'bg-pale-sky-500/15 text-main' : 'text-main hover:bg-canvas'}`}
+                >
+                  {item}
+                </li>
+              ))}
+            </ul>
+          )}
         </form>
+
+        {tabs.length > 1 && (
+          <div role="tablist" aria-label={t('dictionaryWordTabs')} data-dictionary-tabs className="flex gap-1 overflow-x-auto border-b border-subtle bg-canvas/20 px-4 py-2">
+            {tabs.map((tab, index) => (
+              <button
+                key={tab}
+                ref={el => { tabRefs.current[index] = el; }}
+                type="button"
+                role="tab"
+                aria-selected={index === active}
+                tabIndex={index === active ? 0 : -1}
+                data-dictionary-tab={tab}
+                dir="auto"
+                onClick={() => { setActive(index); setDictFilter(null); }}
+                onKeyDown={e => onTabKey(e, index)}
+                className={`shrink-0 rounded-xl border px-3 py-1 text-sm font-reading ${index === active ? 'border-pale-sky-500 bg-pale-sky-500/15 text-main font-bold' : 'border-subtle text-muted hover:text-main'}`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {isLoading ? (
+          {!currentWord ? (
+            <section data-dictionary-history className="space-y-2">
+              <div className="flex items-center justify-between gap-2 text-xs font-bold text-muted">
+                <span className="flex items-center gap-1.5"><History className="w-3.5 h-3.5 text-pale-sky-500" />{t('dictionaryHistory')}</span>
+                {history.length > 0 && <button type="button" data-dictionary-history-clear onClick={clearHistory} className="rounded-lg px-2 py-0.5 font-medium text-muted hover:text-main hover:bg-canvas cursor-pointer">{t('dictionaryHistoryClear')}</button>}
+              </div>
+              {history.length === 0 ? (
+                <p className="py-4 text-center text-xs text-muted">{t('dictionaryHistoryEmpty')}</p>
+              ) : (
+                <ul className="space-y-1">
+                  {history.map(item => (
+                    <li key={item.word} data-dictionary-history-item={item.word} className="group flex items-center gap-2 rounded-xl border border-subtle bg-canvas/50 px-3 py-1.5">
+                      <button type="button" data-dictionary-history-open={item.word} onClick={() => search(item.word)} className="min-w-0 flex-1 text-start cursor-pointer">
+                        <span dir="auto" className="font-reading text-sm font-bold text-main">{item.word}</span>
+                        {item.dictionary && <span dir="auto" className="ms-2 text-[11px] text-muted">{item.dictionary}</span>}
+                      </button>
+                      <time dateTime={item.at} className="shrink-0 text-[11px] text-muted">{new Date(item.at).toLocaleString(uiLanguage(), { dateStyle: 'short', timeStyle: 'short' })}</time>
+                      <button type="button" data-dictionary-history-remove={item.word} onClick={() => removeHistory(item.word)} aria-label={t('dictionaryHistoryRemove', { word: item.word })} title={t('dictionaryHistoryRemove', { word: item.word })} className="shrink-0 rounded-lg p-1 text-muted opacity-0 hover:text-main group-hover:opacity-100 focus:opacity-100 cursor-pointer">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : isLoading ? (
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted" role="status">
               <Loader2 className="w-8 h-8 animate-spin text-pale-sky-500" />
               <p className="text-xs font-medium">{t('dictionarySearching')}</p>
@@ -310,14 +457,11 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                   <div className="flex flex-wrap gap-1.5">
                     {result.candidates.slice(0, 7).map((c, i) => {
                       const badge = getCandidateTypeBadge(c.type);
-                      const isSelected = activeWord === c.token;
+                      const isSelected = currentWord === c.token;
                       return (
                         <button
                           key={i}
-                          onClick={() => {
-                            setActiveWord(c.token);
-                            performLookup(c.token);
-                          }}
+                          onClick={() => openTab(c.token)}
                           className={`px-2.5 py-1 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer ${
                             isSelected
                               ? 'bg-pale-sky-500 text-white border-pale-sky-600 shadow-xs scale-105'
@@ -352,6 +496,18 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                   </select>
                 </div>
               )}
+              {result && result.entries && result.entries.length > 1 && (
+                <div role="group" aria-label={t('dictionaryQuickSwitch')} data-dictionary-chips className="flex flex-wrap gap-1.5">
+                  <button type="button" data-dictionary-chip="" aria-pressed={dictFilter === null} onClick={() => setDictFilter(null)} className={`rounded-full border px-2.5 py-0.5 text-xs ${dictFilter === null ? 'border-pale-sky-500 bg-pale-sky-500/15 text-main' : 'border-subtle text-muted hover:text-main'}`}>
+                    {t('dictionaryAllDictionaries')}
+                  </button>
+                  {[...new Map(result.entries.map(entry => [entry.dictId, entry.dictTitle])).entries()].map(([id, title]) => (
+                    <button key={id} type="button" data-dictionary-chip={id} aria-pressed={dictFilter === id} onClick={() => setDictFilter(id)} dir="auto" className={`rounded-full border px-2.5 py-0.5 text-xs ${dictFilter === id ? 'border-pale-sky-500 bg-pale-sky-500/15 text-main' : 'border-subtle text-muted hover:text-main'}`}>
+                      {title}
+                    </button>
+                  ))}
+                </div>
+              )}
               {result && result.entries && result.entries.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-xs font-bold text-muted border-b border-subtle pb-1.5">
@@ -360,12 +516,13 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                       {t('dictionaryLocalDefinitions')}
                     </span>
                     <span className="text-[11px] font-mono">
-                      {t('dictionaryEntriesCount', { count: result.entries.length })}
+                      {t('dictionaryEntriesCount', { count: result.entries.filter(entry => !dictFilter || entry.dictId === dictFilter).length })}
                     </span>
                   </div>
 
                   {result.entries.map((entry, idx) => {
-                    const entryKey = `entry-${idx}`;
+                    if (dictFilter && entry.dictId !== dictFilter) return null;
+                    const entryKey = `${currentWord}:entry-${idx}`;
                     const qStatus = quickAddStatus[entryKey];
                     const fullSourceTitle = entry.attribution
                       ? `${entry.dictTitle}, ${entry.attribution}`
@@ -440,25 +597,22 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
 
                       {/* Root family ("Other words from this root") for Hans Wehr, Lane, and al-Ghani */}
                       {entry.rootFamily && entry.rootFamily.members.length > 1 && (
-                        <div
+                        <details
                           data-entry-root-family={entry.dictId}
                           className="pt-2 border-t border-subtle/70 space-y-1.5"
                         >
-                          <p className="text-[11px] font-semibold text-muted">
+                          <summary className="cursor-pointer text-[11px] font-semibold text-muted">
                             {t('arlexOtherWordsFromRoot', {
                               root: entry.rootFamily.rootWord || entry.headword,
                             })}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
+                          </summary>
+                          <div className="flex flex-wrap gap-1.5 pt-1.5">
                             {entry.rootFamily.members.slice(0, 24).map((member) => (
                               <button
                                 key={`${member.id}-${member.word}`}
                                 type="button"
                                 data-root-family-word={member.word}
-                                onClick={() => {
-                                  setActiveWord(member.word);
-                                  void performLookup(member.word);
-                                }}
+                                onClick={() => openTab(member.word)}
                                 className={`px-2 py-0.5 rounded-lg text-xs border transition-colors cursor-pointer ${
                                   member.isRoot
                                     ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold'
@@ -472,7 +626,7 @@ export const DictionaryLookupModal: React.FC<DictionaryLookupModalProps> = ({
                               </button>
                             ))}
                           </div>
-                        </div>
+                        </details>
                       )}
                     </div>
                   );

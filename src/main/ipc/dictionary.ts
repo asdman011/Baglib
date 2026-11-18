@@ -7,6 +7,7 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { getDatabase } from '../database/connection';
 import { DictionaryService } from '../services/dictionary/dictionary.service';
 import { WikipediaService } from '../services/dictionary/wikipedia.service';
+import { DictionaryPrefsService } from '../services/dictionary/dictionary-prefs';
 import { confirmedQuitCleanup } from '../services/quit-cleanup';
 import type { ImportDictionaryOptions } from '../../shared/types/dictionary';
 import { translations } from '../../renderer/translations';
@@ -163,6 +164,27 @@ export function registerDictionaryIpc(): void {
       return null;
     }
   });
+
+  // KEY-414: suggestions, dictionary order, lookup history and the Reading pad. Inputs are validated
+  // in the services; a bad request returns { ok: false, error: 'invalid-request' }.
+  const handled = <T>(name: string, run: () => T) => {
+    try {
+      return { ok: true as const, data: run() };
+    } catch (err) {
+      const message = (err as Error)?.message === 'invalid-request' ? 'invalid-request' : 'failed';
+      if (message === 'failed') console.warn(`[IPC:dictionary:${name}] Error:`, err);
+      return { ok: false as const, error: message };
+    }
+  };
+  const prefs = () => new DictionaryPrefsService(getDatabase());
+  ipcMain.handle('dictionary:suggest', (_, query: unknown) => handled('suggest', () => getDictService().suggest(query)));
+  ipcMain.handle('dictionary:set-order', (_, ids: unknown) => handled('set-order', () => getDictService().setDictionaryOrder(ids)));
+  ipcMain.handle('dictionary:history', () => handled('history', () => prefs().history()));
+  ipcMain.handle('dictionary:history-add', (_, entry: unknown) => handled('history-add', () => prefs().addHistory(entry)));
+  ipcMain.handle('dictionary:history-remove', (_, word: unknown) => handled('history-remove', () => prefs().removeHistory(word)));
+  ipcMain.handle('dictionary:history-clear', () => handled('history-clear', () => prefs().clearHistory()));
+  ipcMain.handle('dictionary:pad', () => handled('pad', () => prefs().pad()));
+  ipcMain.handle('dictionary:pad-save', (_, state: unknown) => handled('pad-save', () => prefs().savePad(state)));
 
   ipcMain.handle('dictionary:set-science', async (_, id: string, science: string | null) => getDictService().setScience(id, science));
 

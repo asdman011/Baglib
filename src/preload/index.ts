@@ -269,6 +269,17 @@ export const API = {
     ipcRenderer.invoke('dictionary:remove-arabic-lexicons') as Promise<boolean>,
   dictionaryRootFamily: (dictId: string, entryId: number) =>
     ipcRenderer.invoke('dictionary:root-family', dictId, entryId) as Promise<import('../shared/types/dictionary').DictionaryRootFamily | null>,
+  // KEY-414: suggestions, dictionary order, lookup history, Reading pad.
+  dictionaryFeatures: {
+    suggest: (query: string) => ipcRenderer.invoke('dictionary:suggest', query) as Promise<{ ok: true; data: string[] } | { ok: false; error: string }>,
+    setOrder: (ids: string[]) => ipcRenderer.invoke('dictionary:set-order', ids) as Promise<{ ok: true; data: boolean } | { ok: false; error: string }>,
+    history: () => ipcRenderer.invoke('dictionary:history') as Promise<{ ok: true; data: import('../shared/dictionary-features').LookupHistoryEntry[] } | { ok: false; error: string }>,
+    addHistory: (entry: { word: string; dictionary?: string }) => ipcRenderer.invoke('dictionary:history-add', entry) as Promise<{ ok: true; data: import('../shared/dictionary-features').LookupHistoryEntry[] } | { ok: false; error: string }>,
+    removeHistory: (word: string) => ipcRenderer.invoke('dictionary:history-remove', word) as Promise<{ ok: true; data: import('../shared/dictionary-features').LookupHistoryEntry[] } | { ok: false; error: string }>,
+    clearHistory: () => ipcRenderer.invoke('dictionary:history-clear') as Promise<{ ok: true; data: import('../shared/dictionary-features').LookupHistoryEntry[] } | { ok: false; error: string }>,
+    pad: () => ipcRenderer.invoke('dictionary:pad') as Promise<{ ok: true; data: import('../shared/dictionary-features').ReadingPadState } | { ok: false; error: string }>,
+    savePad: (state: import('../shared/dictionary-features').ReadingPadState) => ipcRenderer.invoke('dictionary:pad-save', state) as Promise<{ ok: true; data: import('../shared/dictionary-features').ReadingPadState } | { ok: false; error: string }>,
+  },
   onArabicLexiconsImportProgress: (callback: (progress: import('../shared/types/dictionary').ArabicLexiconsImportProgress) => void) => {
     const sub = (_: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
     ipcRenderer.on('dictionary:arabic-lexicons-progress', sub);

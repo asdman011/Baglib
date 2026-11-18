@@ -1,3 +1,79 @@
+## KEY-414 Dictionary lookup features: multi-word search, suggestions, order, root family, history, Reading pad - 2026-11-18 - Agent: Claude Code
+
+**Request.** Brief `docs/agent-ops/tasks/KEY-414.antigravity.md`. Per "after the argon finishes you handle any remaining tasks", Claude Code built it, and the user confirmed "Yes, KEY-414". Ideas came from the GPL Arabic Lexicons app; no code or text was copied. No tables, columns, migrations or dependencies were added.
+
+**What changed:**
+- **`shared/dictionary-features.ts`:**
+  - `splitLookupWords` (spaces, commas, ، ; ؛ and new lines; unique; at most 12);
+  - `suggestionKey` (tashkeel and tatweel stripped, alef forms unified, ى read as ي, **ة/ه kept apart**);
+  - `applyDictionaryOrder`;
+  - history helpers (100 entries; a repeat moves to the top);
+  - Reading pad helpers (`cleanPad` at 50,000 characters, `toggleHighlight`, `splitHemistichs` by tab, 3+ spaces, `*`, `…` or `...`, `layoutPad`, `padTokens`);
+  - `revisionMeaning`, which cuts long lexicon entries to fit a revision card.
+- **`DictionaryService`:**
+  - the `dictionary.order.v1` order is applied in `listDictionaries`, so lookups, chips and the panel follow it;
+  - `setDictionaryOrder` keeps known ids only;
+  - `suggest` uses the stored index's prefix range on enabled dictionaries, then filters with `suggestionKey`, returning 10, shortest first.
+- **`services/dictionary/dictionary-prefs.ts`:**
+  - history (`dictionary.history.v1`): add, remove, clear;
+  - pad (`dictionary.readingPad.v1`): text over 50,000 characters is refused.
+- **IPC and preload:** new `dictionary:suggest`, `set-order`, `history`, `history-add`, `history-remove`, `history-clear`, `pad` and `pad-save` handlers. Bad input returns `invalid-request`. Preload exposes them as `dictionaryFeatures`.
+- **`DictionaryLookupModal`:**
+  - one tab per word (`tablist`, arrow keys mirrored by the UI direction, Home/End);
+  - "All" plus per-dictionary chips;
+  - a combobox with a suggestions listbox (150 ms, arrow keys, Enter, Esc);
+  - history when the search is empty: re-open, remove, clear;
+  - root family is now expandable, and its words open in new tabs;
+  - candidates open in tabs;
+  - a "Reading pad" button.
+- **`DictionariesPanel`:** reorder by drag, or by up/down buttons.
+- **`ReadingPad`:**
+  - paste and read, with every word clickable;
+  - a popover with the top 3 results, "Add to revision", highlight, and open in the dictionary;
+  - Ctrl/Alt/Cmd + click highlights;
+  - two-column qasidah layout;
+  - the text is saved.
+- **`DictionaryHost`** (in AppLayout) opens the lookup window and the pad from events. The command palette has "Dictionaries & Encyclopedia" and "Reading pad" entries.
+- **Settings:**
+  - `dictionary.order.v1` was added to the settings directory's dictionary entry;
+  - history and pad were added as operational keys in the coverage test.
+- **Strings:** ar and en.
+- **Docs:** feature doc section 6.
+
+**Found and fixed in the live run:**
+1. With Lisan first, "Add to revision" on a long entry was refused by quick-add's 10,000-character meaning limit. This was already true of the KEY-400 button in the lookup window. Both now cut the meaning to 4,000 characters, ending in "…".
+2. Tab arrows used the tab's own `dir=auto`, so in the English UI an Arabic word flipped the arrows. They now follow the tab bar's direction.
+
+**Verified (2026-11-18):**
+- `tests/services/dictionary-features.test.ts` 9/9:
+  - splitting;
+  - ة/ه kept apart and tashkeel ignored;
+  - suggestions from enabled dictionaries, under 30 ms on 60,000 headwords;
+  - order;
+  - history cap and removal;
+  - pad cap and highlights;
+  - hemistichs;
+  - meaning cap;
+  - IPC validation.
+- Full suite 2,637/2,637; tsc 0; eslint 0 errors (one `<img>` warning was already there).
+- **`scripts/dictionary-features-live` passed in ar and en,** with the real `repos/arabic_lexicons-main.zip` and a poetry corpus copy (original checked unchanged):
+  - Lisan moved first with the arrows, and the first result is from Lisan;
+  - كتب رحمة استغفر gives 3 tabs; the arrow key goes to رحمة; the al-Maqayis chip narrows the results;
+  - استغ gives 10 suggestions; picking one looks it up;
+  - in the root family of كتب, أكتب opens in a new tab;
+  - history lists the lookups, and رحمة re-opens;
+  - **Reading pad:** two real verses (poem 1) show as 2 columns, with the sadr on the right and on the same row; a word gives 3 results and "Added to «مفردات المعجم»"; highlight works; text and highlight are saved.
+  - No renderer errors. Evidence: `.baglib-data/key414-evidence/`.
+
+**Limits / notes:**
+- Suggestions show headword forms as the lexicons store them. Some are bare root-pattern forms such as إستغب.
+- In Qasidah mode a word that runs across the hemistichs in the source (run-on verse) stays split, as the source has it.
+- The pad popover is positioned on screen and may extend past the pad's edge.
+
+**Files:** src/shared/dictionary-features.ts, src/main/services/dictionary/dictionary-prefs.ts, src/main/services/dictionary/dictionary.service.ts, src/main/ipc/dictionary.ts, src/preload/index.ts, src/renderer/components/reader/DictionaryLookupModal.tsx, src/renderer/components/reader/ReadingPad.tsx, src/renderer/components/reader/DictionaryHost.tsx, src/renderer/components/knowledge/DictionariesPanel.tsx, src/renderer/components/layout/CommandPalette.tsx, src/renderer/components/layout/AppLayout.tsx, src/renderer/components/layout/settings-directory-model.ts, src/renderer/translations.ts, tests/services/dictionary-features.test.ts, tests/ui/settings-directory-coverage.test.ts, scripts/dictionary-features-live/run.mjs, scripts/dictionary-features-live/main.cjs, docs/features/feature - Pluggable Offline Dictionary and Encyclopedia Lookup.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-386 Personal lists: Starred plus named lists of books, ayahs, hadith and poems - 2026-11-18 - Agent: Claude Code
 
 **Request.** The user approved the new tables and placement option 3 on 2026-11-18: "Approve KEY-386 tables, and option 3: both". So each section filters by its own share of every list, and one hub groups all lists.

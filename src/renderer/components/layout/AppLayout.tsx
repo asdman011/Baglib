@@ -29,6 +29,7 @@ import { SettingsDirectory } from './SettingsDirectory';
 import { useAppCloseBridge } from '../../utils/close-guard';
 import { StudyDeepLinkBridge } from '../notes/StudyDeepLinkBridge';
 import { NewListDialogHost } from '../lists/PersonalListControls';
+import { DictionaryHost } from '../reader/DictionaryHost';
 import { StartupSplash } from '../StartupSplash';
 import { BookRevisionHost } from '../knowledge/BookRevisionHost';
 
@@ -178,6 +179,7 @@ const AppLayoutContent: React.FC = () => {
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative" dir={dir} suppressHydrationWarning>
       <StudyDeepLinkBridge />
       <NewListDialogHost />
+      <DictionaryHost />
       {/* Scholar-Grade Startup Splash Orchestrator */}
       {showSplash && (
         <StartupSplash

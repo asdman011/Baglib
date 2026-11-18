@@ -35,6 +35,14 @@ import {
   getArabicLexiconLabels,
   isArabicLexiconId,
 } from './arabic-lexicons';
+import {
+  DICTIONARY_ORDER_SETTING,
+  MAX_LOOKUP_WORD_LENGTH,
+  MAX_SUGGESTIONS,
+  applyDictionaryOrder,
+  cleanDictionaryOrder,
+  suggestionKey,
+} from '../../../shared/dictionary-features';
 
 const SCIENCES_KEY = 'dictionary.sciences.v1';
 const ARABIC_LEXICON_ORDER = new Map<string, number>(
@@ -95,12 +103,66 @@ export class DictionaryService {
       };
     });
 
-    return mapped.sort((a, b) => {
+    const builtIn = mapped.sort((a, b) => {
       const orderA = ARABIC_LEXICON_ORDER.get(a.id);
       const orderB = ARABIC_LEXICON_ORDER.get(b.id);
       if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
       return 0;
     });
+    // KEY-414: the user's own order (Dictionaries panel) comes first; lookups follow it.
+    return applyDictionaryOrder(builtIn, this.dictionaryOrder());
+  }
+
+  /** The user's dictionary order (KEY-414), an id list kept in settings because `dictionaries` has no field for it. */
+  dictionaryOrder(): string[] {
+    try {
+      const row = this.db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get(DICTIONARY_ORDER_SETTING) as { value: string } | undefined;
+      return row ? cleanDictionaryOrder(JSON.parse(row.value)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Saves the dictionary order. Only ids of registered dictionaries are kept; anything else is refused. */
+  setDictionaryOrder(ids: unknown): boolean {
+    if (!Array.isArray(ids) || ids.length > 500 || ids.some(id => typeof id !== 'string')) throw new Error('invalid-request');
+    const known = new Set((this.db.prepare(`SELECT id FROM dictionaries`).all() as { id: string }[]).map(r => r.id));
+    const order = cleanDictionaryOrder(ids).filter(id => known.has(id));
+    this.db.prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+      .run(DICTIONARY_ORDER_SETTING, JSON.stringify(order), new Date().toISOString());
+    return true;
+  }
+
+  /**
+   * Headword suggestions for what is being typed (KEY-414): up to 10 headwords from the enabled
+   * dictionaries starting with the typed prefix. The index range uses the stored normalised form;
+   * the result is then checked with `suggestionKey`, which keeps ة and ه apart and ignores tashkeel.
+   */
+  suggest(query: unknown): string[] {
+    if (typeof query !== 'string' || query.length > 200) throw new Error('invalid-request');
+    const typed = query.trim().slice(0, MAX_LOOKUP_WORD_LENGTH);
+    const key = suggestionKey(typed);
+    if (!key) return [];
+    const enabled = this.listDictionaries().filter(d => d.isEnabled).map(d => d.id);
+    if (enabled.length === 0) return [];
+    const prefix = normalizeArabicLetters(stripArabicDiacritics(typed.toLowerCase()));
+    if (!prefix) return [];
+    const rows = this.db.prepare(
+      `SELECT headword FROM headword_index
+       WHERE normalized_headword >= ? AND normalized_headword < ? AND dict_id IN (${enabled.map(() => '?').join(',')})
+       LIMIT 600`
+    ).all(prefix, `${prefix}￿`, ...enabled) as { headword: string }[];
+    const seen = new Map<string, string>();
+    for (const { headword } of rows) {
+      const form = headword.trim();
+      const formKey = suggestionKey(form);
+      if (!form || !formKey.startsWith(key) || seen.has(formKey)) continue;
+      seen.set(formKey, form);
+    }
+    return [...seen.entries()]
+      .sort(([a], [b]) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0))
+      .slice(0, MAX_SUGGESTIONS)
+      .map(([, form]) => form);
   }
 
   /**

@@ -17,10 +17,12 @@ import {
   Route,
   BookMarked,
   BookOpenText,
+  BookA,
   Feather,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
+import { OPEN_DICTIONARY_EVENT, OPEN_READING_PAD_EVENT } from '../../../shared/dictionary-features';
 import { useWorkspace, type WorkspaceViewMode } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { matchesStudyQuery } from '../../../shared/study-notes';
@@ -83,6 +85,14 @@ export const CommandPalette: React.FC = () => {
           if(shortcut.id==='new-note')openStudyNote({content:''});
           if(shortcut.id==='navigation')toggleNavPinned();
         }});
+      }
+      // KEY-414: dictionary lookup and the Reading pad, from anywhere.
+      for (const entry of [
+        { id: 'dictionary-lookup', title: t('dictionaryLookupTitle'), icon: BookA, event: OPEN_DICTIONARY_EVENT },
+        { id: 'reading-pad', title: t('readingPadTitle'), icon: BookOpenText, event: OPEN_READING_PAD_EVENT },
+      ]) {
+        if (keyword && !matchesStudyQuery(`${entry.title} ${t('readingPadHint')}`, keyword)) continue;
+        items.push({ id: `tool:${entry.id}`, title: entry.title, subtitle: t('readerToolsGroup'), icon: entry.icon, action: () => window.dispatchEvent(new CustomEvent(entry.event)) });
       }
     }
 
