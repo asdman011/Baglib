@@ -21,6 +21,8 @@ import { colorKeys } from '../reader/ReaderMarkupBar';
 import { createHadithPayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
 import { getSunnahIsnadScope } from '../../utils/corpus-lookup';
 import { SunnahDeckDialog, type SunnahDeckSource } from '../knowledge/SunnahDeckDialog';
+import { useListMembership, type PersonalList } from '../../libs/personal-lists';
+import { ListItemControls, listMenuItems } from '../lists/PersonalListControls';
 
 export type SunnahTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -50,8 +52,11 @@ function NumberedTitle({ number, title, language, fallback }: { number: string; 
   return <><bdi className="sunnah-number" dir="ltr">{number}</bdi><span>{title[language] || fallback}</span></>;
 }
 
-export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCounts, chapter, hadiths, showEnglish, single, t, onFocus }: {
+export function SunnahChapterView({ lists = [], onListFilter, calm = false, onStudy, onShowGrading, noteCounts, chapter, hadiths, showEnglish, single, t, onFocus }: {
   calm?: boolean;
+  /** KEY-386: every personal list, and the section's "in list" filter (a chip click sets it). */
+  lists?: PersonalList[];
+  onListFilter?: (listId: string) => void;
   /** KEY-337: notes per passage target; a hadith with notes shows a marker that opens them beside the text. */
   noteCounts?: Map<string, number>;
   onStudy?: (tab: ReaderTab) => void;
@@ -69,6 +74,8 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
   const [deckSource, setDeckSource] = useState<SunnahDeckSource | null>(null);
   const [deckMode, setDeckMode] = useState<'hadith' | 'narrator'>('hadith');
   const collectionName = collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection;
+  const listRefs = hadiths.map(hadith => `sunnah:${chapter.collection}:${chapter.number}:${hadith.id}`);
+  const membership = useListMembership('hadith', listRefs);
   const bookSource = (): SunnahDeckSource => ({ kind: 'sunnah_book', ref: `${chapter.collection}:${chapter.number}`, label: `${collectionName} — ${chapter.title.ar || chapter.title.en}` });
   const openDeck = (source: SunnahDeckSource, mode: 'hadith' | 'narrator' = 'hadith') => {
     setDeckMode(mode);
@@ -130,6 +137,8 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
         link: () => linkPassageToNote(target,label),
         manuscript: () => requestSendToManuscript(createHadithPayload({ collection: chapter.collection, collectionLabel: collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection, chapterNumber: chapter.number, hadithId: hadith.id, hadithNumber: hadith.number || '', text: formatHadith(chapter, hadith, false, getSunnahIsnadScope() !== 'matn_only', false) })),
       },t);
+      const listItem = { kind: 'hadith' as const, itemRef: target, label: `${collectionName} ${hadith.number || ''} — ${(hadith.text.ar.matn || hadith.text.ar.full || hadith.text.en.matn || '').slice(0, 160)}` };
+      items.push(...listMenuItems(listItem, lists, membership[target] ?? [], t));
       const mine = highlights.filter(item => item.location === target);
       const babSource: SunnahDeckSource | null = section.number
         ? { kind: 'sunnah_bab', ref: `${chapter.collection}:${chapter.number}:${section.number}`, label: `${bookSource().label} — ${section.title.ar || section.title.en || section.number}` }
@@ -152,7 +161,8 @@ export function SunnahChapterView({ calm = false, onStudy, onShowGrading, noteCo
         <article className="sunnah-hadith group relative" aria-label={t('sunnahHadithNumber', { number: hadith.number || '—' })}>
           <div className="flex items-center justify-between gap-3 mb-4 text-xs font-sans text-muted">
             <span className="inline-flex items-center gap-2"><span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
-              {!!noteCounts?.get(target) && <NoteMarker count={noteCounts.get(target)!} t={t} onOpen={() => passageNote(target, label)} />}</span>
+              {!!noteCounts?.get(target) && <NoteMarker count={noteCounts.get(target)!} t={t} onOpen={() => passageNote(target, label)} />}
+              {onListFilter && <ListItemControls item={listItem} heldBy={membership[target] ?? []} lists={lists} onFilter={onListFilter} />}</span>
             {!calm && hadith.researchId !== undefined && <button type="button" className="sunnah-button" onClick={event => {
               const panel = event.currentTarget.closest('article')?.querySelector<HTMLDetailsElement>('.sunnah-research');
               if (panel) { panel.open = true; panel.scrollIntoView({ block: 'start' }); }

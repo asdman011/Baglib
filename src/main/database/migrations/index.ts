@@ -47,6 +47,7 @@ import migration034 from './034_sunnah_deck_note_types';
 import migration035 from './035_poem_deck_note_types';
 import migration036 from './036_person_note_type';
 import migration037 from './037_anki_orphan_revlog';
+import migration038 from './038_personal_lists';
 
 
 /** All migrations in chronological order. */
@@ -88,6 +89,7 @@ export const migrations: Migration[] = [
   migration035,
   migration036,
   migration037,
+  migration038,
 ];
 
 

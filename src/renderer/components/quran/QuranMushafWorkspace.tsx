@@ -32,6 +32,9 @@ import { openSunnahReference } from '../../utils/study-navigation';
 import { groupThemeLabels } from './quran-theme-labels';
 import { quranStudyReferences } from '../../../shared/quran-study-scope';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
+import { usePersonalLists, useListMembership } from '../../libs/personal-lists';
+import { listMenuItems } from '../lists/PersonalListControls';
+import { ayahListRef } from '../../../shared/personal-lists';
 
 function QuranWordQuickAddButton({ word, meaning, reference, lang, t }: { word: string; meaning: string; reference: string; lang: 'ar' | 'en'; t: Props['t'] }) {
   const [state, setState] = useState<{ busy: boolean; message: string | null; failed?: boolean }>({ busy: false, message: null });
@@ -265,12 +268,28 @@ function StudyContent({ tool, reference, page, selection, metadata, t, lang, onN
   return loadedKey !== key ? <p role="status">{t('quranLoading')}</p> : failed ? <p role="alert">{t('quranReaderError')}</p> : <>{content}</>;
 }
 
+/** KEY-386: the ayah's Star / "Add to list" menu entries (kept out of the workspace component). */
+function useAyahListMenu(reference: Reference | null, page: Props['page'], surahs: Props['surahs'], lang: 'ar' | 'en', t: Props['t']): () => MenuItemProps[] {
+  const { lists } = usePersonalLists();
+  const itemRef = reference ? ayahListRef(reference.surah, reference.ayah, reference.ayah, page.profile === 'warsh' ? 'warsh' : 'hafs') : '';
+  const membership = useListMembership('ayah', itemRef ? [itemRef] : []);
+  return () => {
+    if (!reference) return [];
+    const surah = surahs.find(item => item.number === reference.surah);
+    const name = (lang === 'ar' ? surah?.arabic : surah?.name) || '';
+    const text = page.words.filter(word => word.type !== 'aya-mark' && word.surah === reference.surah && word.ayah === reference.ayah).map(word => word.canonicalText || word.textHafs || '').join(' ').trim();
+    return listMenuItems({ kind: 'ayah', itemRef, label: `${name} ${reference.surah}:${reference.ayah} — ${text}`.slice(0, 300) }, lists, membership[itemRef] ?? [], t);
+  };
+}
+
 export function QuranMushafWorkspace(props: Props) {
   const { page, t, selection, metadata, studyTarget, onStudyTargetConsumed, onNavigateAyah, onPanelChange } = props;
   const [notesTab, setNotesTab] = useState(false);
   const [compareTafsirs, setCompareTafsirs] = useState(false);
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [menu, setMenu] = useState<{ reference: Reference; x: number; y: number } | null>(null);
+  // KEY-386: Star and "Add to list" in the ayah's right-click menu.
+  const ayahListItems = useAyahListMenu(menu?.reference ?? null, page, props.surahs, props.lang, t);
   const [showThemes, setShowThemes] = useState(false);
   const [deckFrom, setDeckFrom] = useState<Reference | null>(null);
   const [themes, setThemes] = useState<QuranAyahTheme[]>([]);
@@ -445,7 +464,7 @@ export function QuranMushafWorkspace(props: Props) {
         </>}
       </IslamicReaderPanel>;
     })()}
-    {menu && <QuranActionMenu portal anchor={{ x: menu.x, y: menu.y }} extra={highlightItems(menu.reference)} onClose={() => setMenu(null)} input={{ reference: menu.reference, script: selection.script, profile: page.profile, language: props.lang, t,
+    {menu && <QuranActionMenu portal anchor={{ x: menu.x, y: menu.y }} extra={[...highlightItems(menu.reference), ...ayahListItems()]} onClose={() => setMenu(null)} input={{ reference: menu.reference, script: selection.script, profile: page.profile, language: props.lang, t,
         tafsir: selection.tafsir ? () => open('tafsir',menu.reference,'left') : undefined,
         translation: selection.translation ? () => open('translation',menu.reference,'left') : undefined,
         play: props.canPlay ? () => props.onStartAudio(menu.reference) : undefined,

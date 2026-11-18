@@ -7,6 +7,9 @@ import { PoetryReader } from './PoetryReader';
 import { PoetBrowser } from './PoetBrowser';
 import { PoetryExcerpt } from './PoetryExcerpt';
 import { consumePoetryReference, POETRY_OPEN_EVENT } from '../../utils/poetry-navigation';
+import { usePersonalLists, useListFilter, useListMembership } from '../../libs/personal-lists';
+import { ListFilterBar, ListItemControls } from '../lists/PersonalListControls';
+import { poemListRef } from '../../../shared/personal-lists';
 
 export function BayanView() {
   const { t, dir, lang } = useWorkspace();
@@ -17,6 +20,10 @@ export function BayanView() {
   const [history, setHistory] = useState<{ key: string; cursors: number[] }>({ key: '', cursors: [] });
   const resultsElement = React.useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<PoetrySummary[]>([]);
+  // KEY-386: star, add-to-list and chips on each poem, and the "in list" filter.
+  const { lists } = usePersonalLists();
+  const listFilter = useListFilter('poem');
+  const poemMembership = useListMembership('poem', items.map(item => poemListRef(item.id)));
   const [next, setNext] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const [provision, setProvision] = useState<PoetryProvisionStatus | null>(null);
@@ -147,11 +154,12 @@ export function BayanView() {
     </aside>}
     {panel === 'poet' && <PoetBrowser key={`${language}:${era}:${location}`} language={language} era={era} location={location} onPoet={id => { setPoetId(id); setAfter(0); setPanel(null); }} />}
     <input type="search" dir="auto" aria-label={t('bayanSearch')} placeholder={t('bayanSearch')} value={query} onChange={event => { setQuery(event.target.value); setAfter(0); }} className="my-4 rounded-lg border border-subtle bg-surface p-3 text-start" />
+    <ListFilterBar kind="poem" lists={lists} filter={listFilter} className="pb-3" onOpen={item => { const id = Number(item.itemRef.split(':')[2]); if (id > 0) void openPoem(id); }} />
     {loading && <p role="status" className="pb-2 text-sm text-muted">{t('bayanLoading')}</p>}
     <div ref={resultsElement} aria-busy={loading} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-4 xl:grid-cols-2">
-      {failed ? <p role="alert">{t('bayanUnavailable')}</p> : !items.length ? !loading && <p role="status">{t('bayanEmpty')}</p> : items.map(item => <article key={item.id} dir={item.language === 'ar' ? 'rtl' : 'ltr'} className="rounded-2xl border border-border bg-surface p-4 text-start leading-loose shadow-xs transition-colors hover:bg-surface-raised focus-within:border-primary sm:p-5">
-        <h2 className="font-semibold text-lg leading-loose"><button type="button" className="w-full text-start rounded focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => void openPoem(item.id)}>{item.title || item.poetName}</button></h2><p className="text-sm text-primary-text">{item.poetName}</p><p className="mt-1 text-xs text-muted leading-loose">{[item.meter, item.theme, t('bayanVerseCountShort', { count: item.verseCount.toLocaleString(lang) })].filter(Boolean).join(' · ')}</p>
+      {failed ? <p role="alert">{t('bayanUnavailable')}</p> : !items.length ? !loading && <p role="status">{t('bayanEmpty')}</p> : items.filter(item => !listFilter.refs || listFilter.refs.has(poemListRef(item.id))).map(item => <article key={item.id} dir={item.language === 'ar' ? 'rtl' : 'ltr'} className="rounded-2xl border border-border bg-surface p-4 text-start leading-loose shadow-xs transition-colors hover:bg-surface-raised focus-within:border-primary sm:p-5">
+        <h2 className="font-semibold text-lg leading-loose"><button type="button" className="w-full text-start rounded focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => void openPoem(item.id)}>{item.title || item.poetName}</button></h2><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-primary-text">{item.poetName}</p><ListItemControls item={{ kind: 'poem', itemRef: poemListRef(item.id), label: [item.title, item.poetName].filter(Boolean).join(' — ') }} heldBy={poemMembership[poemListRef(item.id)] ?? []} lists={lists} onFilter={listFilter.only} /></div><p className="mt-1 text-xs text-muted leading-loose">{[item.meter, item.theme, t('bayanVerseCountShort', { count: item.verseCount.toLocaleString(lang) })].filter(Boolean).join(' · ')}</p>
         {item.match && <PoetryExcerpt lines={item.match.lines} query={matchedQuery} onOpen={() => void openPoem(item.id, item.match!.from, item.match!.from + item.match!.lines.length - 1)} />}
       </article>)}
       </div>

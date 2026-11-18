@@ -987,6 +987,11 @@ export const API = {
     export: (input?: { filePath?: string; deckIds?: string[]; includeScheduling?: boolean; includeMedia?: boolean; defaultName?: string; language?: 'ar' | 'en' }): Promise<{ ok: true; data: import('../main/services/anki/apkg-export').AnkiExportReport | null } | { ok: false; error: string }> =>
       ipcRenderer.invoke('anki-package:export', input ?? {}),
   },
+  // KEY-386: personal lists (Starred plus named lists of books, ayahs, hadith and poems).
+  personalLists: {
+    invoke: <T = unknown>(action: 'all' | 'create' | 'rename' | 'remove' | 'reorder' | 'items' | 'add' | 'remove-item' | 'reorder-items' | 'toggle-star' | 'membership' | 'filter', ...args: unknown[]): Promise<{ ok: true; data: T } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(`personal-lists:${action}`, ...args),
+  },
   revisionRecommendations: {
     list: (): Promise<{ ok: true; data: import('../shared/revision-recommendations').Recommendation[] } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:list'),
     dismiss: (id: string): Promise<{ ok: true; data: null } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:dismiss', id),

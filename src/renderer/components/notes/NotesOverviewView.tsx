@@ -20,11 +20,13 @@ import {
   MessageSquare,
   ArrowLeft,
   ChevronRight,
+  ListChecks,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { useAssistant } from '../ai/AssistantContext';
 import { BoardsWorkspace } from './BoardsWorkspace';
+import { PersonalListsHub } from '../lists/PersonalListsHub';
 import { SavedCardsPanel } from '../knowledge/SavedCardsPanel';
 import { SrsReviewScreen } from '../knowledge/SrsReviewScreen';
 import { peekRevisionIntent, REVISION_INTENT_EVENT, takeRevisionIntent } from '../../libs/revision-intent';
@@ -67,7 +69,7 @@ const savedWordLayout = (): WordLayout => {
   }
 };
 
-export type WorkspaceTab = 'notes' | 'cards' | 'boards' | 'review';
+export type WorkspaceTab = 'notes' | 'cards' | 'boards' | 'lists' | 'review';
 export type NoteSortOrder = 'recent' | 'title' | 'oldest';
 export type NoteFilter = 'all' | 'comments' | 'questions' | 'book';
 
@@ -568,6 +570,21 @@ export const NotesOverviewView: React.FC = () => {
                   {boardsCount}
                 </span>
               )}
+            </button>
+
+            {/* Personal lists hub (KEY-386) */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('lists')}
+              data-notes-tab="lists"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                activeTab === 'lists'
+                  ? 'bg-primary text-primary-contrast shadow-xs'
+                  : 'text-muted hover:text-main hover:bg-canvas'
+              }`}
+            >
+              <ListChecks className="size-4" />
+              <span>{t('notesTabLists')}</span>
             </button>
           </div>
 
@@ -1107,6 +1124,9 @@ export const NotesOverviewView: React.FC = () => {
           onClose={() => setActiveTab('notes')}
         />
       )}
+
+      {/* TAB 5: PERSONAL LISTS HUB (KEY-386) */}
+      {activeTab === 'lists' && <PersonalListsHub />}
     </section>
   );
 };

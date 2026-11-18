@@ -8,6 +8,10 @@ import { IslamicReaderHeader } from '../islamic/IslamicReaderChrome';
 import { readerProfileSelection } from '../islamic/reader-chrome';
 import { saveContinueReading, loadQuranContinueReading, quranContinueKey, quranPageHint } from '../islamic/continue-reading';
 import { ContextMenu } from '../ui/ContextMenu';
+import { usePersonalLists, useListFilter, useListMembership } from '../../libs/personal-lists';
+import { ListFilterBar, ListItemControls } from '../lists/PersonalListControls';
+import { ayahListRef } from '../../../shared/personal-lists';
+import { navigateStudyReference } from '../../utils/study-navigation';
 import { quranActions } from '../actions/quran-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, CopyCheck, Layers, Play, Pause, X, Maximize2, Minimize2 } from 'lucide-react';
@@ -129,6 +133,13 @@ export function QuranPassageView({
   </div>;
 }
 
+/** KEY-386: the inspected ayah's star, list menu and chips. */
+function InspectedAyahLists({ reference, profile, label, lists, onFilter }: { reference: { surah: number; ayah: number }; profile: string; label: string; lists: ReturnType<typeof usePersonalLists>['lists']; onFilter: (listId: string) => void }) {
+  const itemRef = ayahListRef(reference.surah, reference.ayah, reference.ayah, profile === 'warsh' ? 'warsh' : 'hafs');
+  const membership = useListMembership('ayah', [itemRef]);
+  return <ListItemControls item={{ kind: 'ayah', itemRef, label: label.slice(0, 300) }} heldBy={membership[itemRef] ?? []} lists={lists} onFilter={onFilter} />;
+}
+
 export function QuranReaderView({ visible = true, navigation }: { visible?: boolean; navigation?: React.ReactNode }) {
   const { t, lang, dir } = useWorkspace();
   const root = useRef<HTMLElement>(null);
@@ -152,6 +163,9 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
   const [audioOpen, setAudioOpen] = useState(false);
   const [audioState, setAudioState] = useState<QuranAudioState | null>(null);
   const [inspected, setInspected] = useState<{ surah: number; ayah: number } | null>(null);
+  // KEY-386: personal lists — star/add-to-list/chips in the ayah inspector, and the "in list" filter.
+  const { lists } = usePersonalLists();
+  const listFilter = useListFilter('ayah');
   const [details, setDetails] = useState<QuranAyahDetails | null>(null);
   const [inspectionError, setInspectionError] = useState(false);
   const [studyTarget, setStudyTarget] = useState<{ surah: number; ayah: number } | null>(null);
@@ -432,6 +446,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
               <button type="button" data-quran-fullscreen={immersive ? 'exit' : 'enter'} aria-label={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} title={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} onClick={() => { if (immersive) leaveFullscreen(); else { setImmersive(true); void root.current?.requestFullscreen?.().catch(() => {}); } }} className="p-2">{immersive ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}</button>
         <button type="button" onClick={() => startAudio({surah: page?.surahStart || 1, ayah: page?.ayahStart || 1})}>{t('quranAudioPlay')}</button>
       </div>} />
+    <ListFilterBar kind="ayah" lists={lists} filter={listFilter} className="shrink-0 border-b border-subtle bg-surface px-4 py-2" onOpen={item => { void navigateStudyReference(item.itemRef, [], () => undefined, () => undefined).catch(() => setError('quranReaderError')); }} />
     <QuranBookmarks bookmarks={bookmarks} failed={bookmarksFailed} lang={lang} t={t} onNavigate={reference => { setInspected(reference); jumpReference(reference); }} />
     {error && <p role="alert" className="absolute top-16 inset-x-3 mx-auto z-50 w-fit max-w-[90%] rounded-xl bg-surface border border-red-500 p-3 text-sm">{t(error)}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setError(null)} className="ms-2"><X className="size-4" /></button></p>}
     {notice && <p role="status" className="sr-only">{t(notice)}</p>}
@@ -452,7 +467,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
       <button type="button" className="rounded-lg border border-subtle p-2 text-sm mt-2" onClick={() => { const client = api(); if (client) void client.setup(catalog.presets.filter(preset => preset.id !== 'mushaf-layout/warsh-svg').map(preset => preset.id)).then(result => { if (!result.ok || result.data?.failed.length) setError('quranReaderError'); }).catch(() => setError('quranReaderError')); }}>{t('quranImportSelected')}</button>
     </aside>}
     {showIntro && intro && <aside data-quran-popup className="absolute start-3 sm:start-14 top-16 z-40 w-96 max-w-[85%] max-h-[calc(100%-5rem)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] bg-surface rounded-2xl border border-subtle shadow-xl"><QuranSurahIntroCard intro={intro} t={t} surah={surahs.find(surah => surah.number === intro.surahNumber)} derived={surahInfo?.language === 'ar'} onClose={() => setShowIntro(false)} /></aside>}
-    {inspected && <QuranAyahInspector floating reference={inspected} details={details} error={inspectionError} surahName={(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah })} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={copy} onStudy={() => { setStudyTarget(inspected); setInspected(null); }} commentary={<PersonalCommentary key={`${inspected.surah}:${inspected.ayah}`} reference={`quran:${profile}:${inspected.surah}:${inspected.ayah}`} />} />}
+    {inspected && <QuranAyahInspector floating reference={inspected} details={details} error={inspectionError} surahName={(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || t('quranSurahNumber', { number: inspected.surah })} t={t} dir={dir} onClose={() => setInspected(null)} onCopy={copy} onStudy={() => { setStudyTarget(inspected); setInspected(null); }} commentary={<PersonalCommentary key={`${inspected.surah}:${inspected.ayah}`} reference={`quran:${profile}:${inspected.surah}:${inspected.ayah}`} />} listControls={<InspectedAyahLists reference={inspected} profile={profile ?? "hafs"} label={`${(lang === 'ar' ? surahs.find(surah => surah.number === inspected.surah)?.arabic : surahs.find(surah => surah.number === inspected.surah)?.name) || ''} ${inspected.surah}:${inspected.ayah}${details?.canonical ? ` — ${details.canonical}` : ''}`} lists={lists} onFilter={listFilter.only} />} />}
     {audioOpen && <div data-quran-audio-dock className="absolute bottom-3 inset-x-0 mx-auto z-40 w-[min(54rem,calc(100%-2.5rem))] max-h-[70%] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [&>div]:!relative [&>div]:!inset-auto [&>div]:!m-0 [&>div]:!max-w-none"><QuranAudioPlayer surah={audioAyah.surah} ayah={audioAyah.ayah} surahCount={surahs.find(surah => surah.number === audioAyah.surah)?.count || 300} reciters={reciters} activeReciterId={activeReciterId} onSelectReciter={setActiveReciterId} t={t} lang={lang} dir={dir} onAyahChange={(surah, ayah) => { setAudioAyah({ surah, ayah }); void jump(surah, ayah); }} onAudioStateChange={setAudioState} onClose={() => { setAudioOpen(false); setAudioState(null); }} /></div>}
   </section>;
 }

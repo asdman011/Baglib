@@ -703,3 +703,33 @@ FTS5 columns document_id UNINDEXED, title, plain_text with unicode61. The index 
 ADR-008 entity_version uses entity_type manuscript_document, schema_version 1, a SHA-256 history_blob envelope containing exact snapshot/title/primary_mode, and action checkpoint or restore. Autosaves write no versions. Checkpoints skip an unchanged content hash. Restore preserves the replaced content as a checkpoint when needed and records restored_from_revision. Hierarchy and trash flags are retained across content restore.
 
 The manuscript-assets/<blobId> folder concept is approved beside the database, with its blob bridge assigned to RE-2. No asset or board schema is added here. See ADR-016 for save/lifecycle/restore contracts and implementation boundaries.
+
+## Personal lists — KEY-386, migration 038
+
+Approved by the user on 2026-11-18 ("Approve KEY-386 tables, and option 3: both"). A built-in "Starred" list plus the user's own named lists, each holding any mix of books, ayahs, hadith and poems. Lists also work as filters, like tags: every section (Library, Quran, Sunnah, Poetry) filters by its own share of every list, and the Notes → Lists hub groups every list across all kinds. Ayahs, hadith and poems are not catalog rows, so items are referenced by kind plus a study-link reference rather than by foreign key. Starred differs from reader bookmarks (Quran bookmarks, Sunnah and poetry reading positions) and from Marks/highlights: those record where you are or what you marked inside a text; lists collect whole items to come back to. Book tags (Categories & Tags) are unchanged. Both tables are in the catalog export (`CATALOG_TABLES`) and in every database backup.
+
+### personal_list
+
+| Column | Type and constraints | Meaning |
+| --- | --- | --- |
+| id | TEXT PRIMARY KEY | `starred` for the built-in list, otherwise a UUID |
+| name | TEXT NOT NULL | Kept exactly as the user typed it (trimmed); Starred is shown with its translated name |
+| kind | TEXT NOT NULL DEFAULT 'custom', CHECK IN ('starred','custom') | Starred can't be renamed or deleted |
+| position | INTEGER NOT NULL DEFAULT 0 | The user's order of custom lists; Starred is always first |
+| created_at, updated_at | TEXT NOT NULL | ISO timestamps; `updated_at` also moves when an item is added |
+
+Migration 038 seeds the `starred` row.
+
+### personal_list_item
+
+| Column | Type and constraints | Meaning |
+| --- | --- | --- |
+| id | TEXT PRIMARY KEY | UUID |
+| list_id | TEXT NOT NULL, FK personal_list(id), ON DELETE CASCADE | Parent list |
+| item_kind | TEXT NOT NULL, CHECK IN ('book','ayah','hadith','poem') | Kind of material |
+| item_ref | TEXT NOT NULL | `book:<workId>`, `quran:<hafs\|warsh>:<surah>:<ayah>[-<to>]`, `sunnah:<collection>:<chapter>:<hadithId>`, `poetry:ashaar:<poemId>:0:0`; opened with the study-link navigation |
+| label | TEXT NOT NULL DEFAULT '' | Short preview (title, ayah or hadith opening, poem title) kept when added, at most 300 characters |
+| position | INTEGER NOT NULL DEFAULT 0 | Order within the list |
+| added_at | TEXT NOT NULL | When it was added |
+
+UNIQUE (list_id, item_kind, item_ref). Indexes: `idx_personal_list_item_item (item_kind, item_ref)` for list chips and section filters, and `idx_personal_list_item_list (list_id, position)` for the list view. Deleting a book does not remove its list rows; the hub then reports the source as unavailable when opened.

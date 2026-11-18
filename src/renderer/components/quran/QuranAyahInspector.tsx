@@ -9,11 +9,13 @@ import { quranCopyText } from '../../utils/quran-reference-label';
 import { passageNote } from '../actions/passage-actions';
 import { createQuranAyahPayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
 
-export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false, commentary }: {
+export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false, commentary, listControls }: {
   details: QuranAyahDetails | null; reference: { surah: number; ayah: number }; surahName: string; error: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string; dir: 'rtl' | 'ltr';
   onClose: () => void; onCopy: (text: string) => void; onStudy: () => void; onSimilar?: () => void;
   floating?: boolean; commentary?: React.ReactNode;
+  /** KEY-386: star, add-to-list and list chips for this ayah. */
+  listControls?: React.ReactNode;
 }) {
   const drawer = useDialogFocus(!floating, onClose);
   const close = useRef(onClose);
@@ -31,7 +33,7 @@ export function QuranAyahInspector({ details, reference, surahName, error, t, di
       if (floating && event.key === 'Escape') { event.stopPropagation(); close.current(); }
 
     }}>
-      <header className="shrink-0 flex items-start justify-between gap-3 p-4 border-b border-subtle"><div><h2 id="quran-inspector-title" className="font-semibold">{t('quranAyahInspector')}</h2><p className="mt-2 leading-relaxed">{surahName} <bdi>{reference.surah}:{reference.ayah}</bdi></p></div><button type="button" aria-label={t('quranClosePanel')} onClick={onClose} className="p-2 rounded-lg border border-subtle"><X className="size-4" /></button></header>
+      <header className="shrink-0 flex items-start justify-between gap-3 p-4 border-b border-subtle"><div><h2 id="quran-inspector-title" className="font-semibold">{t('quranAyahInspector')}</h2><p className="mt-2 leading-relaxed">{surahName} <bdi>{reference.surah}:{reference.ayah}</bdi></p>{listControls && <div className="mt-2">{listControls}</div>}</div><button type="button" aria-label={t('quranClosePanel')} onClick={onClose} className="p-2 rounded-lg border border-subtle"><X className="size-4" /></button></header>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] break-words p-5 space-y-5" tabIndex={0}>
       {!details ? <p role={error ? 'alert' : 'status'}>{t(error ? 'quranReaderError' : 'quranLoading')}</p> : <>
         <section className="space-y-3"><h3 className="text-sm text-muted">{t(details.profile === 'hafs' ? 'quranCanonicalHafs' : 'quranScriptChoice')}</h3><p dir="rtl" lang="ar" className="font-reading text-2xl leading-[2.5] break-words select-text">{details.canonical}</p><button type="button" onClick={() => copy(details.canonical)} className="flex items-center gap-2 text-sm rounded-xl border border-subtle px-3 py-2"><Copy className="size-4" />{t('quranCopyCanonical')}</button></section>

@@ -102,6 +102,9 @@ import { resolveDroppedFilePath, localAssetUrl } from '../../utils/file-path-hel
 import { isLectureFormat } from '../../../shared/lectures';
 import { LectureSeriesPicker } from '../lectures/LectureSeriesPicker';
 import { routeBookDrop } from '../../utils/book-drop';
+import { usePersonalLists, useListFilter, useListMembership } from '../../libs/personal-lists';
+import { ListFilterBar, ListItemControls, listMenuItems } from '../lists/PersonalListControls';
+import { bookListRef } from '../../../shared/personal-lists';
 import type {
   CardDensity,
   ListDensity,
@@ -505,12 +508,16 @@ export const LibraryGridView: React.FC = () => {
     if (recentView === 'imported') return recentlyImportedBooks(books);
     return books;
   }, [books, recentView, recentActivity]);
+  // KEY-386: personal lists — star/add-to-list/chips on book cards, and the "in list" filter.
+  const { lists: personalListsAll } = usePersonalLists();
+  const bookListFilter = useListFilter('book');
   const filteredAndSortedBooks = useMemo(() => {
     const filtered = filterAndSortBooks(recentBooks, filterState, sortState);
-    if (recentView === 'all') return filtered;
+    const inLists = (list: BookItem[]) => bookListFilter.refs ? list.filter(book => bookListFilter.refs!.has(bookListRef(book.id))) : list;
+    if (recentView === 'all') return inLists(filtered);
     const matchingIds = new Set(filtered.map(book => book.id));
-    return recentBooks.filter(book => matchingIds.has(book.id));
-  }, [recentBooks, recentView, filterState, sortState]);
+    return inLists(recentBooks.filter(book => matchingIds.has(book.id)));
+  }, [recentBooks, recentView, filterState, sortState, bookListFilter.refs]);
   const booksToAudit = useMemo(() => {
     if (selectedBookIds.size > 0) return books.filter(book => selectedBookIds.has(book.id));
     return recentView === 'all' ? books : filteredAndSortedBooks;
@@ -619,6 +626,8 @@ export const LibraryGridView: React.FC = () => {
     return libraryEntries.slice(start, start + pageSize);
   }, [libraryEntries, safeCurrentPage, pageSize]);
   const paginatedBooks = useMemo(() => paginatedEntries.filter(entry => !entry.series).map(entry => entry.book), [paginatedEntries]);
+  const bookMembership = useListMembership('book', paginatedBooks.map(book => bookListRef(book.id)));
+  const bookListItem = (book: BookItem) => ({ kind: 'book' as const, itemRef: bookListRef(book.id), label: [book.title, book.author].filter(Boolean).join(' — ') });
 
   // Batch Selection Helpers with Shift-Click Range Support (Story 9: 9.6 / KEY-44)
   const handleToggleSelectBook = (id: string, e?: React.MouseEvent) => {
@@ -1068,6 +1077,8 @@ export const LibraryGridView: React.FC = () => {
     // KEY-398: revise this book.
     items.push({ id: 'revise-deck', label: t('bookReviseDeck'), icon: createElement(Layers, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => requestBookRevision({ mode: 'deck', workId: book.id }) });
     items.push({ id: 'revise-questions', label: t('bookReviseQuestions'), icon: createElement(Sparkles, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => requestBookRevision({ mode: 'questions', workId: book.id, title: book.title }) });
+    // KEY-386: Star and "Add to list".
+    items.push(...listMenuItems(bookListItem(book), personalListsAll, bookMembership[bookListRef(book.id)] ?? [], t).map(item => ({ danger: false, disabled: false, disabledReason: undefined, ...item })) as typeof items);
     return items;
   };
   const exportBooks = (items: BookItem[]) => {
@@ -1601,6 +1612,7 @@ export const LibraryGridView: React.FC = () => {
             setScrollHeader((prev) => computeScrollHeaderState(prev, st));
           }}
         >
+          <ListFilterBar kind="book" lists={personalListsAll} filter={bookListFilter} />
           {/* Featured Card (Shown on page 1 in Grid mode when not actively searching) */}
           {/* The featured card only shows a book the active filters include (KEY-309: it showed above an empty result). */}
           {recentView === 'all' && featuredBook && !filterState.searchQuery && currentPage === 1 && viewMode === 'grid' && featuredVisible && !libraryEntries.some(entry => entry.series?.items.some(item => item.id === featuredBook.id)) && (
@@ -1646,6 +1658,7 @@ export const LibraryGridView: React.FC = () => {
                     key={book.id}
                     book={book}
                     onOpenMenu={() => bookMenu(book)}
+                    listControls={<ListItemControls item={bookListItem(book)} heldBy={bookMembership[bookListRef(book.id)] ?? []} lists={personalListsAll} onFilter={bookListFilter.only} />}
                     isSelected={selectedBookIds.has(book.id)}
                     onToggleSelect={handleToggleSelectBook}
                     onOpenBook={handleSafeOpenBook}

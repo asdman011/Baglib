@@ -2,6 +2,7 @@ export const CATALOG_TABLES = [
   'work_type', 'work', 'author', 'work_author', 'edition', 'source',
   'file_source_detail', 'physical_source_detail', 'wishlist_source_detail',
   'tag', 'work_tag', 'category', 'collection', 'work_collection',
+  'personal_list', 'personal_list_item',
 ] as const;
 export type CatalogRow = Record<string, string | number | null>;
 export interface CatalogExport {

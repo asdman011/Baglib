@@ -1,3 +1,97 @@
+## KEY-386 Personal lists: Starred plus named lists of books, ayahs, hadith and poems - 2026-11-18 - Agent: Claude Code
+
+**Request.** The user approved the new tables and placement option 3 on 2026-11-18: "Approve KEY-386 tables, and option 3: both". So each section filters by its own share of every list, and one hub groups all lists.
+
+**What changed:**
+- **Migration 038** (`personal_list`, `personal_list_item`; Starred seeded; indexed by item and by list).
+  - **Items:** referenced by kind plus a study-link reference (`book:`, `quran:`, `sunnah:`, `poetry:ashaar:<id>:0:0`), so opening an item reuses `navigateStudyReference`.
+  - **Export:** both tables were added to the catalog export (`CATALOG_TABLES`).
+- **`shared/personal-lists.ts`:**
+  - kinds, reference validation and canonical form;
+  - name and label cleaning (names are kept as typed);
+  - the shared any/all rule (`passesListFilter`);
+  - list-name search with Arabic normalisation.
+- **`services/personal-lists.ts`:**
+  - create, rename, delete and reorder lists (Starred is fixed and first);
+  - add, remove and reorder items;
+  - toggle the star;
+  - `membership`, which returns the lists of each item (for chips);
+  - `filter(kind, lists, any|all)`.
+- **`ipc/personal-lists.ts`:** every call checks the sender frame. Preload exposes `personalLists.invoke`, and `renderer/libs/personal-lists.ts` wraps it with a typed client and hooks (`usePersonalLists`, `useListMembership`, `useListFilter`) that refresh on `baglib:personal-lists-changed`.
+- **UI** (`components/lists/`):
+  - **Controls:**
+    - the star;
+    - an "Add to list" menu with a check per list and "New list…" (a dialog, because Electron has no `prompt`);
+    - list chips (click to filter, × to remove);
+    - `ListFilterBar`: only lists holding that kind, any/all when two or more are chosen, and the matching items listed and opened;
+    - right-click entries (`listMenuItems`).
+  - **Hub:** Notes → **Lists** tab (`PersonalListsHub`):
+    - search list names (normalised);
+    - new, rename in place, delete with confirm, move up and down;
+    - per list, kind tabs (All, Books, Ayahs, Hadith, Poems) with counts;
+    - items with kind icon and preview: open, move, remove.
+- **Sections:**
+  - **Library:**
+    - star, list menu and chips on book cards;
+    - Star and "Add to list" in the card and row right-click menus;
+    - the "in list" filter narrows the grid.
+  - **Sunnah:**
+    - the controls in each hadith header;
+    - right-click entries;
+    - the filter lists matching hadith and narrows the open chapter.
+  - **Quran:**
+    - the controls in the ayah inspector;
+    - Star and "Add to list" in the mushaf right-click menu;
+    - the filter strip above the reader lists and opens ayahs.
+  - **Poetry:**
+    - the controls on poem cards and under the poem title;
+    - title right-click entries;
+    - the filter lists and opens poems and narrows the results.
+  - **Search:** Quran, Sunnah and poetry hits in the search hub have Star and "Add to list" on right-click.
+- **Strings:** ar and en `lists*` keys plus `notesTabLists`.
+- **Docs:** the data dictionary section "Personal lists — KEY-386, migration 038". It also covers how Starred differs from reader bookmarks and Marks.
+
+**Verified (2026-11-18):**
+- `tests/services/personal-lists.test.ts` 8/8:
+  - Starred is fixed;
+  - mixed lists keep their order and names;
+  - rename, reorder, and delete with cascade;
+  - star toggle;
+  - membership for chips;
+  - the any/all filter limited to the section's kind;
+  - reference validation;
+  - Arabic-normalised list search.
+- Full suite 2,628/2,628; tsc 0; eslint 0 errors on every KEY-386 file (the 2 hook warnings in Quran files were already there).
+- **`scripts/personal-lists-live` passed in ar and en**, using the real ar and en text-layer PDFs from `tests/real-files/` plus throwaway copies of the Sunnah, Quran and poetry corpora (originals checked unchanged):
+  - **Library:**
+    - star from a card;
+    - "New list…" dialog (RTL/LTR), with the name kept as typed;
+    - chip on the card;
+    - list filter shows 1 book; any = 2 and all = 0; clearing it restores all books.
+  - **Sunnah:**
+    - Bukhari 1 added to the list from the hadith header menu; its chip appears;
+    - right-click offers "Add to list";
+    - the hadith filter lists it.
+  - **Quran:** the filter lists and opens 2:255.
+  - **Poetry:** a real poem starred from its card; the Starred filter lists it.
+  - **Hub:**
+    - all 3 kinds in order;
+    - kind tab narrows the list;
+    - reorder, rename in place;
+    - unvocalised search finds the list;
+    - opening the hadith from the hub shows it in the Sunnah reader.
+  - No renderer errors. Evidence: `.baglib-data/key386-evidence/`.
+
+**Limits / notes:**
+- Removing a book leaves its list rows. The hub then reports the source as unavailable when it is opened.
+- Within a kind tab in the hub, items move past the hidden kinds.
+- The Quran controls are in the ayah inspector and the mushaf right-click menu. There are no per-ayah buttons on the mushaf page itself.
+- Task 8 (KEY-399 "Revise this list") is now unblocked.
+
+**Files:** src/main/database/migrations/038_personal_lists.ts, src/main/database/migrations/index.ts, src/shared/personal-lists.ts, src/shared/catalog-export.ts, src/main/services/personal-lists.ts, src/main/ipc/personal-lists.ts, src/main/index.ts, src/preload/index.ts, src/renderer/libs/personal-lists.ts, src/renderer/components/lists/PersonalListControls.tsx, src/renderer/components/lists/PersonalListsHub.tsx, src/renderer/components/notes/NotesOverviewView.tsx, src/renderer/components/layout/AppLayout.tsx, src/renderer/components/library/LibraryGridView.tsx, src/renderer/components/library/LibraryBookCard.tsx, src/renderer/components/sunnah/SunnahView.tsx, src/renderer/components/sunnah/SunnahChapterView.tsx, src/renderer/components/quran/QuranReaderView.tsx, src/renderer/components/quran/QuranMushafWorkspace.tsx, src/renderer/components/quran/QuranAyahInspector.tsx, src/renderer/components/poetry/BayanView.tsx, src/renderer/components/poetry/PoetryReader.tsx, src/renderer/components/search/StudySourcesSearch.tsx, src/renderer/translations.ts, tests/services/personal-lists.test.ts, scripts/personal-lists-live/run.mjs, scripts/personal-lists-live/main.cjs, docs/data-dictionary.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-392 Lossless .apkg import and export - 2026-11-18 - Agent: Claude Code
 
 **Request.** Revision Task 1E (ADR-017). The user approved the `fzstd` dependency on 2026-11-18 ("i approve").

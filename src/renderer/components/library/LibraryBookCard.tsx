@@ -29,6 +29,8 @@ export interface LibraryBookCardProps {
   onLend?: (book: BookItem) => void;
   onDelete?: (bookId: string) => void;
   cardDensity?: CardDensity;
+  /** KEY-386: star, add-to-list and list chips. */
+  listControls?: React.ReactNode;
 }
 
 export const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
@@ -42,6 +44,7 @@ export const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
   onLend,
   onDelete,
   cardDensity = 'comfortable',
+  listControls,
 }) => {
   const { t, lang } = useWorkspace();
   // Centralized Card Actions (reusable by KEY-316 context menu)
@@ -169,6 +172,7 @@ export const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
           <p className="text-[11px] text-text-muted font-serif truncate mt-0.5">
             <bdi>{book.author || t('unknownAuthor')}</bdi>
           </p>
+          {listControls && <div className="mt-1" onClick={event => event.stopPropagation()}>{listControls}</div>}
         </div>
 
         {/* Exactly ONE subject chip at the bottom */}

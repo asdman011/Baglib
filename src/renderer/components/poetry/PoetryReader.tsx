@@ -6,6 +6,9 @@ import React, { useMemo, useState } from 'react';
 import type { PoetryDetail } from '../../../shared/types/poetry';
 import { poetryDisplayText, poetryDescriptionText } from '../../../shared/poetry';
 import { ContextMenu } from '../ui/ContextMenu';
+import { usePersonalLists, useListMembership } from '../../libs/personal-lists';
+import { ListItemControls, listMenuItems } from '../lists/PersonalListControls';
+import { poemListRef } from '../../../shared/personal-lists';
 import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
 import { addPassageToSrs, passageNote } from '../actions/passage-actions';
 import { createPoetryVersePayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
@@ -55,6 +58,12 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
     { id: 'deck-poem', label: t('poemAddDeck'), onClick: () => setPoemDeck({ kind: 'poem', ref: String(poem.id), label: [poem.title, poem.poet_name].filter(Boolean).join(' — ') }) },
     ...(poem.poet_id ? [{ id: 'deck-poet', label: t('poetAddDeck'), onClick: () => setPoemDeck({ kind: 'poet', ref: String(poem.poet_id), label: poem.poet_name || '' }) }] : []),
   ];
+  // KEY-386: star, add-to-list and chips for this poem; also in the title's right-click menu.
+  const { lists } = usePersonalLists();
+  const poemRef = poemListRef(poem.id);
+  const poemListItem = { kind: 'poem' as const, itemRef: poemRef, label: [poem.title, poem.poet_name].filter(Boolean).join(' — ') };
+  const poemMembership = useListMembership('poem', [poemRef]);
+  const titleMenu = [...deckMenu, ...listMenuItems(poemListItem, lists, poemMembership[poemRef] ?? [], t)];
   // The companion note pane links to the open poem, at the verses it was opened on.
   useCompanionContext('bayan', () => {
     const from = Math.max(0, Math.min(Number.isSafeInteger(initialVerse) ? initialVerse! : 0, Math.max(verses.length - 1, 0)));
@@ -213,7 +222,8 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
     </IslamicReaderPanel>}
     <div ref={poemScroller} className="min-h-0 flex-1 overflow-y-auto py-5">
       <div data-poetry-header className="mx-auto mb-6 max-w-3xl text-center">
-        <ContextMenu items={deckMenu} data-poem-heading><h1 dir="auto" className="mb-1 text-3xl font-semibold leading-[1.8]">{poem.title || poem.poet_name}</h1></ContextMenu>
+        <ContextMenu items={titleMenu} data-poem-heading><h1 dir="auto" className="mb-1 text-3xl font-semibold leading-[1.8]">{poem.title || poem.poet_name}</h1></ContextMenu>
+        <ListItemControls className="mb-2" item={poemListItem} heldBy={poemMembership[poemRef] ?? []} lists={lists} />
         <ContextMenu items={deckMenu} data-poem-poet dir="auto" className="mb-3 text-lg text-muted"><button type="button" className="rounded px-1 text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-pale-sky-500" onClick={() => { setPanelOpen(true); setReaderTab('related'); }}>{poem.poet_name}</button>{poem.poet_era && <> · {poem.poet_era}</>}</ContextMenu>
         <dl className="flex flex-wrap justify-center gap-2 text-sm">
           {chips.map(item => item.value ? <div key={item.key} className="flex items-baseline gap-1.5 rounded-full border border-subtle bg-surface px-3 py-1"><dt className="text-xs text-muted">{t(item.key)}</dt><dd dir="auto" className="leading-relaxed">{item.value}</dd></div> : null)}
