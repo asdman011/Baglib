@@ -21,6 +21,8 @@ import { DeckRepository } from '../database/repositories/deck.repository';
 import { CardMediaStore, MAX_CARD_MEDIA_BYTES } from '../services/card-media';
 import { corpusReaders, createDeckSyncService } from '../services/deck-sync-readers';
 import { NarratorDeckService, validateNarratorDeckInput } from '../services/narrator-decks';
+import { RevisionBrowserService } from '../services/revision-browser.service';
+import type { RevisionBrowseQuery, RevisionBulkAction } from '../../shared/revision-browser';
 import { deckSyncScheduler } from '../services/deck-sync-scheduler';
 import {
   validateSafeId,
@@ -131,6 +133,14 @@ export function registerKnowledgeCardIpc(): void {
     search: typeof query?.search === 'string' ? query.search.slice(0, 200) : '',
     offset: typeof query?.offset === 'number' ? query.offset : 0,
   }));
+  ipcMain.handle('knowledge-cards:browse', (event, query?: unknown) => {
+    authorize(event);
+    return new RevisionBrowserService(getDatabase()).browse((query ?? {}) as RevisionBrowseQuery);
+  });
+  ipcMain.handle('knowledge-cards:bulk-action', (event, input: unknown) => {
+    authorize(event);
+    return new RevisionBrowserService(getDatabase()).bulkAction((input ?? {}) as RevisionBulkAction);
+  });
   ipcMain.handle('knowledge-cards:save', (_, input: unknown) => repository().save(validateCardInput(input)));
   ipcMain.handle('knowledge-cards:preserved', () => repository().listPreserved());
   ipcMain.handle('knowledge-cards:remove', (_, id: unknown) => repository().remove(cardId(id)));

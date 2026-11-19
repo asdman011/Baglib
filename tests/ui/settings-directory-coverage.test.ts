@@ -30,6 +30,7 @@ const operational = new Set([
   'baglib.notes.folder', // The Notes tab's last open folder, so a return visit opens where the user left (KEY-338).
   'baglib:last-manuscript-id', 'baglib:last-chapter-id', // Last manuscript and chapter used by "Send to manuscript", preselected in its picker (KEY-370).
   'revision.recommendations.dismissed', // "Revise next" items the user hid; each entry expires after 7 days (KEY-412).
+  'revision.savedSearches.v1', // Saved revision browser searches, managed in the Revision Browser (KEY-395).
   'anki.collection.v1', // the imported Anki collection's crt and config, kept so .apkg export writes them back (KEY-392).
   'dictionary.history.v1', // The last 100 lookups, shown in the lookup window when its search is empty (KEY-414).
   'dictionary.readingPad.v1', // The Reading pad's current text and highlighted words, edited inside the pad (KEY-414).

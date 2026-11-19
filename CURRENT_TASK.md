@@ -1,4 +1,26 @@
-﻿## KEY-429: sharing and copying with user annotations + "Source only" option in Settings — 2026-11-19 - Agent: Antigravity
+﻿## KEY-395: revision browser and deck manager — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/shared/revision-browser.ts`: shared types (`RevisionBrowseQuery`, `RevisionCardRow`, `RevisionBrowseResult`, `SavedRevisionSearch`, `RevisionBulkAction`), `computeRetrievability`, `parseSavedSearches`, `buildFilteredDeckSearch`, and `REVISION_SAVED_SEARCHES_SETTING` (`revision.savedSearches.v1`, stored in `settings` with no new DB table).
+- `src/main/services/revision-browser.service.ts`: `RevisionBrowserService` on existing SRS tables (`knowledge`, `card_detail`, `srs_state`, `deck`, `deck_card`, `knowledge_tag`, `tag`, `work`, `category`, `personal_list`, `personal_list_item`) supporting source-type filters (`sunnah`, `narrators`, `poetry`, `book`, `note`, `lexicon`, `person`, `tafsir`, `quran`), science/discipline filters (both book `primary_category_id` categories and card tags), KEY-386 list filters (`any`/`all`), Arabic-normalised search, sorting (`due`, `retrievability`, `difficulty`, `lapses`, `created`, `source`), and bulk actions (`suspend`, `unsuspend`, `reschedule`, `moveDeck`, `tag`, `delete` with confirmation).
+- `src/shared/types/knowledge-cards.ts`, `src/main/ipc/knowledge-cards.ts`, `src/preload/index.ts`: added `knowledge-cards:browse` and `knowledge-cards:bulk-action` IPC handlers and preload APIs.
+- `src/renderer/components/knowledge/RevisionBrowserPanel.tsx` & `SavedCardsPanel.tsx`: added the Revision Browser sub-tab alongside `DeckManagerPanel`, with filter bar, list `any`/`all` chips, saved searches in `settings`, one-click "Create filtered deck", bulk actions bar, and paginated table.
+- `src/renderer/translations.ts`: added 53 bilingual (`ar` + `en`) keys.
+- `tests/services/revision-browser.test.ts`, `tests/ui/settings-directory-coverage.test.ts`, `scripts/revision-browser-live/{run.mjs,main.cjs}`: unit tests (6,000-card benchmark + all filters/sorts/bulk actions) and live Electron verification in `ar` and `en`.
+
+**Tests:**
+- Focused (`revision-browser`, `settings-directory-coverage`, `translation-keys`): 6/6 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,837/2,837 pass (400 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `git diff --check`: clean.
+- Live Electron run (`node scripts/revision-browser-live/run.mjs`): PASS in `ar` and `en` with real PDFs from `tests/real-files/` (0 renderer errors, throwaway profile removed).
+
+**Jira:**
+- Moved `KEY-395` to In Progress (`21`), and moved to Done (`41`) after commit+push.
+
+**Files:**
+`CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/agent-ops/reports/KEY-395.md`, `scripts/revision-browser-live/main.cjs`, `scripts/revision-browser-live/run.mjs`, `src/main/ipc/knowledge-cards.ts`, `src/main/services/revision-browser.service.ts`, `src/preload/index.ts`, `src/renderer/components/knowledge/RevisionBrowserPanel.tsx`, `src/renderer/components/knowledge/SavedCardsPanel.tsx`, `src/renderer/translations.ts`, `src/shared/revision-browser.ts`, `src/shared/types/knowledge-cards.ts`, `tests/services/revision-browser.test.ts`, `tests/ui/settings-directory-coverage.test.ts`.
+
+## KEY-429: sharing and copying with user annotations + "Source only" option in Settings — 2026-11-19 - Agent: Antigravity
 
 **Done:**
 - `src/shared/workspace-tabs.ts`: added `shareSourceOnly: boolean` (default `false`) to `WorkspacePrefs` and `parsePrefs`.

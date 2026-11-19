@@ -948,6 +948,10 @@ export const API = {
     savePreset: (input): Promise<import('../shared/srs').SrsPreset> => ipcRenderer.invoke('knowledge-cards:save-preset', input),
     copyPreset: (id: string, newName?: string): Promise<import('../shared/srs').SrsPreset> => ipcRenderer.invoke('knowledge-cards:copy-preset', id, newName),
     deletePreset: (id: string): Promise<boolean> => ipcRenderer.invoke('knowledge-cards:delete-preset', id),
+    browse: (query?: import('../shared/revision-browser').RevisionBrowseQuery): Promise<import('../shared/revision-browser').RevisionBrowseResult> =>
+      ipcRenderer.invoke('knowledge-cards:browse', query),
+    bulkAction: (input: import('../shared/revision-browser').RevisionBulkAction): Promise<import('../shared/revision-browser').RevisionBulkResult> =>
+      ipcRenderer.invoke('knowledge-cards:bulk-action', input),
     buryCard: (cardId: string, deckId?: string | null) => ipcRenderer.invoke('knowledge-cards:bury-card', cardId, deckId),
     buryNoteSiblings: (cardId: string, deckId?: string | null) => ipcRenderer.invoke('knowledge-cards:bury-siblings', cardId, deckId),
     unbury: (deckId?: string | null, cardId?: string | null) => ipcRenderer.invoke('knowledge-cards:unbury', deckId, cardId),

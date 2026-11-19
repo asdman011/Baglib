@@ -128,6 +128,8 @@ export interface KnowledgeCardsAPI {
   getRolloverHour(): Promise<0 | 4>;
   setRolloverHour(hour: 0 | 4): Promise<0 | 4>;
   list(query?: { search?: string; offset?: number }): Promise<KnowledgeCard[]>;
+  browse(query?: import('../revision-browser').RevisionBrowseQuery): Promise<import('../revision-browser').RevisionBrowseResult>;
+  bulkAction(input: import('../revision-browser').RevisionBulkAction): Promise<import('../revision-browser').RevisionBulkResult>;
   save(input: SaveCardInput): Promise<KnowledgeCard>;
   listPreserved(): Promise<PreservedKnowledge[]>;
   remove(id: string): Promise<boolean>;

@@ -19,6 +19,7 @@ import { PracticeHistoryPanel } from './PracticeHistoryPanel';
 import { NoteHistory } from '../notes/NoteHistory';
 import { CardDecksPanel } from './CardDecksPanel';
 import { DeckManagerPanel } from './DeckManagerPanel';
+import { RevisionBrowserPanel } from './RevisionBrowserPanel';
 import { DictionariesPanel } from './DictionariesPanel';
 import { PersonalCommentary } from './PersonalCommentary';
 import { Button } from '../ui/Button';
@@ -49,6 +50,7 @@ export function SavedCardsPanel({
   const [loading, setLoading] = useState(true);
   const requestSequence = useRef(0);
   const [dueCount, setDueCount] = useState(0);
+  const [subTab, setSubTab] = useState<'decks' | 'browser'>('decks');
 
   const refresh = useCallback(async () => {
     const request = ++requestSequence.current;
@@ -218,6 +220,34 @@ export function SavedCardsPanel({
         />
       </label>
 
+      {/* Sub-view switcher: Decks & Cards vs Revision Browser (KEY-395) */}
+      <div className="flex items-center gap-2 border-b border-subtle pb-2" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subTab === 'decks'}
+          data-revision-subtab="decks"
+          onClick={() => setSubTab('decks')}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${subTab === 'decks' ? 'bg-primary text-primary-contrast' : 'text-muted hover:text-main hover:bg-canvas'}`}
+        >
+          {t('revisionTabDecksAndCards')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subTab === 'browser'}
+          data-revision-subtab="browser"
+          onClick={() => setSubTab('browser')}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${subTab === 'browser' ? 'bg-primary text-primary-contrast' : 'text-muted hover:text-main hover:bg-canvas'}`}
+        >
+          {t('revisionTabBrowser')}
+        </button>
+      </div>
+
+      {subTab === 'browser' ? (
+        <RevisionBrowserPanel />
+      ) : (
+        <>
       {/* Deck Manager Hierarchy */}
       <DeckManagerPanel onStudyDeck={deckId => onStartReview?.(deckId)} />
 
@@ -412,6 +442,8 @@ export function SavedCardsPanel({
             ))}
           </ul>
         </details>
+      )}
+        </>
       )}
 
       <NoteEditorModal
