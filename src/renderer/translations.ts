@@ -6207,6 +6207,8 @@ export const translations = {
     workspaceQuickOpenMostUsed: "الأكثر استخدامًا",
     workspaceQuickOpenRecent: "فُتح مؤخرًا",
     workspaceQuickOpenNoRecent: "لم يُفتح شيء بعد",
+    workspaceSplitDivider: "تغيير عرض اللوحين",
+    workspaceSplitClose: "إغلاق العرض جنبًا إلى جنب",
   },
   en: {
     ...researchEditorTranslations.en,
@@ -12415,6 +12417,8 @@ export const translations = {
     workspaceQuickOpenMostUsed: "Most used",
     workspaceQuickOpenRecent: "Recent",
     workspaceQuickOpenNoRecent: "Nothing opened yet",
+    workspaceSplitDivider: "Resize the two panes",
+    workspaceSplitClose: "Close side by side",
   }
 };
 

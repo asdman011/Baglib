@@ -1,3 +1,20 @@
+## KEY-425 part A: side-by-side panes component (WS-9; not yet wired) - 2026-11-19 - Agent: Claude Code
+
+**Request.** Nonstop work in parallel with Antigravity while the user is away.
+
+**Done:**
+- `src/renderer/components/layout/split-model.ts` (new):
+  - `clampRatio`: each pane keeps at least 20%;
+  - `ratioFromPointer`: mirrored in Arabic, where the first pane is on the right;
+  - `ratioFromKey`: arrows move the divider the way they point, Shift takes bigger steps, Home/End go to the limits;
+  - `edgeZone`: whether a dragged tab is on the start or end side edge, for "drag a tab to the edge to open beside".
+- `src/renderer/components/layout/SplitPanes.tsx` (new): two panes with a role=separator divider. It resizes by pointer drag or keys, and a double-click recentres it. Clicking or tabbing into a pane makes it the focused pane (`onFocusPane`), which is marked with a ring. The × on the second pane ends side by side. With no second pane it renders one pane.
+- `src/renderer/translations.ts`: workspaceSplitDivider and workspaceSplitClose, in ar and en.
+- `tests/ui/split-panes.test.ts` (new).
+
+**Tests:** 12/12, with ar and en. translation-keys passes after I removed an unused drop-overlay label (it comes back with the overlay). ESLint shows 0 errors.
+
+**Not done:** wiring. AppLayout renders the active and split tabs through SplitPanes. "Open beside" goes in the tab menu, the edge drop-zone overlay is still to build, and the focused pane will route shortcuts. This needs KEY-419 part B.
 ## KEY-428 / KEY-426 model: tab multi-select, tab-menu helpers and tab groups (WS-10, WS-11 pure parts) - 2026-11-19 - Agent: Claude Code
 
 **Request.** Nonstop work in parallel with Antigravity's KEY-418, while the user is away. These are the pure-model parts of WS-10 and WS-11, built ahead of their UI. They touch none of KEY-418's files.
