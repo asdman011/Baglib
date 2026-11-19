@@ -176,6 +176,49 @@ describe('workspace tabs wired to the providers', () => {
     } finally { off(); restore(); }
   });
 
+  it('side by side: both panes show, clicking a pane focuses it without moving it, the divider resizes, × ends it', async () => {
+    const { window, root, restore } = setup();
+    try {
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: threeTabs() }, createElement(Shell))));
+      await act(async () => { probe.tabs!.dispatchTabs({ type: 'openBeside', id: 't2' }); });
+      const pane = (which: string) => window.document.querySelector('[data-split-pane="' + which + '"]')!;
+      assert.equal(window.document.querySelector('[data-tab-panels]')!.getAttribute('data-tab-panels'), 'split');
+      assert.equal(pane('first').getAttribute('data-tab-panel'), 't1');
+      assert.equal(pane('second').getAttribute('data-tab-panel'), 't2');
+      assert.deepEqual(visibleScreens(window).sort(), ['library', 'quran']);
+      await act(async () => fire(pane('second'), 'onPointerDownCapture'));
+      assert.equal(probe.tabs!.state.activeId, 't2', 'the clicked pane is focused');
+      assert.equal(pane('first').getAttribute('data-tab-panel'), 't1', 'the panes stay put');
+      assert.ok(pane('second').hasAttribute('data-focused'));
+      const divider = window.document.querySelector('[data-split-divider]')!;
+      const dir = window.document.querySelector('[data-tab-panels]')!.getAttribute('dir');
+      await act(async () => fire(divider, 'onKeyDown', { key: dir === 'rtl' ? 'ArrowLeft' : 'ArrowRight', shiftKey: false }));
+      assert.equal(probe.tabs!.state.splitRatio, 0.52);
+      await act(async () => fire(window.document.querySelector('[data-split-close]')!, 'onClick'));
+      assert.equal(probe.tabs!.state.splitId, undefined);
+      assert.equal(window.document.querySelector('[data-tab-panels]')!.getAttribute('data-tab-panels'), 'single');
+    } finally { restore(); }
+  });
+
+  it('dragging a tab down out of the bar to the window edge opens it beside the focused tab', async () => {
+    const { window, root, restore } = setup();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
+    try {
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: threeTabs() }, createElement(Shell))));
+      const list = window.document.querySelector('[role="tablist"]') as unknown as { getBoundingClientRect: () => unknown };
+      list.getBoundingClientRect = () => ({ left: 0, width: 600, top: 0, bottom: 40 });
+      const dir = window.document.querySelector('[data-workspace-tabbar]')!.getAttribute('dir');
+      const endX = dir === 'rtl' ? 20 : 1180;
+      const tab = () => window.document.querySelector('[data-tab-id="t3"]')!;
+      await act(async () => fire(tab(), 'onPointerDown', { clientX: 300, clientY: 20 }));
+      await act(async () => fire(tab(), 'onPointerMove', { clientX: endX, clientY: 400 }));
+      assert.equal(window.document.querySelector('[data-split-drop]')!.getAttribute('data-split-drop'), 'end');
+      await act(async () => fire(tab(), 'onPointerUp', { clientX: endX, clientY: 400 }));
+      assert.equal(probe.tabs!.state.activeId, 't1');
+      assert.equal(probe.tabs!.state.splitId, 't3');
+    } finally { restore(); }
+  });
+
   it('Ctrl+T opens Home, Ctrl+W closes, Ctrl+Shift+T brings it back with its place', async () => {
     const { window, root, restore } = setup();
     try {

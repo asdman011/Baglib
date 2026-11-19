@@ -160,6 +160,10 @@ export interface TabsState {
   activeId: string | null;
   /** The tab in the second pane (WS-9), if two tabs are side by side. */
   splitId?: string;
+  /** KEY-425: the first pane's share of the width while two tabs are side by side (0.2-0.8). */
+  splitRatio?: number;
+  /** KEY-425: the focused tab is the one in the second pane (focus moved between the panes; the panes stay put). */
+  splitSwapped?: boolean;
   /** KEY-426 (WS-11): groups that have at least one tab. Absent when there are none. */
   groups?: TabGroup[];
 }
@@ -229,6 +233,8 @@ export type TabsAction =
   | { type: 'reopen'; tab: WorkspaceTab; id: string; now: number }
   | { type: 'openBeside'; id: string }
   | { type: 'closeSplit' }
+  /** KEY-425: drag or keys on the divider between the two panes. */
+  | { type: 'setSplitRatio'; ratio: number }
   /** KEY-426: put tabs in a new group, gathered where the first of them is. */
   | { type: 'group'; ids: string[]; groupId: string; name: string; color: TabGroupColor }
   /** Add tabs to an existing group, after its last tab. */
@@ -273,6 +279,8 @@ function withSplit(base: TabsState, tabs: WorkspaceTab[], activeId: string | nul
   const used = new Set(cleaned.map(tab => tab.groupId).filter(Boolean));
   const kept = groups.filter(group => used.has(group.id));
   const out: TabsState = splitId ? { tabs: cleaned, activeId, splitId } : { tabs: cleaned, activeId };
+  if (splitId && base.splitRatio !== undefined) out.splitRatio = base.splitRatio;
+  if (splitId && base.splitSwapped) out.splitSwapped = true;
   if (kept.length) out.groups = kept;
   return out;
 }
@@ -317,7 +325,10 @@ function touch(state: TabsState, id: string, now: number): TabsState {
   const next = replaceTab(state, { ...tab, lastActiveAt: now });
   // Focusing a tab inside a collapsed group opens the group.
   const groups = next.groups?.map(group => (group.id === tab.groupId && group.collapsed ? { ...group, collapsed: false } : group));
-  return withSplit({ ...next, groups }, next.tabs, id, next.splitId === id ? undefined : next.splitId);
+  // Focusing the tab in the other pane moves the focus between the panes; the panes stay where they are.
+  if (next.splitId === id && next.activeId) return withSplit({ ...next, groups, splitSwapped: !next.splitSwapped }, next.tabs, id, next.activeId);
+  // Focusing a tab outside the pair ends side by side.
+  return withSplit({ ...next, groups }, next.tabs, id, id === next.activeId ? next.splitId : undefined);
 }
 
 function insertAfter(tabs: WorkspaceTab[], tab: WorkspaceTab, afterId: string | null | undefined): WorkspaceTab[] {
@@ -349,7 +360,8 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       const inserted = insertAfter(state.tabs, tab, action.afterId ?? state.activeId);
       const tabs = settleMembership(inserted, inserted.indexOf(tab));
       if (action.background && state.activeId) return rebuild(state, tabs);
-      return withSplit(state, tabs, tab.id, state.splitId);
+      // A new tab in front ends side by side.
+      return withSplit(state, tabs, tab.id, undefined);
     }
     case 'close': {
       const at = state.tabs.findIndex(tab => tab.id === action.id);
@@ -378,7 +390,7 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       if (!tab || findTab(state, action.newId) || singleInstanceHolder(state, currentLocation(tab).view)) return state;
       // The copy sits next to the original, so it stays in the original's group.
       const copy: WorkspaceTab = { ...tab, id: action.newId, openedAt: action.now, lastActiveAt: action.now, history: tab.history.map(entry => ({ ...entry })) };
-      return withSplit(state, insertAfter(state.tabs, copy, tab.id), copy.id, state.splitId);
+      return withSplit(state, insertAfter(state.tabs, copy, tab.id), copy.id, undefined);
     }
     case 'navigate': {
       const tab = findTab(state, action.id);
@@ -419,13 +431,17 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       // Its old group may be gone; it joins a group only if it lands inside one.
       const tab: WorkspaceTab = withoutGroup({ ...action.tab, id: action.id, lastActiveAt: action.now });
       const inserted = insertAfter(state.tabs, tab, state.activeId);
-      return withSplit(state, settleMembership(inserted, inserted.indexOf(tab)), tab.id, state.splitId);
+      return withSplit(state, settleMembership(inserted, inserted.indexOf(tab)), tab.id, undefined);
     }
     case 'openBeside':
       if (!findTab(state, action.id) || action.id === state.activeId) return state;
-      return { ...state, splitId: action.id };
+      return withSplit({ ...state, splitSwapped: false }, state.tabs, state.activeId, action.id);
     case 'closeSplit':
       return state.splitId ? withSplit(state, state.tabs, state.activeId, undefined) : state;
+    case 'setSplitRatio': {
+      if (!state.splitId || !Number.isFinite(action.ratio)) return state;
+      return { ...state, splitRatio: Math.min(0.8, Math.max(0.2, action.ratio)) };
+    }
     case 'group': {
       const ids = new Set(action.ids);
       const members = state.tabs.filter(tab => ids.has(tab.id));
@@ -591,7 +607,8 @@ export function parseTabs(raw: unknown): TabsState {
   if (tabs.length === 0) return EMPTY_TABS;
   const activeId = typeof value.activeId === 'string' && ids.has(value.activeId) ? value.activeId : tabs[0].id;
   const splitId = typeof value.splitId === 'string' && ids.has(value.splitId) && value.splitId !== activeId ? value.splitId : undefined;
-  const parsed = withSplit({ tabs, activeId, groups: sanitizeGroups(value.groups) }, tabs, activeId, splitId);
+  const ratio = typeof value.splitRatio === 'number' && Number.isFinite(value.splitRatio) ? Math.min(0.8, Math.max(0.2, value.splitRatio)) : undefined;
+  const parsed = withSplit({ tabs, activeId, groups: sanitizeGroups(value.groups), splitRatio: ratio, splitSwapped: value.splitSwapped === true }, tabs, activeId, splitId);
   // The focused tab is never hidden in a collapsed group.
   const holder = findGroup(parsed, findTab(parsed, activeId)?.groupId);
   if (holder?.collapsed) parsed.groups = parsed.groups!.map(group => (group.id === holder.id ? { ...group, collapsed: false } : group));

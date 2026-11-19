@@ -160,7 +160,22 @@ describe('tabsReducer: reopen and side by side', () => {
   it('shows a tab beside the active one, and clears it when that tab is focused or closed', () => {
     const split = run(openMany(3), { type: 'openBeside', id: 't1' });
     assert.equal(split.splitId, 't1');
-    assert.equal(run(split, { type: 'activate', id: 't1', now: 9 }).splitId, undefined);
+    // Focusing the tab in the other pane moves the focus; both stay side by side, the panes stay put.
+    const swapped = run(split, { type: 'activate', id: 't1', now: 9 });
+    assert.equal(swapped.activeId, 't1');
+    assert.equal(swapped.splitId, 't3');
+    assert.equal(swapped.splitSwapped, true);
+    assert.equal(run(swapped, { type: 'activate', id: 't3', now: 10 }).splitSwapped, undefined, 'back to the first pane');
+    // Focusing a tab outside the pair, or opening a new one, ends side by side.
+    assert.equal(run(split, { type: 'activate', id: 't2', now: 9 }).splitId, undefined);
+    assert.equal(run(split, { type: 'open', id: 'n', location: { view: 'library', title: '' }, now: 9 }).splitId, undefined);
+    // The divider size is kept between 0.2 and 0.8, saved and restored; it goes when the split ends.
+    const sized = run(split, { type: 'setSplitRatio', ratio: 0.95 });
+    assert.equal(sized.splitRatio, 0.8);
+    assert.deepEqual(parseTabs(JSON.stringify(serializeTabs(run(sized, { type: 'activate', id: 't1', now: 11 })))).splitSwapped, true);
+    assert.equal(parseTabs(JSON.stringify(serializeTabs(sized))).splitRatio, 0.8);
+    assert.equal(run(sized, { type: 'closeSplit' }).splitRatio, undefined);
+    assert.equal(run(openMany(3), { type: 'setSplitRatio', ratio: 0.4 }).splitRatio, undefined, 'no split, no size');
     assert.equal(run(split, { type: 'close', id: 't1', homeId: 'h', now: 9 }).splitId, undefined);
     assert.equal(run(split, { type: 'closeSplit' }).splitId, undefined);
     assert.equal(run(openMany(2), { type: 'openBeside', id: 't2' }).splitId, undefined);

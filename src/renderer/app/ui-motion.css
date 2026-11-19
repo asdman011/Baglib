@@ -87,3 +87,12 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* KEY-425: side by side. The full-page reader is `position: fixed` for the whole window; inside a split pane it
+   fills its pane instead, so the other pane stays visible. */
+[data-split-pane] [role="region"][data-reader-page] {
+  position: absolute !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+}

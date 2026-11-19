@@ -1,3 +1,30 @@
+## KEY-425 progress: side by side is wired (WS-9); the tab menu item and the live run wait for KEY-421 - 2026-11-19 - Agent: Claude Code
+
+**Request.** Nonstop work in parallel with Antigravity's KEY-421 (links). It owns translations.ts and the link files.
+
+**Done:**
+- `src/shared/workspace-tabs.ts`:
+  - `splitRatio` (0.2–0.8, saved in `workspace.tabs.v1` and restored) and `splitSwapped`;
+  - a new `setSplitRatio` action;
+  - focusing the tab in the other pane moves the focus between the panes, and the panes stay put;
+  - focusing a tab outside the pair, opening, duplicating or reopening a tab ends side by side;
+  - closing either tab ends it (as before).
+- `src/renderer/components/layout/TabKeepAlive.tsx`: the side-by-side row. Both panes are the same kept-alive children laid out with CSS, so nothing remounts when a split starts or ends. A click or focus inside a pane focuses its tab, and the focused pane is marked.
+- `src/renderer/components/layout/SplitPanes.tsx`: the divider is now a shared `SplitDivider` (drag, arrow keys, double-click, and × to end the split).
+- `src/renderer/components/layout/TabBar.tsx`: dragging a tab down out of the bar to a side edge shows a drop zone and opens the tab side by side (`onDropToEdge`).
+- `src/renderer/components/layout/WorkspaceTabs.tsx`: the split controls are passed to the panels. A dropped tab opens beside the focused tab, or beside the most recently used other tab when it is the focused one.
+- `src/renderer/app/ui-motion.css`: inside a split pane, the full-page reader fills its pane instead of the window.
+- `src/renderer/components/context/WorkspaceContext.tsx`: only `useTabs().dispatchTabs` was added. Antigravity's in-progress KEY-421 hunks in this file are **not** part of this commit; they were staged out hunk by hunk.
+- Tests: the split model in `tests/shared/workspace-tabs.test.ts`; split and edge drop in `tests/ui/workspace-tabs-wiring.test.ts` (11).
+
+**Tests:** focused tests pass (78, plus wiring 11). ESLint is clean on my files.
+
+**Not done:**
+- "Open beside" in the tab right-click menu needs new strings in translations.ts, which Antigravity holds for KEY-421.
+- The live run (a reader and the research editor side by side, in ar and en) needs the shared dev server free of KEY-421 edits.
+- The full suite runs after KEY-421 lands.
+
+KEY-425 stays In Progress.
 ## KEY-423 review and fixes; KEY-422 live-verified - 2026-11-19 - Agent: Claude Code
 
 **KEY-423 review (Antigravity, e16f350e): pass.**

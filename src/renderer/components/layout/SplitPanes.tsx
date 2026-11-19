@@ -3,24 +3,89 @@
 /**
  * KEY-425 (WS-9): two tabs side by side with a resizable divider.
  *
- * - The first pane holds the focused tab and the second the split tab. In Arabic the first pane is on the right.
- * - Drag the divider, or focus it and use the arrow keys (Shift for bigger steps, Home/End for the limits);
- *   a double-click puts it back in the middle.
- * - The pane the user clicks or tabs into becomes the focused pane, which receives keyboard shortcuts and open
- *   requests; the workspace learns about it through `onFocusPane`.
- * - Presentational: it gets the two screens and reports what the user does. When `second` is absent it renders
- *   the first pane alone.
+ * - `SplitDivider` is the divider the workspace uses between two kept-alive tab panels (TabKeepAlive). Drag it,
+ *   or focus it and use the arrow keys (Shift for bigger steps, Home/End for the limits); a double-click puts it
+ *   back in the middle. Its × ends side by side.
+ * - `SplitPanes` lays out two given screens with that divider, for places that own both screens.
+ * - In Arabic the first pane is on the right.
  */
 import React from 'react';
 import { X } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import { DEFAULT_SPLIT_RATIO, clampRatio, ratioFromKey, ratioFromPointer } from './split-model';
 
+type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
+
+export interface SplitDividerProps {
+  dir: 'rtl' | 'ltr';
+  t: Translate;
+  /** The first pane's share of the width. */
+  ratio: number;
+  /** The row the divider sits in, to turn the pointer position into a ratio. */
+  boxRef: React.RefObject<HTMLElement | null>;
+  onRatioChange: (ratio: number) => void;
+  onClose: () => void;
+  style?: React.CSSProperties;
+}
+
+export const SplitDivider: React.FC<SplitDividerProps> = ({ dir, t, ratio, boxRef, onRatioChange, onClose, style }) => {
+  const [dragging, setDragging] = React.useState(false);
+  const current = clampRatio(ratio);
+  const fromPointer = (x: number) => {
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (rect) onRatioChange(ratioFromPointer(x, { left: rect.left, width: rect.width }, dir));
+  };
+  return (
+    <div className="relative flex w-2 shrink-0 flex-col items-center" style={style} data-split-divider-wrap>
+      <button
+        type="button"
+        data-split-close
+        onClick={onClose}
+        aria-label={t('workspaceSplitClose')}
+        title={t('workspaceSplitClose')}
+        className="absolute top-1 z-10 rounded-md bg-surface p-0.5 text-muted shadow-sm transition-colors hover:bg-canvas hover:text-main focus-visible:outline-2 focus-visible:outline-focus"
+      >
+        <X className="h-3 w-3" aria-hidden="true" />
+      </button>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t('workspaceSplitDivider')}
+        aria-valuemin={20}
+        aria-valuemax={80}
+        aria-valuenow={Math.round(current * 100)}
+        tabIndex={0}
+        data-split-divider
+        data-dragging={dragging ? '' : undefined}
+        onPointerDown={event => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          setDragging(true);
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+        }}
+        onPointerMove={event => { if (dragging) fromPointer(event.clientX); }}
+        onPointerUp={event => { setDragging(false); event.currentTarget.releasePointerCapture?.(event.pointerId); }}
+        onPointerCancel={() => setDragging(false)}
+        onDoubleClick={() => onRatioChange(DEFAULT_SPLIT_RATIO)}
+        onKeyDown={event => {
+          const next = ratioFromKey(current, event.key, dir, event.shiftKey);
+          if (next === null) return;
+          event.preventDefault();
+          onRatioChange(next);
+        }}
+        className="group relative w-2 flex-1 cursor-col-resize touch-none focus-visible:outline-none"
+      >
+        <span className={`absolute inset-x-0 inset-y-2 mx-auto w-px rounded-full transition-colors ${dragging ? 'bg-primary' : 'bg-subtle group-hover:bg-primary/60 group-focus-visible:bg-primary'}`} />
+      </div>
+    </div>
+  );
+};
+
 export type PaneId = 'first' | 'second';
 
 export interface SplitPanesProps {
   dir: 'rtl' | 'ltr';
-  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  t: Translate;
   first: React.ReactNode;
   second?: React.ReactNode;
   /** The pane that receives shortcuts and open requests. */
@@ -37,17 +102,11 @@ export const SplitPanes: React.FC<SplitPanesProps> = ({ dir, t, first, second, f
   const [ownRatio, setOwnRatio] = React.useState(DEFAULT_SPLIT_RATIO);
   const current = clampRatio(ratio ?? ownRatio);
   const boxRef = React.useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = React.useState(false);
 
   const setRatio = (next: number) => {
     const value = clampRatio(next);
     if (ratio === undefined) setOwnRatio(value);
     onRatioChange?.(value);
-  };
-
-  const fromPointer = (x: number) => {
-    const rect = boxRef.current?.getBoundingClientRect();
-    if (rect) setRatio(ratioFromPointer(x, { left: rect.left, width: rect.width }, dir));
   };
 
   if (second === undefined) {
@@ -66,57 +125,14 @@ export const SplitPanes: React.FC<SplitPanesProps> = ({ dir, t, first, second, f
         focusedPane === id ? 'ring-1 ring-primary/40' : 'ring-1 ring-transparent',
       ].join(' ')}
     >
-      {id === 'second' && (
-        <button
-          type="button"
-          data-split-close
-          onClick={onCloseSplit}
-          aria-label={t('workspaceSplitClose')}
-          title={t('workspaceSplitClose')}
-          className="absolute top-1 z-10 rounded-md p-1 text-muted transition-colors hover:bg-canvas hover:text-main focus-visible:outline-2 focus-visible:outline-focus [inset-inline-end:0.25rem]"
-        >
-          <X className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-      )}
       {content}
     </section>
   );
 
-  const percent = Math.round(current * 100);
-
   return (
-    <div ref={boxRef} dir={dir} data-split-panes="two" className={`flex min-h-0 min-w-0 flex-1 gap-0 ${dragging ? 'select-none' : ''}`}>
+    <div ref={boxRef} dir={dir} data-split-panes="two" className="flex min-h-0 min-w-0 flex-1 gap-0">
       {pane('first', first, current)}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={t('workspaceSplitDivider')}
-        aria-valuemin={20}
-        aria-valuemax={80}
-        aria-valuenow={percent}
-        tabIndex={0}
-        data-split-divider
-        data-dragging={dragging ? '' : undefined}
-        onPointerDown={event => {
-          if (event.button !== 0) return;
-          event.preventDefault();
-          setDragging(true);
-          event.currentTarget.setPointerCapture?.(event.pointerId);
-        }}
-        onPointerMove={event => { if (dragging) fromPointer(event.clientX); }}
-        onPointerUp={event => { setDragging(false); event.currentTarget.releasePointerCapture?.(event.pointerId); }}
-        onPointerCancel={() => setDragging(false)}
-        onDoubleClick={() => setRatio(DEFAULT_SPLIT_RATIO)}
-        onKeyDown={event => {
-          const next = ratioFromKey(current, event.key, dir, event.shiftKey);
-          if (next === null) return;
-          event.preventDefault();
-          setRatio(next);
-        }}
-        className="group relative w-2 shrink-0 cursor-col-resize touch-none focus-visible:outline-none"
-      >
-        <span className={`absolute inset-x-0 inset-y-2 mx-auto w-px rounded-full transition-colors ${dragging ? 'bg-primary' : 'bg-subtle group-hover:bg-primary/60 group-focus-visible:bg-primary'}`} />
-      </div>
+      <SplitDivider dir={dir} t={t} ratio={current} boxRef={boxRef} onRatioChange={setRatio} onClose={onCloseSplit} />
       {pane('second', second, 1 - current)}
     </div>
   );

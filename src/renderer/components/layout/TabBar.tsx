@@ -16,6 +16,7 @@ import { Plus, Volume2, X } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import { currentLocation, type WorkspaceTab } from '../../../shared/workspace-tabs';
 import { DRAG_THRESHOLD_PX, dropIndex, tabIcon, tabLabel, type TabSpan } from './tab-bar-model';
+import { edgeZone } from './split-model';
 
 export interface TabBarProps {
   tabs: WorkspaceTab[];
@@ -37,24 +38,32 @@ export interface TabBarProps {
    * clicking + still opens a new Home tab.
    */
   renderQuickOpen?: (props: { close: () => void; autoFocus: boolean }) => React.ReactNode;
+  /**
+   * KEY-425 (WS-9): a tab dragged down out of the bar and dropped near a side edge of the window opens side by
+   * side. `end` is the second pane's side (right in English, left in Arabic).
+   */
+  onDropToEdge?: (id: string, side: 'start' | 'end') => void;
 }
+
+/** How far below the bar the pointer must go before a dragged tab counts as pulled out of it. */
+const PULL_OUT_PX = 30;
 
 /** Hover delays for the + panel, so passing over the button doesn't flash it. */
 const QUICK_OPEN_DELAY_MS = 250;
 const QUICK_OPEN_CLOSE_MS = 200;
 
-interface DragState { id: string; startX: number; spans: TabSpan[]; target: number; moved: boolean }
+interface DragState { id: string; startX: number; spans: TabSpan[]; target: number; moved: boolean; out?: boolean; edge?: 'start' | 'end' | null }
 
 /** The order shown while a tab is dragged: the dragged tab already at its landing index. */
 function previewOrder(tabs: WorkspaceTab[], drag: DragState | null): WorkspaceTab[] {
-  if (!drag?.moved) return tabs;
+  if (!drag?.moved || drag.out) return tabs;
   const dragged = tabs.find(tab => tab.id === drag.id);
   if (!dragged) return tabs;
   const rest = tabs.filter(tab => tab.id !== drag.id);
   return [...rest.slice(0, drag.target), dragged, ...rest.slice(drag.target)];
 }
 
-export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot, renderQuickOpen }) => {
+export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot, renderQuickOpen, onDropToEdge }) => {
   const listRef = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
@@ -100,16 +109,28 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     const current = dragRef.current;
     if (!current) return;
+    // Pulled down out of the bar: a drop near a side edge opens the tab side by side.
+    const barBottom = listRef.current?.getBoundingClientRect().bottom ?? 0;
+    if (onDropToEdge && barBottom > 0 && event.clientY > barBottom + PULL_OUT_PX) {
+      const edge = edgeZone(event.clientX, { left: 0, width: window.innerWidth }, dir);
+      if (!current.out || edge !== current.edge) setDragState({ ...current, moved: true, out: true, edge });
+      return;
+    }
     const moved = current.moved || Math.abs(event.clientX - current.startX) >= DRAG_THRESHOLD_PX;
     if (!moved) return;
     const target = dropIndex(event.clientX, current.spans, current.id, dir);
-    if (moved !== current.moved || target !== current.target) setDragState({ ...current, moved, target });
+    if (moved !== current.moved || target !== current.target || current.out) setDragState({ ...current, moved, target, out: false, edge: null });
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLElement>) => {
     const current = dragRef.current;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     setDragState(null);
+    if (current?.out) {
+      suppressClick.current = true;
+      if (current.edge) onDropToEdge?.(current.id, current.edge);
+      return;
+    }
     if (current?.moved) {
       suppressClick.current = true;
       finishMove(current.id, current.target);
@@ -240,6 +261,10 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
       </div>
       {endSlot}
       <span className="sr-only" aria-live="polite">{announcement}</span>
+      {drag?.out && drag.edge && (
+        // Where the tab will go: the half of the window on that side.
+        <div aria-hidden="true" data-split-drop={drag.edge} className={`pointer-events-none fixed inset-y-0 z-[70] w-1/2 border-2 border-dashed border-primary/60 bg-primary/10 ${drag.edge === 'end' ? '[inset-inline-end:0]' : '[inset-inline-start:0]'}`} />
+      )}
     </div>
   );
 };

@@ -44,7 +44,7 @@ function useGuardedClose() {
 
 export const WorkspaceTabRow: React.FC = () => {
   const { dir, t, books } = useWorkspace();
-  const { state, open, activate, move } = useTabs();
+  const { state, open, activate, move, dispatchTabs } = useTabs();
   const closeTab = useGuardedClose();
   const playing = usePlayingTabs();
   const quick = useQuickOpenData(state);
@@ -59,6 +59,22 @@ export const WorkspaceTabRow: React.FC = () => {
     }
   }, [open, state, books]);
 
+  // KEY-425: a tab dropped on a side edge opens side by side with the focused tab (or, when it is the focused tab,
+  // with the most recently used other tab). "end" puts it in the second pane, "start" in the first.
+  const dropToEdge = React.useCallback((id: string, side: 'start' | 'end') => {
+    const partner = id === state.activeId
+      ? [...state.tabs].filter(tab => tab.id !== id).sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0]?.id
+      : state.activeId;
+    if (!partner) return;
+    if (side === 'end') {
+      if (partner !== state.activeId) activate(partner);
+      dispatchTabs({ type: 'openBeside', id });
+    } else {
+      activate(id);
+      dispatchTabs({ type: 'openBeside', id: partner });
+    }
+  }, [state, activate, dispatchTabs]);
+
   return (
     <div className="relative z-[61] flex h-10 shrink-0 items-center border-b border-subtle bg-surface/80 px-2 sm:px-3" data-workspace-tab-row>
       <TabBar
@@ -70,6 +86,7 @@ export const WorkspaceTabRow: React.FC = () => {
         onClose={closeTab}
         onMove={move}
         playing={playing}
+        onDropToEdge={dropToEdge}
         onNew={() => { open(homeLocation(), { afterId: lastTabId(state) }); }}
         renderQuickOpen={({ close, autoFocus }) => (
           <QuickOpenPanel destinations={quick.destinations} recent={quick.recent} t={t} onOpen={openQuick} onClose={close} autoFocus={autoFocus} />
@@ -128,7 +145,8 @@ const TabScreen: React.FC<{ render: (view: WorkspaceView) => React.ReactNode }> 
 const saveGenericSnapshot = async () => true;
 
 export const WorkspaceTabPanels: React.FC<{ render: (view: WorkspaceView) => React.ReactNode }> = ({ render }) => {
-  const { state } = useTabs();
+  const { dir, t } = useWorkspace();
+  const { state, activate, dispatchTabs } = useTabs();
   const playing = usePlayingTabs();
   const awake = useTabKeepAlive(state, playing, saveGenericSnapshot);
   const renderTab = React.useCallback((tab: WorkspaceTab) => (
@@ -136,7 +154,15 @@ export const WorkspaceTabPanels: React.FC<{ render: (view: WorkspaceView) => Rea
       <TabScreen render={render} />
     </TabScope>
   ), [render]);
-  return <TabKeepAlive state={state} awake={awake} renderTab={renderTab} />;
+  // KEY-425: the side-by-side row. Clicking into a pane focuses its tab (the focused pane gets shortcuts, open
+  // requests and back/forward); the divider size is saved with the tabs.
+  const split = React.useMemo(() => ({
+    dir, t,
+    onFocusTab: activate,
+    onRatioChange: (ratio: number) => dispatchTabs({ type: 'setSplitRatio', ratio }),
+    onCloseSplit: () => dispatchTabs({ type: 'closeSplit' }),
+  }), [dir, t, activate, dispatchTabs]);
+  return <TabKeepAlive state={state} awake={awake} renderTab={renderTab} split={split} />;
 };
 
 /** Runs one tab command against the tab state. */

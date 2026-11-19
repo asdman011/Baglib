@@ -184,6 +184,8 @@ export interface UseTabsResult {
 }
 
 interface BookSyncSubscriber {
+  /** KEY-425: any other tab action (side by side: openBeside, closeSplit, setSplitRatio). */
+  dispatchTabs: (action: TabsAction) => void;
   onUpdate: (book: BookItem) => void;
   onDelete: (bookId: string) => void;
 }
@@ -1053,6 +1055,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     duplicate,
     reopenClosed,
     closedTabs,
+    dispatchTabs: dispatch,
   }), [state, open, close, activate, navigate, move, go, duplicate, reopenClosed, closedTabs]);
 
   // Focused scope registry so `useWorkspace()` outside any `<TabScope>` reads the focused tab's scope.
