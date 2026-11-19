@@ -6194,6 +6194,11 @@ export const translations = {
     arlexAuthorLane: "إدوارد ويليام لين (ت ١٨٧٦ م)",
     arlexTitleDirect: "المحلل الصرفي المباشر (عربي - إنجليزي)",
     arlexAuthorDirect: "تيم باكوالتر — محلل أرامورف الصرفي (٢٠٠٢ م)",
+    workspaceTabsLabel: "علامات التبويب المفتوحة",
+    workspaceTabNew: "علامة تبويب جديدة (Ctrl+T)",
+    workspaceTabClose: "إغلاق علامة التبويب (Ctrl+W)",
+    workspaceTabUntitled: "بلا عنوان",
+    workspaceTabMoved: "نُقلت علامة التبويب إلى الموضع {position} من {count}",
   },
   en: {
     ...researchEditorTranslations.en,
@@ -12389,6 +12394,11 @@ export const translations = {
     arlexAuthorLane: "Edward William Lane (d. 1876 CE)",
     arlexTitleDirect: "Direct Morphological Analyzer (Arabic–English)",
     arlexAuthorDirect: "Tim Buckwalter — AraMorph Morphological Analyzer (2002)",
+    workspaceTabsLabel: "Open tabs",
+    workspaceTabNew: "New tab (Ctrl+T)",
+    workspaceTabClose: "Close tab (Ctrl+W)",
+    workspaceTabUntitled: "Untitled",
+    workspaceTabMoved: "Tab moved to position {position} of {count}",
   }
 };
 

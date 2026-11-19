@@ -1,3 +1,42 @@
+## KEY-419 part A: tab bar, shortcuts and keep-alive components (WS-3, not yet wired) - 2026-11-19 - Agent: Claude Code
+
+**Request.** WS-3 of the multi-tab workspace (epic KEY-380). Part A was built in new files only, while Antigravity holds KEY-418 (WS-2) and its files (WorkspaceContext, AppLayout, navigation helpers, listening views). Part B wires these into Titlebar/AppLayout once KEY-418 lands.
+
+**Done:**
+- `src/renderer/components/layout/tab-bar-model.ts`:
+  - browser tab shortcuts read from the key code, so an Arabic layout works and Cmd counts as Ctrl;
+  - the shortcut target, with wrap-around;
+  - the drag drop index, mirrored in RTL;
+  - the tab label and icon.
+- `src/renderer/components/layout/TabBar.tsx`:
+  - a presentational tablist;
+  - click, middle-click and × close, and + for a new tab;
+  - drag to reorder with a live preview, where a 5 px wobble is still a click;
+  - arrows mirrored in RTL, Home, End, Delete, and Ctrl+Shift+PageUp/PageDown to move;
+  - wheel scrolling and an aria-live move announcement.
+- `src/renderer/components/layout/use-tab-keep-alive.ts`: 6 tabs stay awake. A tab sleeps only after its save resolves true; a failed save keeps it awake until it is focused again. Exempt tabs never sleep. Only the slept set is state; the awake set is derived during render, with no setState in effects.
+- `src/renderer/components/layout/TabKeepAlive.tsx`: mounts the awake tabs and hides all but the active and split tabs.
+- `src/renderer/translations.ts`: workspaceTabsLabel, workspaceTabNew, workspaceTabClose, workspaceTabUntitled and workspaceTabMoved, in ar and en.
+- `tests/ui/tab-bar-model.test.ts` and `tests/ui/tab-bar.test.ts`.
+
+**Tests:** 22/22 pass, with ar and en for the bar, drag and keyboard. ESLint shows 0 errors on these files.
+
+**Not done:** part B (the titlebar/AppLayout wiring, global shortcuts, a live run in ar and en) waits for KEY-418. Nothing is visible in the app yet.
+## KEY-429 planned: shares and copies carry my annotations by default - 2026-11-19 - Agent: Claude Code
+
+**Request.** When the user shares or copies something, the share should include their own annotations by default. This applies to a single hadith, an ayah range, a book page, or several tabs at once, and covers:
+- page highlights and comments;
+- ayah notes and connections;
+- hadith commentary and connections.
+
+A "source only" option in Settings shares the plain material instead.
+
+**Done (planning only, no code):**
+- Created Jira KEY-429 (Task, epic KEY-380, label Library). It records today's plain-text share paths (HadithActions, quran-actions sharePassage, reader copy), the rules and the acceptance criteria.
+- Commented on KEY-416 so that its future share format leaves room for annotations.
+
+**Pending:** implementation. The setting is planned for the settings key-value store, so no schema change is expected. Any new field would be a hard gate.
+
 ## KEY-380 additions: tear-off windows, drag to reorder, multi-select, tab menu and groups (WS-10 to WS-12) - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user asked for Chrome- and Edge-style tabs:
