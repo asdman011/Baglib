@@ -7,7 +7,10 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Pencil, Plus, Search, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Layers, Pencil, Plus, Search, Star, Trash2, X } from 'lucide-react';
+import { ContextMenu } from '../ui/ContextMenu';
+import { ListDeckDialog } from './ListDeckDialog';
+import type { PersonalList } from '../../../shared/personal-lists';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { PERSONAL_LIST_KINDS, STARRED_LIST_ID, matchListName, type PersonalListItem, type PersonalListItemKind } from '../../../shared/personal-lists';
@@ -27,6 +30,8 @@ export function PersonalListsHub() {
   const [draft, setDraft] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // KEY-399: "Revise this list".
+  const [revising, setRevising] = useState<PersonalList | null>(null);
 
   const current = lists.find(l => l.id === selected) ?? lists[0];
   const shownLists = useMemo(() => lists.filter(l => l.kind === 'starred' || matchListName(l, query)), [lists, query]);
@@ -93,7 +98,7 @@ export function PersonalListsHub() {
             const active = current?.id === l.id;
             const position = custom.findIndex(c => c.id === l.id);
             return (
-              <li key={l.id} data-lists-row={l.id} className={`group rounded-xl border ${active ? 'border-accent bg-accent/5' : 'border-transparent hover:bg-surface'}`}>
+              <ContextMenu as="li" key={l.id} data-lists-row={l.id} tabIndex={-1} items={[{ id: 'revise-list', label: t('listDeckRevise'), icon: <Layers className="size-4" />, onClick: () => setRevising(l) }]} className={`group rounded-xl border ${active ? 'border-accent bg-accent/5' : 'border-transparent hover:bg-surface'}`}>
                 {renaming === l.id ? (
                   <form className="flex items-center gap-1 p-1.5" onSubmit={e => { e.preventDefault(); saveName(l.id); }}>
                     <input autoFocus dir="auto" value={draft} maxLength={120} data-lists-rename-input aria-label={t('listsRename')} onChange={e => setDraft(e.target.value)} onBlur={() => saveName(l.id)} onKeyDown={e => e.key === 'Escape' && setRenaming(null)} className="min-w-0 flex-1 rounded-lg border border-subtle bg-canvas px-2 py-1 text-sm text-main" />
@@ -122,7 +127,7 @@ export function PersonalListsHub() {
                     <button type="button" onClick={() => setConfirmDelete(null)} className="rounded-lg px-2 py-0.5 text-muted hover:bg-canvas">{t('cancel')}</button>
                   </div>
                 )}
-              </li>
+              </ContextMenu>
             );
           })}
           {shownLists.length <= 1 && custom.length === 0 && <li className="px-2 py-3 text-xs leading-relaxed text-muted">{t('listsHubEmpty')}</li>}
@@ -134,6 +139,9 @@ export function PersonalListsHub() {
           <>
             <header className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-bold text-main" dir="auto">{listName(current, t)}</h2>
+              <button type="button" data-lists-revise={current.id} onClick={() => setRevising(current)} className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas">
+                <Layers className="size-3.5" />{t('listDeckRevise')}
+              </button>
               <div className="ms-auto flex flex-wrap gap-1 text-xs" role="tablist" aria-label={t('listsKindFilter')}>
                 {(['all', ...PERSONAL_LIST_KINDS] as const).map(k => {
                   const count = k === 'all' ? total(current.counts) : current.counts[k];
@@ -168,6 +176,7 @@ export function PersonalListsHub() {
           </>
         )}
       </section>
+      {revising && <ListDeckDialog list={revising} onClose={() => setRevising(null)} />}
     </div>
   );
 }

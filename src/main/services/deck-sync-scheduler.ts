@@ -20,6 +20,7 @@ const STARTUP_DELAY_MS = 15_000;
 class DeckSyncScheduler {
   private pendingWorks = new Set<string>();
   private pendingSubs = new Set<string>();
+  private pendingLists = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
   private chain: Promise<void> = Promise.resolve();
 
@@ -27,6 +28,13 @@ class DeckSyncScheduler {
   requestForWork(workId: string | null | undefined): void {
     if (!workId) return;
     this.pendingWorks.add(workId);
+    this.schedule();
+  }
+
+  /** KEY-399: a personal list's items were added, removed or reordered. */
+  requestForList(listId: string | null | undefined): void {
+    if (!listId) return;
+    this.pendingLists.add(listId);
     this.schedule();
   }
 
@@ -78,8 +86,10 @@ class DeckSyncScheduler {
     const service = createDeckSyncService(getDatabase());
     const ids = new Set(this.pendingSubs);
     for (const workId of this.pendingWorks) for (const sub of service.forWork(workId)) ids.add(sub.id);
+    for (const listId of this.pendingLists) for (const sub of service.forList(listId)) ids.add(sub.id);
     this.pendingSubs.clear();
     this.pendingWorks.clear();
+    this.pendingLists.clear();
     for (const id of ids) {
       try {
         this.report(await service.sync(id));

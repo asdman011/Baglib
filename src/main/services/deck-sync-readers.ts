@@ -8,6 +8,7 @@ import { DeckSyncService } from './deck-sync';
 import type { NarratorReaders } from './narrator-decks';
 import { readNarrator, readNarratorIdsForHadiths, readSunnahChapterForSync, readSunnahChapterNumbers } from '../ipc/sunnah';
 import { readPoemForSync, readPoetPoemIds } from '../ipc/poetry';
+import { readAyahTexts, readQuranSources } from '../ipc/quran';
 import { collectionKeys } from '../../renderer/utils/sunnah-collections';
 import { translations } from '../../renderer/translations';
 import type { SunnahCollectionId } from '../../shared/types/sunnah';
@@ -22,6 +23,15 @@ export const corpusReaders: NarratorReaders = {
   sunnahChapterNumbers: readSunnahChapterNumbers,
   poem: readPoemForSync,
   poetPoemIds: readPoetPoemIds,
+  // KEY-399: ayah meaning cards: the installed text, Saheeh International and Ibn Kathir when installed.
+  ayahMeaning: async (profile, surah, from, to) => {
+    const ayahs = await readAyahTexts(surah, from, to, { profile }).catch(() => []);
+    if (!ayahs.length) return null;
+    const sources = profile === 'hafs' ? await readQuranSources({ profile, surah, from, to, translation: 'translation/193', tafsir: 'tafsir/22' }).catch(() => []) : [];
+    const translation = sources.filter(s => s.kind === 'translation').map(s => s.text).join(' ');
+    const tafsir = sources.find(s => s.kind === 'tafsir' && s.text.trim());
+    return { text: ayahs.map(a => a.text).join(' '), translation, tafsir: tafsir?.text ?? '', tafsirTitle: tafsir?.title ?? '' };
+  },
   narratorIdsForHadiths: readNarratorIdsForHadiths,
   narrator: readNarrator,
 };

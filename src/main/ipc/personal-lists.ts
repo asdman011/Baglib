@@ -5,6 +5,8 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getDatabase } from '../database/connection';
 import { PersonalListsService } from '../services/personal-lists';
+import { deckSyncScheduler } from '../services/deck-sync-scheduler';
+import { STARRED_LIST_ID } from '../../shared/personal-lists';
 
 const KNOWN = ['invalid-request', 'not-found'];
 
@@ -32,12 +34,24 @@ const HANDLERS: Record<string, Handler> = {
   filter: (s, kind, ids, mode) => s.filter(kind, ids, mode),
 };
 
+/** KEY-399: item changes that a "Revise this list" deck follows. */
+const LIST_ITEM_CHANGES: Record<string, (args: unknown[]) => unknown> = {
+  add: args => args[0],
+  remove: args => args[0],
+  'remove-item': args => args[0],
+  'reorder-items': args => args[0],
+  'toggle-star': () => STARRED_LIST_ID,
+};
+
 export function registerPersonalListsIpc(): void {
   for (const [name, handler] of Object.entries(HANDLERS)) {
     ipcMain.handle(`personal-lists:${name}`, (event, ...args: unknown[]) => {
       try {
         authorize(event);
-        return { ok: true as const, data: handler(new PersonalListsService(getDatabase()), ...args) ?? null };
+        const data = handler(new PersonalListsService(getDatabase()), ...args) ?? null;
+        const changed = LIST_ITEM_CHANGES[name]?.(args);
+        if (typeof changed === 'string') deckSyncScheduler.requestForList(changed);
+        return { ok: true as const, data };
       } catch (error) {
         const message = (error as Error)?.message ?? '';
         if (!KNOWN.includes(message)) console.warn('[IPC:personal-lists]', error);

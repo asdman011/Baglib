@@ -25,13 +25,14 @@
  */
 
 import crypto from 'node:crypto';
+import { SURAH_NAMES_AR } from '../../shared/quran-wird';
 import { randomUUID } from 'node:crypto';
 import type { Database } from 'better-sqlite3';
 import { DeckRepository } from '../database/repositories/deck.repository';
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { trashKnowledge } from './knowledge-history';
 
-export const SUPPORTED_SUBSCRIPTION_KINDS = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet'] as const;
+export const SUPPORTED_SUBSCRIPTION_KINDS = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet', 'list'] as const;
 export type SupportedSubscriptionKind = (typeof SUPPORTED_SUBSCRIPTION_KINDS)[number];
 export type NewItemsPolicy = 'silent' | 'toast';
 
@@ -73,6 +74,8 @@ interface ListOptions {
 
 export interface SourceItem {
   ref: string;
+  /** KEY-399: a mixed source (a personal list) gives each item the note type of its own kind. */
+  noteTypeId?: string;
   /** Values for the note type's fields, in field order (book sources, any normal note type). */
   values?: string[];
   /** Values by field name (sources with a fixed note type). */
@@ -99,6 +102,11 @@ export interface SourceReaders {
   /** `paired`: Arabic bayt layout, where verses alternate sadr and ajuz. */
   poem(id: number): Promise<{ id: number; title: string; poetName: string; verses: string[]; paired?: boolean } | null>;
   poetPoemIds(poetId: number): Promise<number[]>;
+  /**
+   * KEY-399: an ayah (or range) for a meaning card: the ayah text, a translation and a short tafsir.
+   * Never used to hide Quran text (no hifz cards).
+   */
+  ayahMeaning?(profile: 'hafs' | 'warsh', surah: number, from: number, to: number): Promise<{ text: string; translation: string; tafsir: string; tafsirTitle: string } | null>;
 }
 
 const NO_READERS: SourceReaders = {
@@ -129,8 +137,8 @@ interface Adapter {
   noteTypes?: readonly string[];
   /** Checks the source reference's shape. */
   validRef(ref: string): boolean;
-  /** Item refs of this source start with this, used to find the deck's notes for it. */
-  namespace(ref: string): string;
+  /** Item refs of this source start with this (or one of these), used to find the deck's notes for it. */
+  namespace(ref: string): string | readonly string[];
   list(db: Database, ref: string, readers: SourceReaders, options: ListOptions): Promise<SourceItem[]>;
 }
 
@@ -203,6 +211,78 @@ async function poemItem(readers: SourceReaders, id: number, options: ListOptions
 
 const SUNNAH_ID = /^[A-Za-z0-9]{1,40}$/u;
 const NUMBER = /^[1-9]\d{0,11}$/u;
+
+/** KEY-399: the item refs a personal list's deck may hold, by kind. */
+const LIST_NAMESPACES = ['book-highlight:', 'list-book:', 'sunnah-hadith:', 'poem:', 'quran-meaning:'] as const;
+const LIST_BASIC_TYPES = ['stock-basic', 'stock-basic-reversed'];
+const plainText = (html: string, max: number) => {
+  const text = html.replace(/<[^>]*>/gu, ' ').replace(/&nbsp;/gu, ' ').replace(/\s+/gu, ' ').trim();
+  return text.length > max ? `${text.slice(0, max).replace(/\s+\S*$/u, '')} …` : text;
+};
+
+/**
+ * KEY-399: a personal list's items as cards, in list order. Each kind uses its own template:
+ * books their highlights (Task 7; a book with none gets a title → author card), hadith the
+ * "Hadith (variants)" type (Task 5), poems the whole-poem type (Task 6), and ayahs a meaning card
+ * (ayah text → translation and tafsir, Task 9). Ayah cards are never reversed: no hifz cards.
+ */
+async function listItems(db: Database, listId: string, readers: SourceReaders, options: ListOptions): Promise<SourceItem[]> {
+  const rows = db
+    .prepare(`SELECT item_kind, item_ref FROM personal_list_item WHERE list_id = ? ORDER BY position, added_at`)
+    .all(listId) as Array<{ item_kind: string; item_ref: string }>;
+  const basic = LIST_BASIC_TYPES.includes(options.noteTypeId) ? options.noteTypeId : 'stock-basic';
+  const items: SourceItem[] = [];
+  for (const row of rows) {
+    if (row.item_kind === 'book') {
+      const workId = row.item_ref.slice(5);
+      if (!/^[A-Za-z0-9_-]{1,128}$/u.test(workId)) continue;
+      const highlights = await ADAPTERS.book_highlights.list(db, workId, readers, options);
+      if (highlights.length) {
+        items.push(...highlights.map(item => ({ ...item, noteTypeId: basic })));
+        continue;
+      }
+      const work = db.prepare(`SELECT title FROM work WHERE id = ?`).get(workId) as { title: string } | undefined;
+      if (!work) continue;
+      const authors = (db.prepare(`SELECT a.name FROM work_author wa JOIN author a ON a.id = wa.author_id WHERE wa.work_id = ? ORDER BY a.name`).all(workId) as Array<{ name: string }>).map(a => a.name);
+      items.push({ ref: `list-book:${workId}`, noteTypeId: basic, values: [escapeHtml(work.title), escapeHtml(authors.join('، ') || work.title)] });
+    } else if (row.item_kind === 'hadith') {
+      const parts = row.item_ref.split(':');
+      const collection = parts[1];
+      const chapter = Number(parts[2]);
+      const hadithId = parts.slice(3).join(':');
+      if (!SUNNAH_ID.test(collection ?? '') || !Number.isSafeInteger(chapter) || chapter < 0 || !hadithId) continue;
+      const found = await hadithItems(readers, collection, chapter, undefined, { ...options, noteTypeId: 'stock-hadith-variants' });
+      const item = found.find(h => h.ref === `sunnah-hadith:${collection}:${chapter}:${hadithId}`);
+      if (item) items.push({ ...item, noteTypeId: 'stock-hadith-variants' });
+    } else if (row.item_kind === 'poem') {
+      const id = Number(row.item_ref.split(':')[2]);
+      if (!Number.isSafeInteger(id) || id <= 0) continue;
+      const item = await poemItem(readers, id, { ...options, noteTypeId: 'stock-poem-whole' });
+      if (item) items.push({ ...item, noteTypeId: 'stock-poem-whole' });
+    } else if (row.item_kind === 'ayah') {
+      const match = /^quran:(hafs|warsh):(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?$/u.exec(row.item_ref);
+      if (!match || !readers.ayahMeaning) continue;
+      const [, profile, surahText, fromText, toText] = match;
+      const surah = Number(surahText);
+      const from = Number(fromText);
+      const to = toText ? Number(toText) : from;
+      const meaning = await readers.ayahMeaning(profile as 'hafs' | 'warsh', surah, from, to).catch(() => null);
+      if (!meaning || !meaning.text.trim()) continue;
+      const reference = `${SURAH_NAMES_AR[surah - 1] ?? surah} ${surah}:${from}${to > from ? `-${to}` : ''}`;
+      const back = [
+        meaning.translation.trim() ? `<div dir="ltr" lang="en">${escapeHtml(plainText(meaning.translation, 1500))}</div>` : '',
+        meaning.tafsir.trim() ? `<div dir="rtl" lang="ar">${escapeHtml(plainText(meaning.tafsir, 700))}</div><div class="source">— ${escapeHtml(meaning.tafsirTitle)}</div>` : '',
+      ].filter(Boolean).join('<br>');
+      if (!back) continue;
+      items.push({
+        ref: `quran-meaning:${profile}:${surah}:${from}${to > from ? `-${to}` : ''}`,
+        noteTypeId: 'stock-basic',
+        values: [`<div dir="rtl" lang="ar">${escapeHtml(meaning.text.trim())}</div><div class="source">${escapeHtml(reference)}</div>`, back],
+      });
+    }
+  }
+  return items;
+}
 
 /** Source adapters: how a subscription's items are read. */
 const ADAPTERS: Record<SupportedSubscriptionKind, Adapter> = {
@@ -290,6 +370,13 @@ const ADAPTERS: Record<SupportedSubscriptionKind, Adapter> = {
       const item = await poemItem(readers, Number(ref), options);
       return item ? [item] : [];
     },
+  },
+  list: {
+    noteTypeId: 'stock-basic',
+    noteTypes: ['stock-basic-reversed'],
+    validRef: ref => /^[A-Za-z0-9_-]{1,64}$/u.test(ref),
+    namespace: () => LIST_NAMESPACES,
+    list: (db, ref, readers, options) => listItems(db, ref, readers, options),
   },
   poet: {
     noteTypeId: 'stock-context-cloze',
@@ -505,6 +592,10 @@ export class DeckSyncService {
 
   /** A readable name for the source, or null when it does not exist. */
   private async describeSource(kind: SupportedSubscriptionKind, ref: string): Promise<string | null> {
+    if (kind === 'list') {
+      const list = this.db.prepare(`SELECT name FROM personal_list WHERE id = ?`).get(ref) as { name: string } | undefined;
+      return list ? list.name : null;
+    }
     if (kind === 'book_highlights' || kind === 'book_comments') {
       return this.db.prepare(`SELECT 1 FROM work WHERE id = ?`).get(ref) ? workTitle(this.db, ref) : null;
     }
@@ -542,6 +633,11 @@ export class DeckSyncService {
     return sub;
   }
 
+  /** KEY-399: subscriptions that follow a personal list (for the list hooks). */
+  forList(listId: string): DeckSubscription[] {
+    return this.list().filter(s => s.sourceKind === 'list' && s.sourceRef === listId);
+  }
+
   /** Subscriptions that follow a given book (for the annotation hooks). */
   forWork(workId: string): DeckSubscription[] {
     return this.list().filter(s => (s.sourceKind === 'book_highlights' || s.sourceKind === 'book_comments') && s.sourceRef === workId);
@@ -556,21 +652,29 @@ export class DeckSyncService {
     const adapter = ADAPTERS[sub.sourceKind];
     const type = this.notes.getNoteType(sub.noteTypeId);
     if (!type) throw new Error('invalid-note-type');
-    const fieldNames = type.fields.map(f => f.name);
+    const fieldsOf = new Map<string, string[]>([[sub.noteTypeId, type.fields.map(f => f.name)]]);
+    const fieldNamesFor = (noteTypeId: string) => {
+      if (!fieldsOf.has(noteTypeId)) {
+        const other = this.notes.getNoteType(noteTypeId);
+        if (!other) throw new Error('invalid-note-type');
+        fieldsOf.set(noteTypeId, other.fields.map(f => f.name));
+      }
+      return fieldsOf.get(noteTypeId)!;
+    };
     const items = await adapter.list(this.db, sub.sourceRef, this.readers, { noteTypeId: sub.noteTypeId, cards: sub.cards ?? ['full'], poem: sub.poem });
     const result: SyncResult = { subscriptionId: sub.id, deckId: sub.deckId, added: 0, linked: 0, updated: 0, flagged: 0, orphaned: 0, restored: 0, unchanged: 0 };
 
     for (let i = 0; i < items.length; i += BATCH) {
       const batch = items.slice(i, i + BATCH);
       this.db.transaction(() => {
-        for (const item of batch) this.applyItem(sub, fieldNames, item, result);
+        for (const item of batch) this.applyItem(sub, fieldNamesFor(item.noteTypeId ?? sub.noteTypeId), item, result);
       })();
       if (i + BATCH < items.length) await yieldBetweenBatches();
     }
 
     // Items that are gone: orphan this deck's notes for them.
     const present = new Set(items.map(item => item.ref));
-    const namespace = adapter.namespace(sub.sourceRef);
+    const namespaces = ([] as string[]).concat(adapter.namespace(sub.sourceRef));
     const deckNotes = this.db
       .prepare(
         `SELECT DISTINCT n.id, n.source_ref, n.orphaned_at
@@ -578,9 +682,9 @@ export class DeckSyncService {
          JOIN card_detail c ON c.note_id = n.id
          JOIN deck_card dc ON dc.knowledge_id = c.knowledge_id AND dc.deck_id = ?
          JOIN knowledge k ON k.id = c.knowledge_id AND k.deleted_at IS NULL
-         WHERE substr(n.source_ref, 1, ?) = ?`
+         WHERE ${namespaces.map(() => 'substr(n.source_ref, 1, ?) = ?').join(' OR ')}`
       )
-      .all(sub.deckId, namespace.length, namespace) as Array<{ id: string; source_ref: string; orphaned_at: string | null }>;
+      .all(sub.deckId, ...namespaces.flatMap(namespace => [namespace.length, namespace])) as Array<{ id: string; source_ref: string; orphaned_at: string | null }>;
     let gone = deckNotes.filter(n => !present.has(n.source_ref) && !n.orphaned_at);
     if (gone.length) {
       // Never orphan an item another subscription of this deck still covers (a bab and its book).
@@ -602,8 +706,35 @@ export class DeckSyncService {
       })();
     }
 
+    // KEY-399: a list's order is the order its new cards are introduced; scheduled cards are left alone.
+    if (sub.sourceKind === 'list') this.orderNewCards(sub.deckId, items.map(item => item.ref));
+
     this.db.prepare(`UPDATE deck_subscription SET last_synced_at = ? WHERE id = ?`).run(this.clock().toISOString(), sub.id);
     return result;
+  }
+
+  /** Gives this deck's still-new cards for these refs positions in the given order (several cards per item keep theirs). */
+  private orderNewCards(deckId: string, refs: string[]): void {
+    const cards = this.db.prepare(
+      `SELECT c.knowledge_id AS id FROM card_note n
+       JOIN card_detail c ON c.note_id = n.id
+       JOIN deck_card dc ON dc.knowledge_id = c.knowledge_id AND dc.deck_id = ?
+       JOIN knowledge k ON k.id = c.knowledge_id AND k.deleted_at IS NULL
+       LEFT JOIN srs_state s ON s.knowledge_id = c.knowledge_id
+       WHERE n.source_ref = ? AND (s.state IS NULL OR s.state = 'new')
+       ORDER BY c.ord, c.knowledge_id`
+    );
+    const setDeck = this.db.prepare(`UPDATE deck_card SET position = ? WHERE deck_id = ? AND knowledge_id = ?`);
+    const setState = this.db.prepare(`UPDATE srs_state SET new_position = ? WHERE knowledge_id = ? AND state = 'new'`);
+    this.db.transaction(() => {
+      refs.forEach((ref, index) => {
+        (cards.all(deckId, ref) as Array<{ id: string }>).forEach((card, offset) => {
+          const position = (index + 1) * 100 + offset;
+          setDeck.run(position, deckId, card.id);
+          setState.run(position, card.id);
+        });
+      });
+    })();
   }
 
   private fieldsFor(fieldNames: string[], item: SourceItem): Record<string, string> {
@@ -615,6 +746,7 @@ export class DeckSyncService {
   }
 
   private applyItem(sub: DeckSubscription, fieldNames: string[], item: SourceItem, result: SyncResult): void {
+    const noteTypeId = item.noteTypeId ?? sub.noteTypeId;
     const generated = this.fieldsFor(fieldNames, item);
     const hash = hashFields(generated);
     const notes = this.db
@@ -622,13 +754,13 @@ export class DeckSyncService {
         `SELECT id, note_type_id, fields_json, copied_from_note_id, source_ref, source_snapshot_json, source_hash, source_changed_at, orphaned_at
          FROM card_note WHERE source_ref = ? AND note_type_id = ?`
       )
-      .all(item.ref, sub.noteTypeId) as NoteRow[];
+      .all(item.ref, noteTypeId) as NoteRow[];
     const live = notes.filter(n => this.hasLiveCards(n.id));
     const original = live.find(n => !n.copied_from_note_id);
 
     if (!original) {
       // Not in any deck yet, or every earlier note was deleted: make a new note in this deck.
-      this.notes.saveNote({ noteTypeId: sub.noteTypeId, fields: generated, sourceRef: item.ref, deckId: sub.deckId, sourceSnapshot: generated, sourceHash: hash, fromSourceSync: true });
+      this.notes.saveNote({ noteTypeId, fields: generated, sourceRef: item.ref, deckId: sub.deckId, sourceSnapshot: generated, sourceHash: hash, fromSourceSync: true });
       result.added += 1;
       return;
     }

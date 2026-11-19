@@ -1,3 +1,61 @@
+## KEY-399 "Revise this list": decks from personal lists with live sync - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user said "Yes, KEY-399" after KEY-386 (lists) landed. There is no schema change: the `list` subscription kind was already allowed by migration 031's CHECK.
+
+**What changed:**
+- **`services/deck-sync.ts`:**
+  - **New `list` adapter.** It reads `personal_list_item` in list order, and each kind uses its own template:
+    - **Books:** the book's highlight cards (Task 7, the same `book-highlight:` notes), or a `list-book:<work>` title → author card when the book has none.
+    - **Hadith:** `stock-hadith-variants` (Task 5), sharing the `sunnah-hadith:` note with other decks.
+    - **Poems:** `stock-poem-whole` (Task 6).
+    - **Ayahs:** a `stock-basic` **meaning card** `quran-meaning:<profile>:<surah>:<ayah>`, with the ayah and its reference on the front and Saheeh International plus an Ibn Kathir excerpt on the back. Ayah cards are **never reversed**, whatever the deck asks (no hifz).
+  - **Engine changes:**
+    - `SourceItem.noteTypeId` lets one subscription mix note types;
+    - an adapter's namespace may be a list of prefixes, so a list deck only orphans list-made cards;
+    - `orderNewCards` gives this deck's still-new cards `deck_card.position` and `srs_state.new_position` in list order, leaving reviewed cards untouched;
+    - `forList(listId)`;
+    - `describeSource` returns the list name.
+- **`deck-sync-readers.ts`:** `ayahMeaning`, built on `readAyahTexts` and `readQuranSources` (translation/193, tafsir/22).
+- **`deck-sync-scheduler.ts`:** `requestForList` (debounced, like annotations).
+- **`ipc/personal-lists.ts`:** add, remove-item, reorder-items, toggle-star and remove now request a sync of the decks that follow that list.
+- **Preload:** `deckSync.subscribe` accepts `list` and the `stock-basic`/`stock-basic-reversed` note types.
+- **UI:**
+  - **`components/lists/ListDeckDialog.tsx`:**
+    - the deck name defaults to the list name;
+    - reversible cards for books;
+    - the new-items policy;
+    - the decks already following the list, with "Sync now".
+  - **Hub:** a "Revise this list" button in the list header and in each list's right-click menu.
+  - **Strings:** ar and en.
+- **Docs:** the data dictionary's deck_subscription paragraph now covers `list`.
+
+**Verified (2026-11-19):**
+- `tests/services/list-decks.test.ts` 5/5:
+  - each kind's template;
+  - ayahs never reversed;
+  - add, remove (orphan) and re-add (restore);
+  - list order sets the new-card order, and a reviewed card's `srs_state` is byte-identical;
+  - quick-add and hand-made cards in the same deck are never orphaned;
+  - an unknown list is refused.
+- The existing deck-sync, corpus, poem, Sunnah and personal-lists suites: 36/36.
+- **`scripts/list-decks-live` passed in ar and en,** with the real Arabic PDF, plus Sunnah, Quran and poetry corpus copies (originals checked unchanged):
+  - a mixed list (book, Bukhari 1, poem 1, 2:153);
+  - right-click on the list offers "Revise this list";
+  - the dialog is RTL/LTR and named after the list;
+  - the deck is made with **4 cards**;
+  - adding 2:255 to the list makes **5** through background sync;
+  - the review screen opens on the first list item;
+  - no renderer errors.
+  - Evidence: `.baglib-data/key399-evidence/`.
+
+**Limits:**
+- Ayah meaning cards need an installed Quran text. The translation and tafsir are used when installed; with neither, the ayah is skipped.
+- The sync-review "changed source" comparison has no re-read for `list-book:` and `quran-meaning:` refs (it shows no new source); this only matters for user-edited cards.
+
+**Files:** src/main/services/deck-sync.ts, src/main/services/deck-sync-readers.ts, src/main/services/deck-sync-scheduler.ts, src/main/ipc/personal-lists.ts, src/preload/index.ts, src/renderer/components/lists/ListDeckDialog.tsx, src/renderer/components/lists/PersonalListsHub.tsx, src/renderer/translations.ts, tests/services/list-decks.test.ts, scripts/list-decks-live/run.mjs, scripts/list-decks-live/main.cjs, docs/data-dictionary.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-414 Dictionary lookup features: multi-word search, suggestions, order, root family, history, Reading pad - 2026-11-18 - Agent: Claude Code
 
 **Request.** Brief `docs/agent-ops/tasks/KEY-414.antigravity.md`. Per "after the argon finishes you handle any remaining tasks", Claude Code built it, and the user confirmed "Yes, KEY-414". Ideas came from the GPL Arabic Lexicons app; no code or text was copied. No tables, columns, migrations or dependencies were added.
