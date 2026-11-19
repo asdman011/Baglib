@@ -1,3 +1,24 @@
+## KEY-422: the + panel shows most-used destinations and recent items (WS-6 wiring) - 2026-11-19 - Agent: Claude Code
+
+**Request.** Nonstop work in parallel with Antigravity, which holds KEY-423 (WorkspaceContext, SettingsDirectory, translations).
+
+**Done:**
+- `src/renderer/components/layout/workspace-usage.ts` (new). `useQuickOpenData(state)`:
+  - records each move of the focused tab. A destination view (not Home, the reader or the editor) counts toward "Most used"; a place with an item (`book:` and so on) becomes a recent;
+  - loads and saves `workspace.usage.v1` and `workspace.recent.v1`, writing only after the saved values were read;
+  - merges in the Quran, Sunnah and poetry "continue reading" places (`islamic.continue.v1.*`);
+  - the tab the app starts on is not counted.
+- `src/renderer/components/layout/WorkspaceTabs.tsx`: the tab row passes `renderQuickOpen`, so hovering + or pressing ↓ on it opens QuickOpenPanel. A pick opens in a new tab at the end. A book opens from the tab's own entry; other items go through the study navigation, aimed at the new tab.
+- `tests/ui/workspace-usage.test.ts` (new):
+  - the rules;
+  - the default ranking, with Library first after it's opened often;
+  - recents;
+  - saving;
+  - reading saved data and continue-reading places.
+
+**Tests:** focused tests pass (usage 5, quick-open/history 9+, tab-bar). ESLint shows 0 errors, and tsc was clean before Antigravity's edits started.
+
+**Not done:** the live + panel step is written in `scripts/workspace-tabs-live/main.cjs` but not committed. Its first run was broken because Antigravity's KEY-423 edits hot-reloaded into the shared dev server partway through. It runs, together with the full suite, once KEY-423 lands. KEY-422 stays In Progress until then.
 ## KEY-420 done; Jira updates for KEY-418, 419, 420 - 2026-11-19 - Agent: Claude Code
 
 **Done:**

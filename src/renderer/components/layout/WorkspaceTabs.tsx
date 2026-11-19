@@ -12,7 +12,10 @@
 import React from 'react';
 import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
 import { editorLeaveGuard } from '../research/editor-leave';
-import { activeTab, currentLocation, homeLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
+import { activeTab, currentLocation, homeLocation, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
+import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { QuickOpenPanel } from './QuickOpenPanel';
+import { useQuickOpenData } from './workspace-usage';
 import { TabBar } from './TabBar';
 import { TabKeepAlive } from './TabKeepAlive';
 import { TabHistoryStrip } from './TabHistoryStrip';
@@ -37,10 +40,22 @@ function useGuardedClose() {
 }
 
 export const WorkspaceTabRow: React.FC = () => {
-  const { dir, t } = useWorkspace();
+  const { dir, t, books } = useWorkspace();
   const { state, open, activate, move } = useTabs();
   const closeTab = useGuardedClose();
   const playing = usePlayingTabs();
+  const quick = useQuickOpenData(state);
+
+  // KEY-422: a pick from the + panel opens in a new tab at the end. A book opens from the tab's own entry; other
+  // items (note, ayah, hadith, poem, lecture moment) go through the study navigation, aimed at the new tab.
+  const openQuick = React.useCallback((location: TabLocation) => {
+    const book = location.target?.startsWith('book:');
+    const id = open(book ? location : { view: location.view, title: location.title }, { afterId: lastTabId(state) });
+    if (location.target && !book) {
+      void navigateStudyReference(location.target, books, () => {}, (noteId, anchor) => openStudyNote({ id: noteId, anchor, tabId: id }), id).catch(() => {});
+    }
+  }, [open, state, books]);
+
   return (
     <div className="relative z-[61] flex h-10 shrink-0 items-center border-b border-subtle bg-surface/80 px-2 sm:px-3" data-workspace-tab-row>
       <TabBar
@@ -53,6 +68,9 @@ export const WorkspaceTabRow: React.FC = () => {
         onMove={move}
         playing={playing}
         onNew={() => { open(homeLocation(), { afterId: lastTabId(state) }); }}
+        renderQuickOpen={({ close, autoFocus }) => (
+          <QuickOpenPanel destinations={quick.destinations} recent={quick.recent} t={t} onOpen={openQuick} onClose={close} autoFocus={autoFocus} />
+        )}
       />
     </div>
   );
