@@ -1,3 +1,63 @@
+## KEY-419 part B, KEY-420 wiring and the KEY-418 review: tabs are live in the app (WS-3, WS-4) - 2026-11-19 - Agent: Claude Code
+
+**Request.** Continue the multi-tab workspace nonstop while the user is away, in parallel with Antigravity. Review Antigravity's KEY-418 (WS-2) when it lands, then wire the tab bar on top of it.
+
+**KEY-418 review (Antigravity, 3eabcc2f): pass.**
+- The provider split, `useWorkspace` compatibility and focus-filtered navigation events match the brief.
+- The agent ran the full suite (2719/2719); tsc is clean.
+- `deeplink-live` failed on the agent's branch because the harness is stale. KEY-245 (Nov 12) put a format dialog in front of Markdown export, and the harness predates it. I also found a banner race that let it read the export result too early. Both are fixed in `scripts/deeplink-live/main.cjs`.
+- `note-editor-live` is most likely stale too: the editor's slash and link popups changed after the harness's last update on Nov 11, and WS-2 doesn't touch the editor. This is unproven.
+- Follow-ups, not blockers:
+  - every TabScope loads all book notes again (`getAllNotes`), so 6 awake tabs make 6 copies;
+  - FallbackTabScopeBridge runs a second copy of the tab state;
+  - the agent's own `.baglib-data/mem-check.cjs` hangs (no timeout or quit), and it stalled the run twice.
+
+**Done (KEY-419 part B and KEY-420 wiring):**
+- `src/renderer/components/context/WorkspaceContext.tsx`:
+  - `useTabs` gains move, go, duplicate, reopenClosed and closedTabs;
+  - tab ids carry the session start, so restored tabs can't collide;
+  - a reader entry now names its book (`book:<id>`) and title, so the tab shows the book. A tab that slept, or back/forward to that entry, reopens the book, and the reader restores its page.
+- `src/renderer/components/layout/WorkspaceTabs.tsx` (new):
+  - `WorkspaceTabRow`: the tab bar in its own row under the titlebar;
+  - `WorkspaceHistoryStrip`: back and forward arrows under it;
+  - `WorkspaceTabPanels`: each awake tab in its own TabScope, all but the focused one hidden. Playing audio or video is exempt from sleep.
+  - `useWorkspaceTabShortcuts`: Ctrl+T, Ctrl+W (asks the manuscript editor first), Ctrl+Shift+T, Ctrl+Tab/PageDown, Ctrl+1…9, Alt+Left/Right (mirrored in Arabic), and the mouse back/forward buttons.
+- `src/renderer/components/layout/AppLayout.tsx`: the views render per tab through `renderView`; it mounts the tab row and history strip and calls the shortcuts hook.
+- `src/renderer/components/layout/use-tab-keep-alive.ts`:
+  - only the focused and split tabs wake a sleeping tab;
+  - restored and background tabs start asleep;
+  - the 6-tab budget ranks only mounted tabs.
+- `scripts/workspace-tabs-live/` (new): the live run.
+- `tests/ui/workspace-tabs-wiring.test.ts` (new).
+
+**Tests:** - Full suite: 2780/2780.
+- Focused tab tests: tab-bar, tab-bar-model, tab-history-quick-open, workspace-tabs-wiring (7, including "a hidden tab ignores window keys") and workspace-tab-scope all pass. tsc is clean.
+- ESLint: 0 errors on the changed files, apart from FullPageBookReader's existing refs-during-render error from Nov 10 (b4527364).
+- Live run `scripts/workspace-tabs-live` passed in ar and en with real files: one Arabic and one English text-layer PDF, plus the ar and en lecture videos. It checked:
+  - the reader opened on page 5, with the book title shown on the tab;
+  - Ctrl+T, then a lecture playing in tab 2;
+  - eight tabs, where the reader tab slept and the playing lecture stayed mounted and kept playing (7 mounted);
+  - Ctrl+1 woke the reader on the same book, on page 5;
+  - Alt+arrow back/forward, mirrored in Arabic;
+  - the right-click history list, checked to be on top of the reader;
+  - dragging the reader tab to the end;
+  - Ctrl+W closed the tab and left the window open, then Ctrl+Shift+T restored it on page 5;
+  - Ctrl+Tab;
+  - at 480 px the bar scrolls and the page doesn't;
+  - no renderer errors.
+
+  The evidence is in `.baglib-data/key419-evidence/`.
+- `deeplink-live` passed all 8 runs (ar and en: seed, note, book, Quran) after the harness fixes.
+- The reader now starts below the titlebar, the tab row and the strip; the live screenshots show this. Its own top bar triggers from the reader's top edge.
+
+**Not done:**
+- WS-5: links open tabs.
+- WS-6: feed the + panel from usage and recents.
+- WS-7: restore after restart and the unsaved-editor guard for background tabs.
+- WS-8: per-view snapshots. Today a woken tab gets its view, book and the reader's saved page back, but not scroll inside other views.
+- WS-9: wire SplitPanes.
+- Hidden tabs still receive window-level keyboard listeners from their views. Inputs in hidden panels can't take focus (display:none), but global `keydown` handlers in mounted, hidden views can still fire. Watch for this in WS-8.
+
 ## KEY-425 part A: side-by-side panes component (WS-9; not yet wired) - 2026-11-19 - Agent: Claude Code
 
 **Request.** Nonstop work in parallel with Antigravity while the user is away.

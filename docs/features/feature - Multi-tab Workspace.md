@@ -1,6 +1,6 @@
 # Multi-tab workspace: plan (epic KEY-380)
 
-Status: **plan; the user's decisions were recorded on 2026-11-19 (section 6).** WS-1 (the pure model, ADR-018) and WS-2 (`WorkspaceContext` split) are built; the tab bar UI is not.
+Status: **in progress; the user's decisions were recorded on 2026-11-19 (section 6).** WS-1 (the pure model, ADR-018), WS-2 (`WorkspaceContext` split) and WS-3 (the tab bar, keep-alive and shortcuts) are built and live. The back/forward strip (WS-4) is wired. Parts of WS-6, WS-9, WS-10 and WS-11 are built ahead of their wiring (section 8).
 Written 2026-11-19 by Claude Code. It unblocks KEY-381 (drag passages into a manuscript side by side).
 
 ## 1. What the user asked for (from KEY-380)
@@ -266,3 +266,20 @@ The menu acts on the selection, or on the tab under the pointer when nothing is 
 Jira: WS-10 KEY-428, WS-11 KEY-426, WS-12 KEY-427. KEY-423 (WS-7) blocks KEY-428, which blocks KEY-426 and KEY-427.
 
 Order: these follow WS-9. KEY-381 still only needs WS-9.
+
+## 8. Implementation notes (2026-11-19, Claude Code)
+
+These record choices made while building WS-3 and WS-4, where the plan left room.
+
+- **Where the tabs sit.** The titlebar is already full (breadcrumbs, search, actions), so the tab bar has its own 2.5rem row directly under it. As decided in 3.3a, the back/forward strip sits under the tab bar (2rem).
+- **The reader no longer covers the whole window.** The full-page reader used to start at the top of the window and hide the titlebar. Now it starts below the titlebar, the tab row and the strip (`--workspace-reader-top`, 7.5rem), so the user can see and switch tabs while reading. Its top bar still appears when the pointer nears the reader's own top edge.
+- **New tabs open at the end of the bar,** for both + and Ctrl+T, as in Chrome and Edge.
+- **A reader tab remembers its book.** A reader history entry stores `book:<id>` and the book's title. The tab shows the title, and a tab that slept, or back/forward to that entry, reopens the book. The reader restores the book's last page itself.
+- **Keep-alive.** Only the focused tab and the split tab wake a sleeping tab. Restored and background tabs stay asleep until opened. The 6-tab budget ranks only mounted tabs. A tab playing audio or video never sleeps.
+- **Keys in hidden tabs.** A hidden tab stays mounted, so views with window-level key handlers check `useTabKeysActive()` first. This is done for the reader and the Quran reader. Other views with window key handlers (Boards arrows, SRS review keys) still need it if two such tabs can be open at once.
+- **Ctrl+W.** BagLib has no app menu, so Electron's default menu, which binds Ctrl+W to close the window, is active. The renderer's handler calls `preventDefault()`, and the live run confirms that Ctrl+W closes the tab and leaves the window open.
+- **Built ahead of wiring:**
+  - `QuickOpenPanel` and the + hover (WS-6);
+  - `SplitPanes` and `split-model` (WS-9);
+  - selection and tab-menu helpers in `src/shared/workspace-tab-selection.ts` (WS-10);
+  - tab groups in the model (WS-11).

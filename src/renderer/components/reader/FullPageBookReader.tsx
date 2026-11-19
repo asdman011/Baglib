@@ -53,7 +53,7 @@ import {
   Cloud,
   Puzzle,
 } from 'lucide-react';
-import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
 import { DocumentLoader, detectFormat } from '../../libs/reader/document-loader';
 import { paginateBookSections, type FormattedPage } from '../../libs/reader/epub-paginator';
 import { chaptersFromPages, inlineBlobImages } from '../../libs/reader/book-pdf-export';
@@ -185,7 +185,12 @@ export const FullPageBookReader: React.FC = () => {
 };
 
 // Reader state, including OCR results and pending corrections, belongs to the open source.
+/** KEY-419: where the reader starts: below the titlebar, the tab row and the back/forward strip (0 when absent). */
+const readerTopOffset = (): number => (typeof document === 'undefined' ? 0 : Math.max(0, ...['[data-workspace-tab-row]', '[data-workspace-history-row]'].map(selector => document.querySelector(selector)?.getBoundingClientRect().bottom ?? 0)));
+
 const SourceBookReader: React.FC = () => {
+  // KEY-419: a hidden tab (kept alive) ignores keys; its window-level key handlers check this first.
+  const keysActive = useTabKeysActive();
   const {
     activeBook,
     books,
@@ -326,11 +331,11 @@ const SourceBookReader: React.FC = () => {
       if (event.button !== 0 || !contentContainerRef.current?.contains(event.target as Node)) return;
       setReleaseAnchor({ x: event.clientX, y: event.clientY });
     };
-    const keyboard = (event: KeyboardEvent) => { if (event.shiftKey && event.key.startsWith('Arrow')) setReleaseAnchor(null); };
+    const keyboard = (event: KeyboardEvent) => { if (!keysActive.current) return; if (event.shiftKey && event.key.startsWith('Arrow')) setReleaseAnchor(null); };
     document.addEventListener('pointerup', release, true);
     document.addEventListener('keydown', keyboard, true);
     return () => { document.removeEventListener('pointerup', release, true); document.removeEventListener('keydown', keyboard, true); };
-  }, []);
+  }, [keysActive]);
   const [lineSpacing, setLineSpacing] = useState<number>(1.85);
   const [paragraphSpacing, setParagraphSpacing] = useState<number>(0.8);
   const [margin, setMargin] = useState<number>(28);
@@ -831,7 +836,7 @@ const SourceBookReader: React.FC = () => {
 
   // Full Screen-Reader Accessible Keyboard Navigation & Physics
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => { if (!keysActive.current) return;
       // Keep text selection and focused study controls under native keyboard handling.
       if (e.defaultPrevented || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
@@ -1004,6 +1009,7 @@ const SourceBookReader: React.FC = () => {
       }
     };
   }, [
+    keysActive,
     readingPage,
     readerDirection,
     maxBookPages,
@@ -1041,16 +1047,18 @@ const SourceBookReader: React.FC = () => {
       lastMove = now;
 
       const y = e.clientY;
+      // KEY-419: the reader sits under the titlebar and the tab row, so its top bar triggers from its own top edge.
+      const yTop = y - readerTopOffset();
       const windowHeight = window.innerHeight;
 
       // 1. Top Bar Trigger (clientY <= 44px). Keep open while <= 88px or hovering directly inside.
-      if (y <= 44) {
+      if (yTop <= 44) {
         if (topHideTimerRef.current) {
           clearTimeout(topHideTimerRef.current);
           topHideTimerRef.current = null;
         }
         setIsTopBarVisible(true);
-      } else if (y > 88) {
+      } else if (yTop > 88) {
         isTopBarHoveredRef.current = false;
         if (!topHideTimerRef.current) {
           topHideTimerRef.current = setTimeout(() => {
@@ -1445,7 +1453,7 @@ const SourceBookReader: React.FC = () => {
   // Single-key markup shortcuts for the PDF workstation and EPUB reflowable reader: H keeps highlighter on, 1-5 pick a colour, ? lists shortcuts.
   useEffect(() => {
     if (!isPdfWorkstationActive && !isReflowable) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => { if (!keysActive.current) return;
       const action = readerShortcut(e, markupTool !== 'select');
       if (!action) return;
       if (action.kind === 'toggle-highlighter') toggleMarkupLock();
@@ -1460,14 +1468,14 @@ const SourceBookReader: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPdfWorkstationActive, isReflowable, markupTool, toggleMarkupLock, stopMarkup, chooseMarkupTool]);
+  }, [isPdfWorkstationActive, isReflowable, markupTool, toggleMarkupLock, stopMarkup, chooseMarkupTool, keysActive]);
 
   // The companion note pane links to the page being read.
   useCompanionContext('reader', () => activeBook ? { kind: 'book', target: bookStudyTarget(activeBook, Math.max(1, readingPage)), label: `${activeBook.title} (${Math.max(1, readingPage)})` } : null, [activeBook?.id, activeBook?.sourceId, activeBook?.title, readingPage]);
 
   // Global Ctrl+F / Cmd+F shortcut to open in-book search drawer
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => { if (!keysActive.current) return;
       if (matchesShortcut(e, 'reader-find', 'reader')) {
         e.preventDefault();
         handleToggleSearch();
@@ -1475,7 +1483,7 @@ const SourceBookReader: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleSearch]);
+  }, [handleToggleSearch, keysActive]);
 
   // Background SQLite FTS5 Indexing on Book Load (KEY-140)
   useEffect(() => {
@@ -2289,7 +2297,7 @@ const SourceBookReader: React.FC = () => {
   useEffect(() => {
     if (!activeBook?.id) return;
     const workId = activeBook.id;
-    const key = (event: KeyboardEvent) => {
+    const key = (event: KeyboardEvent) => { if (!keysActive.current) return;
       const action = markHistoryShortcut(event, !!document.querySelector('[role="dialog"],[role="alertdialog"],dialog[open]'));
       if (!action) return;
       event.preventDefault();
@@ -2314,7 +2322,7 @@ const SourceBookReader: React.FC = () => {
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [activeBook?.id, reloadMarks, t]);
+  }, [activeBook?.id, reloadMarks, t, keysActive]);
   // Closing with changes not yet written into the file asks first; closing without writing keeps them in BagLib.
   const [closePrompt, setClosePrompt] = useState<((choice: 'save' | 'discard' | 'cancel') => void) | null>(null);
   const [closeSaving, setCloseSaving] = useState(false);
@@ -3158,7 +3166,7 @@ const SourceBookReader: React.FC = () => {
       if (!selectedText || !(event.target as Element).closest?.('[data-reader-content],.pdf-native-viewer-container,[data-reader-main],.reader-container')) return;
       event.preventDefault(); event.stopPropagation(); setSelectionAt({ x: event.clientX, y: event.clientY });
     };
-    const keyboard = (event: KeyboardEvent) => {
+    const keyboard = (event: KeyboardEvent) => { if (!keysActive.current) return;
       if (isTextEntry(event.target) || !(event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10')) return;
       const element = event.target as HTMLElement;
       const id = element.closest?.('[data-mark-id]')?.getAttribute('data-mark-id');
@@ -3191,7 +3199,7 @@ const SourceBookReader: React.FC = () => {
     document.addEventListener('contextmenu',context); document.addEventListener('keydown',keyboard);
     document.addEventListener('pointerdown',down); document.addEventListener('pointermove',move); document.addEventListener('pointerup',cancel); document.addEventListener('pointercancel',cancel);
     return () => { cancel(); document.removeEventListener('click', touchClick, true); document.removeEventListener('contextmenu',context);document.removeEventListener('keydown',keyboard);document.removeEventListener('pointerdown',down);document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',cancel);document.removeEventListener('pointercancel',cancel); };
-  },[selectedText,knowledgeItems]);
+  },[selectedText,knowledgeItems,keysActive]);
   const selectionHandlers = {
     explain: () => studySelection('explain'), practice: () => studySelection('practice'), review: () => studySelection('review'),
     note: () => setSelectionEditor(current => ({ key: current.key + 1, tab: 'note' })),
@@ -3618,7 +3626,7 @@ const SourceBookReader: React.FC = () => {
       data-reader-focus-mode={focusMode || undefined}
       dir={workspaceDir}
       onClick={handleViewportClick}
-      className={`${chromeStyles.reader} fixed inset-y-0 start-0 z-50 h-screen overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
+      className={`${chromeStyles.reader} fixed bottom-0 start-0 top-[var(--workspace-reader-top,0px)] z-50 overflow-hidden bg-canvas text-main font-sans select-none flex flex-col ${
         isIdle ? 'cursor-none' : 'cursor-auto'
       }`}
       style={{ ...(getViewportCssVariables({

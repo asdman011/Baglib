@@ -6,6 +6,7 @@ import { ToastProvider } from '../ui/Toast';
 import { isLectureFormat } from '../../../shared/lectures';
 import { openLecture } from '../../utils/lecture-navigation';
 import { openStudyNote } from '../../utils/study-navigation';
+import { parseBookTarget } from '../../../shared/study-notes';
 import { matchesShortcut } from '../actions/shortcuts';
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { BookItem } from '../../types/library';
@@ -17,9 +18,11 @@ import {
   findTab,
   homeLocation,
   newTab,
+  pushClosed,
   tabsReducer,
   type TabLocation,
   type TabsState,
+  type WorkspaceTab,
   type ViewSnapshot,
   type WorkspaceView,
 } from '../../../shared/workspace-tabs';
@@ -159,6 +162,15 @@ export interface UseTabsResult {
   close: (id: string) => void;
   activate: (id: string) => void;
   navigate: (id: string, location: TabLocation) => void;
+  /** KEY-419: reorder a tab (drag or Ctrl+Shift+PageUp/PageDown). */
+  move: (id: string, toIndex: number) => void;
+  /** KEY-420: jump to an entry of a tab's own history (back, forward, or the history list). */
+  go: (id: string, index: number) => void;
+  duplicate: (id: string) => string;
+  /** KEY-419: Ctrl+Shift+T brings back the last closed tab with its history. */
+  reopenClosed: () => void;
+  /** The last closed tabs, newest first. */
+  closedTabs: WorkspaceTab[];
 }
 
 interface BookSyncSubscriber {
@@ -832,8 +844,16 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
   notifyBookDelete,
 }) => {
   const [state, dispatch] = useReducer(tabsReducer, initialTabs, (init) => init ?? createInitialTabsState());
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+  // Ids carry the session start, so they never collide with restored or reopened tabs (WS-7).
+  const sessionRef = useRef<string | null>(null);
   const nextIdRef = useRef(2);
-  const allocateId = useCallback(() => `tab-${nextIdRef.current++}`, []);
+  const allocateId = useCallback(() => {
+    sessionRef.current ??= Date.now().toString(36);
+    return `tab-${sessionRef.current}-${nextIdRef.current++}`;
+  }, []);
+  const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
 
   const open = useCallback((location: TabLocation, options?: { afterId?: string; background?: boolean }) => {
     const id = allocateId();
@@ -842,6 +862,8 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
   }, [allocateId]);
 
   const close = useCallback((id: string) => {
+    const closing = findTab(stateRef.current, id);
+    if (closing) setClosedTabs(previous => pushClosed(previous, closing));
     const homeId = allocateId();
     dispatch({ type: 'close', id, homeId, now: Date.now() });
   }, [allocateId]);
@@ -854,13 +876,42 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     dispatch({ type: 'navigate', id, location, now: Date.now() });
   }, []);
 
+  const move = useCallback((id: string, toIndex: number) => {
+    dispatch({ type: 'move', id, toIndex });
+  }, []);
+
+  const go = useCallback((id: string, index: number) => {
+    dispatch({ type: 'go', id, index, now: Date.now() });
+  }, []);
+
+  const duplicate = useCallback((id: string) => {
+    const newId = allocateId();
+    dispatch({ type: 'duplicate', id, newId, now: Date.now() });
+    return newId;
+  }, [allocateId]);
+
+  const closedRef = useRef(closedTabs);
+  useEffect(() => { closedRef.current = closedTabs; }, [closedTabs]);
+  const reopenClosed = useCallback(() => {
+    const [last, ...rest] = closedRef.current;
+    if (!last) return;
+    closedRef.current = rest;
+    setClosedTabs(rest);
+    dispatch({ type: 'reopen', tab: last, id: allocateId(), now: Date.now() });
+  }, [allocateId]);
+
   const tabsValue = useMemo<UseTabsResult>(() => ({
     state,
     open,
     close,
     activate,
     navigate,
-  }), [state, open, close, activate, navigate]);
+    move,
+    go,
+    duplicate,
+    reopenClosed,
+    closedTabs,
+  }), [state, open, close, activate, navigate, move, go, duplicate, reopenClosed, closedTabs]);
 
   // Focused scope registry so `useWorkspace()` outside any `<TabScope>` reads the focused tab's scope.
   const [publishedFocus, setPublishedFocus] = useState<{ tabId: string; scope: TabScopeContextType } | null>(null);
@@ -925,6 +976,18 @@ function useTabScopeState(tabId: string): TabScopeContextType {
   const [activeBook, setActiveBook] = useState<BookItem | null>(null);
   const activeBookRef = useRef<BookItem | null>(activeBook);
   useEffect(() => { activeBookRef.current = activeBook; }, [activeBook]);
+
+  // KEY-419: a reader entry names its book (`book:<id>`), so a tab that slept, or back/forward to another book's
+  // entry, opens that book again. The reader restores the book's last page itself. Adjusted while rendering.
+  const wantedBookId = location.view === 'reader' && location.target ? parseBookTarget(location.target)?.id : undefined;
+  const [restoredBookFor, setRestoredBookFor] = useState<string | undefined>(undefined);
+  if (wantedBookId && wantedBookId !== restoredBookFor && activeBook?.id !== wantedBookId) {
+    const book = global?.books.find(item => item.id === wantedBookId);
+    if (book) {
+      setRestoredBookFor(wantedBookId);
+      setActiveBook(book);
+    }
+  }
   const [readingPage, setReadingPage] = useState<number>(1);
   const [totalPages] = useState<number>(100);
   const [splitOrientation, setSplitOrientation] = useState<SplitOrientationMode>('none');
@@ -952,7 +1015,9 @@ function useTabScopeState(tabId: string): TabScopeContextType {
       if (viewModeRef.current === 'reader' && mode !== 'reader') {
         clearReaderSelection();
       }
-      navigateTab?.(tabId, { view: mode, title: '' });
+      // The reader's entry names its book and carries its title, so the tab shows the book and can wake into it.
+      const book = mode === 'reader' ? activeBookRef.current : null;
+      navigateTab?.(tabId, book ? { view: mode, target: `book:${book.id}`, title: book.title ?? '' } : { view: mode, title: '' });
     };
     const guard = mode === 'notes-editor' ? undefined : editorLeaveGuard();
     if (guard) {
@@ -988,10 +1053,12 @@ function useTabScopeState(tabId: string): TabScopeContextType {
     }
     clearReaderSelection();
     setActiveBook(book);
+    // Read by setViewMode below, before the state update lands.
+    activeBookRef.current = book;
     setViewMode('reader');
     setReadingPage(1);
     setSplitOrientation('none');
-  }, [tabId, setViewMode]);
+  }, [tabId, setViewMode, setActiveBook]);
 
   const closeReaderToLibrary = useCallback(() => {
     clearReaderSelection();
@@ -1147,6 +1214,18 @@ export const useTab = (): UseTabResult => {
 
 /** Optional `useTab()` for views that may be mounted standalone in unit tests without a `TabScope`. */
 export const useOptionalTab = (): UseTabResult | null => useContext(TabContext) ?? null;
+
+/**
+ * KEY-419: true while this tab is the focused one (always true outside a `TabScope`). A hidden tab stays mounted
+ * (keep-alive), so its window-level key handlers would still fire; views check this ref first so only the focused
+ * tab acts on keys.
+ */
+export const useTabKeysActive = (): React.RefObject<boolean> => {
+  const tab = useContext(TabContext);
+  const active = useRef(tab?.isFocused ?? true);
+  useEffect(() => { active.current = tab?.isFocused ?? true; });
+  return active;
+};
 
 export const useTabs = (): UseTabsResult => {
   const tabs = useContext(TabsContext);

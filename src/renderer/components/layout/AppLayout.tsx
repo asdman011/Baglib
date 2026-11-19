@@ -19,7 +19,8 @@ import { SupportSheet } from './SupportSheet';
 import { HomeDashboardView, CompanionMiniWidget } from '../dashboard';
 import { QuotaWarningBanner } from './QuotaWarningBanner';
 import { SearchHubModal } from '../search/SearchHubModal';
-import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
+import { useTabs, useWorkspace, type WorkspaceViewMode } from '../context/WorkspaceContext';
+import { WorkspaceHistoryStrip, WorkspaceTabPanels, WorkspaceTabRow, useWorkspaceTabShortcuts } from './WorkspaceTabs';
 import { useAthan } from '../../hooks/useAthan';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
 import { LECTURE_OPEN_EVENT } from '../../utils/lecture-navigation';
@@ -88,6 +89,8 @@ const AppLayoutContent: React.FC = () => {
   const activeTabIdRef = React.useRef(activeTabId);
   React.useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
   useAppCloseBridge();
+  // KEY-419/420: browser tab shortcuts and back/forward for the focused tab.
+  useWorkspaceTabShortcuts();
   // The companion note pane (decision S10) sits beside these views and keeps its note while you move between them.
   const companion = useCompanionPane();
   const companionViews: string[] = ['reader', 'quran', 'sunnah', 'bayan', 'lectures'];
@@ -119,6 +122,26 @@ const AppLayoutContent: React.FC = () => {
     const timer = setTimeout(warm, 1500);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [isCompanionWindow, showSplash]);
+  // KEY-419: each tab renders the screen for its own view inside its own TabScope.
+  const renderView = React.useCallback((view: WorkspaceViewMode) => (
+    <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
+      {view === 'dashboard' && <HomeDashboardView athanState={athanState} />}
+      {view === 'statistics' && <StatisticsWorkspace />}
+      {view === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
+      {view === 'pathways' && <PathwaysView />}
+      {view === 'lectures' && <LecturesView />}
+      {view === 'islamic' && <IslamicStudiesHub />}
+      {view === 'quran' && <QuranView />}
+      {view === 'sunnah' && <SunnahView />}
+      {view === 'bayan' && <BayanView />}
+      {view === 'library' && <LibraryGridView />}
+      {view === 'categories' && <CategoriesOverviewView />}
+      {view === 'reader' && <FullPageBookReader />}
+      {view === 'notes-editor' && researchEditorAvailable && <ResearchEditorView />}
+      {view === 'notes' && <NotesOverviewView />}
+      {view === 'settings' && <SettingsDirectory athan={athanState} />}
+    </React.Suspense>
+  ), [athanState, researchEditorAvailable]);
   const [widgetStreak, setWidgetStreak] = React.useState(0);
   React.useEffect(() => {
     if (!isCompanionWindow) return;
@@ -186,7 +209,14 @@ const AppLayoutContent: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative" dir={dir} suppressHydrationWarning>
+    <div
+      className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-main select-none font-sans relative"
+      dir={dir}
+      // KEY-419/420: the full-page reader starts below the titlebar (3rem), the tab row (2.5rem) and the back/forward
+      // strip (2rem), so the tabs and the arrows stay visible while reading.
+      style={{ '--workspace-reader-top': '7.5rem' } as React.CSSProperties}
+      suppressHydrationWarning
+    >
       <StudyDeepLinkBridge />
       <NewListDialogHost />
       <DictionaryHost />
@@ -204,6 +234,8 @@ const AppLayoutContent: React.FC = () => {
 
       {/* Zone 1: Titlebar */}
       <Titlebar />
+      {/* KEY-419: the workspace tab bar */}
+      <WorkspaceTabRow />
 
       {/* Invisible Hover Strip along the Start Edge to trigger Navigation Peek overlay when unpinned (KEY-310) */}
       {!isNavPinned && (
@@ -247,26 +279,10 @@ const AppLayoutContent: React.FC = () => {
         <main aria-label={t('shortcutGlobalScope')} data-workspace-motion={viewMode === 'reader' || viewMode === 'quran' ? 'reading' : 'browse'} className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {/* Quota-Saver & Search Limit Banner */}
           <QuotaWarningBanner />
+          {/* KEY-420: the focused tab's back and forward arrows */}
+          <WorkspaceHistoryStrip />
 
-          <TabScope tabId={activeTabId}>
-            <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
-              {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
-              {viewMode === 'statistics' && <StatisticsWorkspace />}
-              {viewMode === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
-              {viewMode === 'pathways' && <PathwaysView />}
-              {viewMode === 'lectures' && <LecturesView />}
-              {viewMode === 'islamic' && <IslamicStudiesHub />}
-              {viewMode === 'quran' && <QuranView />}
-              {viewMode === 'sunnah' && <SunnahView />}
-              {viewMode === 'bayan' && <BayanView />}
-              {viewMode === 'library' && <LibraryGridView />}
-              {viewMode === 'categories' && <CategoriesOverviewView />}
-              {viewMode === 'reader' && <FullPageBookReader />}
-              {viewMode === 'notes-editor' && researchEditorAvailable && <ResearchEditorView />}
-              {viewMode === 'notes' && <NotesOverviewView />}
-              {viewMode === 'settings' && <SettingsDirectory athan={athanState} />}
-            </React.Suspense>
-          </TabScope>
+          <WorkspaceTabPanels render={renderView} />
           {companionViews.includes(viewMode) && <CompanionToggle open={companion.open} onToggle={companion.toggle} />}
         </main>
         {companionViews.includes(viewMode) && companion.open && <CompanionNotePane onClose={companion.close} overlay={viewMode === 'reader'} />}

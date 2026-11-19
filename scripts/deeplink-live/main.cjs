@@ -40,7 +40,9 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
   const exportLabels = language === 'ar' ? { md: 'تصدير بصيغة Markdown', word: 'تصدير بصيغة Word' } : { md: 'Export as Markdown', word: 'Export as Word' };
   // Single-note export lives in the editor's "more" menu.
   const noteMenu = () => evaluate("document.querySelector('[data-note-editor-pane] button[aria-haspopup=\"menu\"]').click()");
-  const noteMenuItem = async label => { await noteMenu(); await until(`[...document.querySelectorAll('[role=menuitem]')].some(b=>b.textContent.trim()===${JSON.stringify(label)})`, 30); await evaluate(`[...document.querySelectorAll('[role=menuitem]')].find(b=>b.textContent.trim()===${JSON.stringify(label)}).click()`); };
+  // Since KEY-245 a Markdown export first asks for the open format (Markdown is preselected).
+const confirmFormat = async () => { await until("!!document.querySelector('[data-notes-format-go]')"); await evaluate("document.querySelector('[data-notes-format-go]').click()"); };
+const noteMenuItem = async label => { await noteMenu(); await until(`[...document.querySelectorAll('[role=menuitem]')].some(b=>b.textContent.trim()===${JSON.stringify(label)})`, 30); await evaluate(`[...document.querySelectorAll('[role=menuitem]')].find(b=>b.textContent.trim()===${JSON.stringify(label)}).click()`); };
   const book = async () => { await until("!!document.querySelector('.textLayer span')"); await until("window.electronAPI.reader.getLastLocation('link-book').then(p=>p==='3')"); };
   // Since KEY-305 the study panel is the shared reader side panel (no data-quran-study-panel); it shows the ayah reference.
   const quran = () => until("!!document.querySelector('[data-quran-reader]') && [...document.querySelectorAll('input')].some(el=>el.value==='42') && document.body.textContent.includes('2:255')");
@@ -72,11 +74,11 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
         }
         win.setContentSize(1280,900);
         // Card and bulk paths write one file, with equivalent content; native dialogs select only the throwaway profile.
-        await noteMenuItem(exportLabels.md);
+        await noteMenuItem(exportLabels.md); await confirmFormat();
         await until("!!document.querySelector('[data-notes-exported]')");
         const cardMd = await evaluate("document.querySelector('[data-notes-exported] bdi').textContent");
-        await evaluate("document.querySelector('[data-notes-export-markdown]').click()");
-        await until(`document.querySelector('[data-notes-exported] bdi')?.textContent!==${JSON.stringify(cardMd)}`);
+        await evaluate("document.querySelector('[data-notes-export-markdown]').click()"); await confirmFormat();
+        await until(`!!document.querySelector('[data-notes-exported] bdi') && document.querySelector('[data-notes-exported] bdi').textContent!==${JSON.stringify(cardMd)}`);
         const bulkMd = await evaluate("document.querySelector('[data-notes-exported] bdi').textContent");
         const files = fs.readdirSync(cardMd); assert.equal(files.length,1); assert.ok(files[0].endsWith('.md'));
         // Since KEY-304 the bulk export holds every listed note; the same note's file must match the single export.
@@ -89,7 +91,7 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
         const cardWord = await evaluate("document.querySelector('[data-notes-word-exported] bdi').textContent");
         await evaluate("document.querySelector('[data-notes-export-word]').click()");
         await evaluate("document.querySelector('[data-word-go]').click()");
-        await until(`document.querySelector('[data-notes-word-exported] bdi')?.textContent!==${JSON.stringify(cardWord)}`);
+        await until(`!!document.querySelector('[data-notes-word-exported] bdi') && document.querySelector('[data-notes-word-exported] bdi').textContent!==${JSON.stringify(cardWord)}`);
         const bulkWord = await evaluate("document.querySelector('[data-notes-word-exported] bdi').textContent");
         const { unzipSync } = require('fflate');
         const xml = file => new TextDecoder().decode(unzipSync(fs.readFileSync(file))['word/document.xml']).replace(/w:id="\d+"/gu, 'w:id="ID"');
@@ -111,7 +113,7 @@ if (!process.argv.includes('--deeplink-secondary')) app.on('browser-window-creat
         await second('baglib:note:another-deleted-note'); await until("!!document.querySelector('[data-study-link-missing]')");
         await second('baglib:note:reader-note'); await until("!!document.querySelector('[data-study-note=\"reader-note\"]')");
         await evaluate("document.querySelector('[data-study-note=\"reader-note\"]').click()"); await pause(500);
-        await noteMenuItem(exportLabels.md);
+        await noteMenuItem(exportLabels.md); await confirmFormat();
         await until("!!document.querySelector('[data-notes-exported]')");
         const readerMd = await evaluate("document.querySelector('[data-notes-exported] bdi').textContent");
         assert.equal(fs.readdirSync(readerMd).length,1);

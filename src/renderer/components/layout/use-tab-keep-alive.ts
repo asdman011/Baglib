@@ -13,14 +13,32 @@ export interface KeepAlivePlan {
   sleep: string[];
 }
 
-/** What changes: wake the newly wanted tabs at once, save-then-sleep the ones no longer wanted. */
+/** The tabs on screen: the focused tab and the side-by-side tab. Only these wake a sleeping tab. */
+const shownIds = (state: TabsState): string[] => [state.activeId, state.splitId].filter((id): id is string => !!id && state.tabs.some(tab => tab.id === id));
+
+/**
+ * What changes: wake a sleeping tab only when it is shown, and save-then-sleep the awake tabs that fell out of
+ * the keep-alive set. A sleeping tab that is merely recent stays asleep (restored and background tabs don't
+ * mount until the user opens them).
+ */
 export function planKeepAlive(state: TabsState, awake: ReadonlySet<string>, exempt: ReadonlySet<string>, failed: ReadonlySet<string>, keepAlive?: number): KeepAlivePlan {
   const open = new Set(state.tabs.map(tab => tab.id));
-  const target = awakeTabIds(state, new Set([...exempt, ...failed].filter(id => open.has(id))), keepAlive);
+  const target = keepAliveTarget(state, awake, new Set([...exempt, ...failed].filter(id => open.has(id))), keepAlive);
   return {
-    wake: [...target].filter(id => !awake.has(id)),
+    wake: shownIds(state).filter(id => !awake.has(id)),
     sleep: [...awake].filter(id => open.has(id) && !target.has(id)),
   };
+}
+
+/**
+ * Which mounted tabs stay mounted: the keep-alive ranking (`awakeTabIds`) among the tabs that are mounted or on
+ * screen. Sleeping tabs don't use up the budget, so a recent but unopened background tab can't push an open one
+ * to sleep.
+ */
+function keepAliveTarget(state: TabsState, mounted: ReadonlySet<string>, exempt: ReadonlySet<string>, keepAlive?: number): Set<string> {
+  const shown = shownIds(state);
+  const candidates = { ...state, tabs: state.tabs.filter(tab => mounted.has(tab.id) || shown.includes(tab.id)) };
+  return awakeTabIds(candidates, exempt, keepAlive);
 }
 
 const without = (set: ReadonlySet<string>, ids: Iterable<string>) => { const next = new Set(set); for (const id of ids) next.delete(id); return next; };
@@ -35,20 +53,30 @@ const without = (set: ReadonlySet<string>, ids: Iterable<string>) => { const nex
 export function useTabKeepAlive(state: TabsState, exempt: ReadonlySet<string>, saveTab: (id: string) => Promise<boolean>, keepAlive?: number): ReadonlySet<string> {
   const open = new Set(state.tabs.map(tab => tab.id));
   const [failed, setFailed] = React.useState<ReadonlySet<string>>(() => new Set());
-  const target = awakeTabIds(state, new Set([...exempt, ...failed].filter(id => open.has(id))), keepAlive);
-  // Restored tabs start asleep except the ones that are wanted now (startup mounts at most 6).
-  const [sleeping, setSleeping] = React.useState<ReadonlySet<string>>(() => new Set([...open].filter(id => !target.has(id))));
+  const shown = shownIds(state);
+  // Restored tabs start asleep: startup mounts only the tabs on screen.
+  const [sleeping, setSleeping] = React.useState<ReadonlySet<string>>(() => new Set([...open].filter(id => !shown.includes(id))));
+  // Tabs this hook has seen; a tab that appears later (Ctrl+T, a link, a duplicate) starts asleep unless shown.
+  const [known, setKnown] = React.useState<ReadonlySet<string>>(() => open);
   const saving = React.useRef(new Set<string>());
   const saveRef = React.useRef(saveTab);
   React.useEffect(() => { saveRef.current = saveTab; });
 
-  // Adjusting state while rendering (React's documented pattern): a woken tab is no longer asleep, and coming
-  // back to a tab whose save failed gives it another chance to sleep later.
-  const woken = [...target].filter(id => sleeping.has(id));
+  // Adjusting state while rendering (React's documented pattern): a new background tab starts asleep, a shown tab
+  // is no longer asleep, and coming back to a tab whose save failed gives it another chance to sleep later.
+  const arrived = [...open].filter(id => !known.has(id));
+  if (arrived.length) {
+    setKnown(new Set([...known].filter(id => open.has(id)).concat(arrived)));
+    const background = arrived.filter(id => !shown.includes(id));
+    if (background.length) setSleeping(new Set([...sleeping, ...background]));
+  }
+  const woken = shown.filter(id => sleeping.has(id));
   if (woken.length) setSleeping(without(sleeping, woken));
   if (state.activeId && failed.has(state.activeId)) setFailed(without(failed, [state.activeId]));
 
-  const awake = new Set([...open].filter(id => target.has(id) || !sleeping.has(id)));
+  const asleep = new Set([...sleeping, ...arrived.filter(id => !shown.includes(id))]);
+  const awake = new Set([...open].filter(id => shown.includes(id) || !asleep.has(id)));
+  const target = keepAliveTarget(state, awake, new Set([...exempt, ...failed].filter(id => open.has(id))), keepAlive);
   const toSleep = [...awake].filter(id => !target.has(id));
   const toSleepKey = toSleep.join('\n');
 

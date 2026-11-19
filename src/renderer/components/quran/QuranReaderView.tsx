@@ -17,7 +17,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Copy, CopyCheck, Layers, Play, Pause, X, Maximize2, Minimize2 } from 'lucide-react';
 import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranStructure, QuranSurahIntro } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
-import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
 import { QuranMushafWorkspace } from './QuranMushafWorkspace';
 import { QuranAudioPlayer, type QuranAudioState } from './QuranAudioPlayer';
 import { QuranSurahIntroCard } from './QuranSurahIntroCard';
@@ -141,6 +141,8 @@ function InspectedAyahLists({ reference, profile, label, lists, onFilter }: { re
 }
 
 export function QuranReaderView({ visible = true, navigation }: { visible?: boolean; navigation?: React.ReactNode }) {
+  // KEY-419: a hidden Quran tab (kept alive) must not turn pages on the focused tab's arrow keys.
+  const keysActive = useTabKeysActive();
   const { t, lang, dir } = useWorkspace();
   const root = useRef<HTMLElement>(null);
   const [catalog, setCatalog] = useState(emptyCatalog);
@@ -318,6 +320,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
   }, []);
   useEffect(() => {
     const handle = (event: KeyboardEvent) => {
+      if (!keysActive.current) return;
       if (!visible || !page || loading || loadedKey !== queryKey || options || setup || inspected || showIntro || document.querySelector('dialog[open],[aria-modal="true"]') || !quranReadingKeyTarget(event.target)) return;
       const delta = quranPageKeyDelta(event, dir);
       if (!delta) return;
@@ -327,7 +330,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [visible, page, loading, loadedKey, queryKey, options, setup, inspected, showIntro, dir, pageNumber, navigatePage]);
+  }, [visible, page, loading, loadedKey, queryKey, options, setup, inspected, showIntro, dir, pageNumber, navigatePage, keysActive]);
   const clearStudyTarget = useCallback(() => setStudyTarget(null), []);
   // A restored reading position only moves to its page; the study panel opens only for targets the user asked for.
   const tab = useOptionalTab();
