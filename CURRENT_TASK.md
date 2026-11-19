@@ -1,4 +1,25 @@
-﻿## KEY-244: mind maps & infinite canvas verification and gap fixes — 2026-11-20 - Agent: Antigravity
+﻿## KEY-244 review, KEY-432 created, Antigravity watchdog and progress window - 2026-11-20 - Agent: Claude Code
+
+**KEY-244** (7d85889c, Antigravity): review passed.
+- Checks: tsc clean, focused tests 18/18, no vendor edits, only `baglib:` targets open.
+- Jira: moved to Done with a comment. Antigravity could not reach Jira.
+
+**KEY-432** created under KEY-223 with the label Notes-Taking: new slash-search options.
+- Dictionary: pick one lexicon entry.
+- People: scholars and narrators.
+- Wikipedia: online only.
+
+**Antigravity tooling** (local, docs/agent-ops is ignored by git):
+- `agy-run.ps1`:
+  - restarts a run that waits forever on a lost background-task notice;
+  - waits out service outages;
+  - opens the progress window.
+- `agy-watch.cjs`: a live window that shows the current step, the recent steps, changed files and screenshots, and lets you nudge a stuck run.
+
+**Root cause of today's stalls.** The PC's DNS server failed to look up googleapis.com and atlassian.com. The user switched the IPv4 DNS to 8.8.8.8 and 8.8.4.4, and IPv6 DNS still points at the router.
+
+**Files.** CURRENT_TASK.md only.
+## KEY-244: mind maps & infinite canvas verification and gap fixes — 2026-11-20 - Agent: Antigravity
 
 **Done:**
 - Verified all 5 "Done when" items (a–e) in live Electron (`ar` RTL and `en` LTR) with real PDFs from `tests/real-files/`, and documented results + `BoardsWorkspace` vs. Canvas overlap for **KEY-376** in `docs/agent-ops/reports/KEY-244.md`.
