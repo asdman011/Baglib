@@ -11,11 +11,18 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import type { SunnahCatalog, SunnahCollectionId } from '../../../shared/types/sunnah';
 
-export type DeckSourceKind = 'book_highlights' | 'book_comments' | 'sunnah_book' | 'sunnah_bab' | 'hadith_collection' | 'poem' | 'poet';
+export type DeckSourceKind = 'book_highlights' | 'book_comments' | 'sunnah_book' | 'sunnah_bab' | 'hadith_collection' | 'poem' | 'poet' | 'list' | 'lexicon';
+/** KEY-410: a dictionary subscription's headword prefix and card limit. */
+export interface DeckSourceOptions {
+  prefix?: string;
+  limit?: number;
+}
+export const DEFAULT_LEXICON_LIMIT = 200;
+export const MAX_LEXICON_LIMIT = 2000;
 
 const field = 'w-full rounded-lg border border-subtle bg-canvas px-2 py-1.5 text-sm text-main';
 
-export function DeckSourcePicker({ kind, onChange }: { kind: DeckSourceKind; onChange: (ref: string) => void }) {
+export function DeckSourcePicker({ kind, onChange, onOptions }: { kind: DeckSourceKind; onChange: (ref: string) => void; onOptions?: (options: DeckSourceOptions) => void }) {
   const { t, books, lang } = useWorkspace();
   const [bookId, setBookId] = useState('');
   const [catalog, setCatalog] = useState<SunnahCatalog['collections']>([]);
@@ -26,8 +33,41 @@ export function DeckSourcePicker({ kind, onChange }: { kind: DeckSourceKind; onC
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Array<{ id: number; label: string }>>([]);
   const [picked, setPicked] = useState('');
+  // KEY-410: dictionaries and personal lists.
+  const [dictionaries, setDictionaries] = useState<Array<{ id: string; title: string; entryCount: number }>>([]);
+  const [lists, setLists] = useState<Array<{ id: string; name: string; kind: string }>>([]);
+  const [chosen, setChosen] = useState('');
+  const [prefix, setPrefix] = useState('');
+  const [limit, setLimit] = useState(DEFAULT_LEXICON_LIMIT);
   const isSunnah = kind === 'sunnah_book' || kind === 'sunnah_bab' || kind === 'hadith_collection';
   const isPoetry = kind === 'poem' || kind === 'poet';
+
+  useEffect(() => {
+    if (kind !== 'lexicon') return;
+    let active = true;
+    void window.electronAPI.dictionaryList(lang === 'en' ? 'en' : 'ar').then(items => {
+      if (active) setDictionaries((items as Array<{ id: string; title: string; entryCount: number; isEnabled: boolean }>).filter(d => d.isEnabled && d.entryCount > 0));
+    });
+    return () => {
+      active = false;
+    };
+  }, [kind, lang]);
+
+  useEffect(() => {
+    if (kind !== 'list') return;
+    let active = true;
+    void window.electronAPI.personalLists.invoke<Array<{ id: string; name: string; kind: string }>>('all').then(r => {
+      if (active && r.ok) setLists(r.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [kind]);
+
+  const validLimit = Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_LEXICON_LIMIT;
+  useEffect(() => {
+    if (kind === 'lexicon') onOptions?.({ prefix: prefix.trim(), limit: validLimit ? limit : DEFAULT_LEXICON_LIMIT });
+  }, [kind, prefix, limit, validLimit, onOptions]);
 
   // The Sunnah catalog, once.
   useEffect(() => {
@@ -80,11 +120,13 @@ export function DeckSourcePicker({ kind, onChange }: { kind: DeckSourceKind; onC
 
   const ref = useMemo(() => {
     if (kind === 'book_highlights' || kind === 'book_comments') return bookId;
+    if (kind === 'lexicon') return chosen && validLimit ? chosen : '';
+    if (kind === 'list') return chosen;
     if (kind === 'hadith_collection') return collection;
     if (kind === 'sunnah_book') return collection && chapter ? `${collection}:${chapter}` : '';
     if (kind === 'sunnah_bab') return collection && chapter && section ? `${collection}:${chapter}:${section}` : '';
     return picked;
-  }, [kind, bookId, collection, chapter, section, picked]);
+  }, [kind, bookId, collection, chapter, section, picked, chosen, validLimit]);
   useEffect(() => onChange(ref), [ref, onChange]);
 
   const chapters = catalog.find(c => c.id === collection)?.chapters ?? [];
@@ -98,6 +140,48 @@ export function DeckSourcePicker({ kind, onChange }: { kind: DeckSourceKind; onC
           {books.map(book => (
             <option key={book.id} value={book.id} dir="auto">
               {book.title}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  if (kind === 'lexicon') {
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="space-y-1 text-xs text-muted sm:col-span-2">
+          <span>{t('deckSyncDictionary')}</span>
+          <select value={chosen} data-deck-sync-dictionary onChange={e => setChosen(e.target.value)} className={field}>
+            <option value="">{t('deckSyncChooseDictionary')}</option>
+            {dictionaries.map(d => (
+              <option key={d.id} value={d.id} dir="auto">
+                {d.title} · {d.entryCount.toLocaleString(lang)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-xs text-muted">
+          <span>{t('deckSyncPrefix')}</span>
+          <input value={prefix} dir="auto" maxLength={64} data-deck-sync-prefix placeholder={t('deckSyncPrefixHint')} onChange={e => setPrefix(e.target.value)} className={field} />
+        </label>
+        <label className="space-y-1 text-xs text-muted">
+          <span>{t('deckSyncLimit')}</span>
+          <input type="number" min={1} max={MAX_LEXICON_LIMIT} value={limit} data-deck-sync-limit onChange={e => setLimit(Number.parseInt(e.target.value, 10))} className={field} />
+        </label>
+      </div>
+    );
+  }
+
+  if (kind === 'list') {
+    return (
+      <label className="space-y-1 text-xs text-muted">
+        <span>{t('deckSyncList')}</span>
+        <select value={chosen} data-deck-sync-list onChange={e => setChosen(e.target.value)} className={field}>
+          <option value="">{t('deckSyncChooseList')}</option>
+          {lists.map(l => (
+            <option key={l.id} value={l.id} dir="auto">
+              {l.kind === 'starred' ? t('listsStarred') : l.name}
             </option>
           ))}
         </select>

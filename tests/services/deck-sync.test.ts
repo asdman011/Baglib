@@ -241,7 +241,7 @@ test('comments subscription, validation, and batching yields between batches', a
   try {
     for (let i = 0; i < 230; i++) f.annotate(`h${i}`, `مقطع ${i}`, i % 2 ? `تعليق ${i}` : null);
     const deck = f.decks.createDeck({ name: 'D' });
-    await assert.rejects(f.sync.subscribe({ deckId: deck.id, sourceKind: 'lexicon', sourceRef: 'x' }), /unsupported-source/u);
+    await assert.rejects(f.sync.subscribe({ deckId: deck.id, sourceKind: 'diwan', sourceRef: 'x' }), /unsupported-source/u);
     await assert.rejects(f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'missing' }), /source-not-found/u);
     const sub = await f.sync.subscribe({ deckId: deck.id, sourceKind: 'book_highlights', sourceRef: 'w1' });
     let yields = 0;

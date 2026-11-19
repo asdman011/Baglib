@@ -1,3 +1,43 @@
+## KEY-410 Live sync for dictionaries and lists from the deck's source picker (diwan stays blocked) - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user said "continue to the next task". KEY-410 was the next unblocked task. Its `list` part was built in KEY-399; the KEY-413 pack supplied lexicon data. `diwan` stays blocked, because the poetry corpus has no diwan entity and following a poet already covers a poet's diwan. No schema change: `lexicon` was already allowed by migration 031.
+
+**What changed:**
+- **`services/deck-sync.ts`:**
+  - **New `lexicon` adapter.** source_ref is a dictionary id. Options `{prefix, limit}` (1-2000, default 200) are kept in `template_options`.
+  - Headwords come in index order, filtered by the normalised prefix, and each is a `stock-basic` (or reversed) note `lexicon:<dict>:<headword>`. These are the same notes KEY-400's dictionary import makes, so schedules are shared.
+  - Added `validateLexiconOptions`. `subscribe` now checks options before looking up the source.
+  - `DeckSubscription.lexicon` holds the options.
+- **`deck-sync-readers.ts`:** `lexiconEntry` reads the entry through the dictionary service and strips it like KEY-400 (no import cycle).
+- **IPC:** `deck-sync:subscribe` accepts `prefix` and `limit`. **Preload:** the `lexicon` kind is added.
+- **`DeckSourcePicker` / `DeckSubscriptionsModal`:**
+  - new "Personal list" kind, with a list picker;
+  - new "Dictionary" kind, with a dictionary picker (enabled, non-empty), "words starting with", and a maximum number of cards;
+  - ar and en strings.
+- **Tests:** `tests/services/deck-sync.test.ts` now uses `diwan` as the unsupported example (lexicon is supported).
+- **Docs:** the data dictionary covers `lexicon` and why `diwan` stays out.
+
+**Verified (2026-11-19):**
+- `tests/services/lexicon-deck-sync.test.ts` 4/4:
+  - prefix follow with add, edit (meaning updated in place), delete (orphan) and restore;
+  - the limit, and a removed dictionary orphaning all its cards;
+  - a KEY-400 card linked, not duplicated;
+  - option validation.
+- Full suite 2,646/2,646; tsc 0; eslint 0 errors.
+- The deck-sync suites, including list decks and KEY-400 lexicon decks: 39/39.
+- **`scripts/lexicon-sync-live` passed in ar and en,** with the real `repos/arabic_lexicons-main.zip` and a real Arabic PDF:
+  - the "follow a source" window is RTL/LTR;
+  - al-Muʿjam al-Wasīṭ, "كت", at most 20, gives 14 cards; "Sync now" adds 0 and leaves 14 unchanged;
+  - a second deck follows a personal list holding the PDF and gets 1 card;
+  - no renderer errors.
+  - Evidence: `.baglib-data/key410-evidence/`.
+
+**Limits:** `diwan` is not built (no data). Following a whole large dictionary is capped at 2,000 cards per subscription.
+
+**Files:** src/main/services/deck-sync.ts, src/main/services/deck-sync-readers.ts, src/main/ipc/knowledge-cards.ts, src/preload/index.ts, src/renderer/components/knowledge/DeckSourcePicker.tsx, src/renderer/components/knowledge/DeckSubscriptionsModal.tsx, src/renderer/translations.ts, tests/services/lexicon-deck-sync.test.ts, tests/services/deck-sync.test.ts, scripts/lexicon-sync-live/run.mjs, scripts/lexicon-sync-live/main.cjs, docs/data-dictionary.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-399 "Revise this list": decks from personal lists with live sync - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user said "Yes, KEY-399" after KEY-386 (lists) landed. There is no schema change: the `list` subscription kind was already allowed by migration 031's CHECK.

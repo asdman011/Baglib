@@ -10,10 +10,10 @@ import { Link2, RefreshCw, Trash2, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
 import type { DeckTreeNode } from '../../../shared/srs';
-import { DeckSourcePicker, type DeckSourceKind } from './DeckSourcePicker';
+import { DeckSourcePicker, type DeckSourceKind, type DeckSourceOptions } from './DeckSourcePicker';
 
 type Kind = DeckSourceKind;
-const KINDS: Kind[] = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet'];
+const KINDS: Kind[] = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet', 'list', 'lexicon'];
 type Policy = 'silent' | 'toast';
 interface Subscription {
   id: string;
@@ -29,6 +29,7 @@ export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: Dec
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [kind, setKind] = useState<Kind>('book_highlights');
   const [sourceRef, setSourceRef] = useState('');
+  const [sourceOptions, setSourceOptions] = useState<DeckSourceOptions>({});
   const [policy, setPolicy] = useState<Policy>('toast');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -77,6 +78,8 @@ export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: Dec
       hadith_collection: t('deckSyncKindCollection'),
       poem: t('deckSyncKindPoem'),
       poet: t('deckSyncKindPoet'),
+      list: t('deckSyncKindList'),
+      lexicon: t('deckSyncKindLexicon'),
     })[k] ?? k;
 
   return (
@@ -153,7 +156,7 @@ export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: Dec
             e.preventDefault();
             if (!sourceRef) return;
             void run(async () => {
-              const { result } = await window.electronAPI.deckSync.subscribe({ deckId: deck.id, sourceKind: kind, sourceRef, newItems: policy });
+              const { result } = await window.electronAPI.deckSync.subscribe({ deckId: deck.id, sourceKind: kind, sourceRef, newItems: policy, ...(kind === 'lexicon' ? sourceOptions : {}) });
               setMessage(summary(result));
             });
           }}
@@ -177,7 +180,7 @@ export function DeckSubscriptionsModal({ deck, onClose, onChanged }: { deck: Dec
               ))}
             </select>
           </label>
-          <DeckSourcePicker key={kind} kind={kind} onChange={setSourceRef} />
+          <DeckSourcePicker key={kind} kind={kind} onChange={setSourceRef} onOptions={setSourceOptions} />
           <fieldset className="space-y-1">
             <legend className="text-xs text-muted">{t('deckSyncPolicy')}</legend>
             <label className="flex items-center gap-2 text-sm text-main">

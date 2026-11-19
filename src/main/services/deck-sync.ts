@@ -26,13 +26,14 @@
 
 import crypto from 'node:crypto';
 import { SURAH_NAMES_AR } from '../../shared/quran-wird';
+import { normalizeArabicLetters, stripArabicDiacritics } from '../../shared/utils/lookup-candidates';
 import { randomUUID } from 'node:crypto';
 import type { Database } from 'better-sqlite3';
 import { DeckRepository } from '../database/repositories/deck.repository';
 import { CardNoteRepository } from '../database/repositories/card-note.repository';
 import { trashKnowledge } from './knowledge-history';
 
-export const SUPPORTED_SUBSCRIPTION_KINDS = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet', 'list'] as const;
+export const SUPPORTED_SUBSCRIPTION_KINDS = ['book_highlights', 'book_comments', 'sunnah_book', 'sunnah_bab', 'hadith_collection', 'poem', 'poet', 'list', 'lexicon'] as const;
 export type SupportedSubscriptionKind = (typeof SUPPORTED_SUBSCRIPTION_KINDS)[number];
 export type NewItemsPolicy = 'silent' | 'toast';
 
@@ -49,6 +50,7 @@ export interface DeckSubscription {
   cards?: HadithCard[];
   /** Poem sources, verse by verse: what is hidden and the daily chunk (KEY-397). */
   poem?: PoemOptions;
+  lexicon?: LexiconOptions;
 }
 
 /** KEY-397: a poem verse by verse hides the ajuz or the whole bayt; chunk is the daily quota (0 = none). */
@@ -70,7 +72,16 @@ interface ListOptions {
   noteTypeId: string;
   cards: HadithCard[];
   poem?: PoemOptions;
+  lexicon?: LexiconOptions;
 }
+
+/** KEY-410: which headwords of a dictionary a deck follows: those starting with `prefix` (all when empty), at most `limit`. */
+export interface LexiconOptions {
+  prefix: string;
+  limit: number;
+}
+export const DEFAULT_LEXICON_OPTIONS: LexiconOptions = { prefix: '', limit: 200 };
+export const MAX_LEXICON_CARDS = 2000;
 
 export interface SourceItem {
   ref: string;
@@ -107,6 +118,8 @@ export interface SourceReaders {
    * Never used to hide Quran text (no hifz cards).
    */
   ayahMeaning?(profile: 'hafs' | 'warsh', surah: number, from: number, to: number): Promise<{ text: string; translation: string; tafsir: string; tafsirTitle: string } | null>;
+  /** KEY-410: a dictionary entry as plain text (HTML stripped, length capped), or null when it has none. */
+  lexiconEntry?(dictId: string, headword: string): Promise<string | null>;
 }
 
 const NO_READERS: SourceReaders = {
@@ -284,6 +297,50 @@ async function listItems(db: Database, listId: string, readers: SourceReaders, o
   return items;
 }
 
+/**
+ * KEY-410: a dictionary's headwords as word → meaning cards, the same `lexicon:<dict>:<headword>`
+ * notes KEY-400's dictionary import makes, so a followed dictionary keeps their schedules. Headwords
+ * come in index order, filtered by prefix on the stored normalised form, capped at the deck's limit.
+ */
+async function lexiconItems(db: Database, dictId: string, readers: SourceReaders, options: ListOptions): Promise<SourceItem[]> {
+  const dict = db.prepare(`SELECT title FROM dictionaries WHERE id = ?`).get(dictId) as { title: string } | undefined;
+  if (!dict || !readers.lexiconEntry) return [];
+  const { prefix, limit } = options.lexicon ?? DEFAULT_LEXICON_OPTIONS;
+  const norm = normalizeArabicLetters(stripArabicDiacritics(prefix.trim().toLowerCase()));
+  const page = norm
+    ? db.prepare(`SELECT id, headword FROM headword_index WHERE dict_id = ? AND id > ? AND normalized_headword >= ? AND normalized_headword < ? ORDER BY id LIMIT 500`)
+    : db.prepare(`SELECT id, headword FROM headword_index WHERE dict_id = ? AND id > ? ORDER BY id LIMIT 500`);
+  const headwords: string[] = [];
+  const seen = new Set<string>();
+  let lastId = 0;
+  while (headwords.length < limit) {
+    const rows = (norm ? page.all(dictId, lastId, norm, `${norm}\uffff`) : page.all(dictId, lastId)) as Array<{ id: number; headword: string }>;
+    if (!rows.length) break;
+    for (const row of rows) {
+      lastId = row.id;
+      const headword = row.headword.trim();
+      if (!headword || seen.has(headword)) continue;
+      seen.add(headword);
+      headwords.push(row.headword);
+      if (headwords.length >= limit) break;
+    }
+    if (rows.length < 500) break;
+  }
+  const items: SourceItem[] = [];
+  for (const headword of headwords) {
+    const meaning = await readers.lexiconEntry(dictId, headword).catch(() => null);
+    if (!meaning) continue;
+    items.push({
+      ref: `lexicon:${dictId}:${headword}`,
+      values: [
+        `<div class="lexicon-headword" dir="auto">${escapeHtml(headword)}</div>`,
+        `<div class="lexicon-definition" dir="auto">${escapeHtml(meaning)}</div>\n<div class="lexicon-source" dir="auto">${escapeHtml(dict.title)}</div>`,
+      ],
+    });
+  }
+  return items;
+}
+
 /** Source adapters: how a subscription's items are read. */
 const ADAPTERS: Record<SupportedSubscriptionKind, Adapter> = {
   book_highlights: {
@@ -371,6 +428,13 @@ const ADAPTERS: Record<SupportedSubscriptionKind, Adapter> = {
       return item ? [item] : [];
     },
   },
+  lexicon: {
+    noteTypeId: 'stock-basic',
+    noteTypes: ['stock-basic-reversed'],
+    validRef: ref => /^[A-Za-z0-9_-]{1,128}$/u.test(ref),
+    namespace: ref => `lexicon:${ref}:`,
+    list: (db, ref, readers, options) => lexiconItems(db, ref, readers, options),
+  },
   list: {
     noteTypeId: 'stock-basic',
     noteTypes: ['stock-basic-reversed'],
@@ -412,6 +476,25 @@ function cardsOf(templateOptions: string | null): HadithCard[] {
   } catch {
     return ['full'];
   }
+}
+
+function lexiconOptionsOf(templateOptions: string | null): LexiconOptions {
+  try {
+    const parsed = JSON.parse(templateOptions ?? '{}') as { prefix?: unknown; limit?: unknown };
+    return {
+      prefix: typeof parsed.prefix === 'string' ? parsed.prefix.slice(0, 64) : '',
+      limit: Number.isSafeInteger(parsed.limit) && (parsed.limit as number) >= 1 && (parsed.limit as number) <= MAX_LEXICON_CARDS ? (parsed.limit as number) : DEFAULT_LEXICON_OPTIONS.limit,
+    };
+  } catch {
+    return { ...DEFAULT_LEXICON_OPTIONS };
+  }
+}
+
+/** Checks a dictionary subscription's options (KEY-410). */
+export function validateLexiconOptions(prefix: unknown, limit: unknown): LexiconOptions {
+  if (prefix !== undefined && (typeof prefix !== 'string' || prefix.length > 64)) throw new Error('invalid-request');
+  if (limit !== undefined && (!Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > MAX_LEXICON_CARDS)) throw new Error('invalid-request');
+  return { prefix: ((prefix as string | undefined) ?? '').trim(), limit: (limit as number | undefined) ?? DEFAULT_LEXICON_OPTIONS.limit };
 }
 
 function poemOptionsOf(templateOptions: string | null): PoemOptions {
@@ -520,6 +603,7 @@ export class DeckSyncService {
       label: labelOf(r.template_options) ?? workTitle(this.db, r.source_ref),
       cards: cardsOf(r.template_options),
       ...(r.source_kind === 'poem' || r.source_kind === 'poet' ? { poem: poemOptionsOf(r.template_options) } : {}),
+      ...(r.source_kind === 'lexicon' ? { lexicon: lexiconOptionsOf(r.template_options) } : {}),
     }));
   }
 
@@ -527,7 +611,7 @@ export class DeckSyncService {
     return this.list().find(s => s.id === id) ?? null;
   }
 
-  async subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy; cards?: unknown; prompt?: unknown; chunk?: unknown }): Promise<DeckSubscription> {
+  async subscribe(input: { deckId: string; sourceKind: string; sourceRef: string; noteTypeId?: string; newItems?: NewItemsPolicy; cards?: unknown; prompt?: unknown; chunk?: unknown; prefix?: unknown; limit?: unknown }): Promise<DeckSubscription> {
     if (!isSupportedKind(input.sourceKind)) throw new Error('unsupported-source');
     const adapter = ADAPTERS[input.sourceKind];
     if (typeof input.sourceRef !== 'string' || !adapter.validRef(input.sourceRef)) throw new Error('invalid-request');
@@ -538,6 +622,9 @@ export class DeckSyncService {
     const type = this.notes.getNoteType(noteTypeId);
     if (!type) throw new Error('invalid-note-type');
     if (!adapter.noteTypeId && (type.fields.length < 2 || type.kind !== 'normal')) throw new Error('invalid-note-type');
+    const isLexicon = input.sourceKind === 'lexicon';
+    if (!isLexicon && (input.prefix !== undefined || input.limit !== undefined)) throw new Error('invalid-request');
+    const lexicon = isLexicon ? validateLexiconOptions(input.prefix, input.limit) : null;
     const label = await this.describeSource(input.sourceKind, input.sourceRef);
     if (label === null) throw new Error('source-not-found');
     const cards = validateHadithCards(input.cards);
@@ -554,7 +641,7 @@ export class DeckSyncService {
         `INSERT INTO deck_subscription (id, deck_id, source_kind, source_ref, note_type_id, template_options, new_items, last_synced_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
       )
-      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, JSON.stringify(poem ? { label, cards, ...poem } : { label, cards }), input.newItems === 'silent' ? 'silent' : 'toast');
+      .run(id, input.deckId, input.sourceKind, input.sourceRef, noteTypeId, JSON.stringify(poem ? { label, cards, ...poem } : lexicon ? { label, cards, ...lexicon } : { label, cards }), input.newItems === 'silent' ? 'silent' : 'toast');
     if (poem && poem.chunk > 0) this.applyDailyQuota(input.deckId, poem.chunk);
     return this.get(id)!;
   }
@@ -595,6 +682,10 @@ export class DeckSyncService {
     if (kind === 'list') {
       const list = this.db.prepare(`SELECT name FROM personal_list WHERE id = ?`).get(ref) as { name: string } | undefined;
       return list ? list.name : null;
+    }
+    if (kind === 'lexicon') {
+      const dict = this.db.prepare(`SELECT title FROM dictionaries WHERE id = ?`).get(ref) as { title: string } | undefined;
+      return dict ? dict.title : null;
     }
     if (kind === 'book_highlights' || kind === 'book_comments') {
       return this.db.prepare(`SELECT 1 FROM work WHERE id = ?`).get(ref) ? workTitle(this.db, ref) : null;
@@ -661,7 +752,7 @@ export class DeckSyncService {
       }
       return fieldsOf.get(noteTypeId)!;
     };
-    const items = await adapter.list(this.db, sub.sourceRef, this.readers, { noteTypeId: sub.noteTypeId, cards: sub.cards ?? ['full'], poem: sub.poem });
+    const items = await adapter.list(this.db, sub.sourceRef, this.readers, { noteTypeId: sub.noteTypeId, cards: sub.cards ?? ['full'], poem: sub.poem, lexicon: sub.lexicon });
     const result: SyncResult = { subscriptionId: sub.id, deckId: sub.deckId, added: 0, linked: 0, updated: 0, flagged: 0, orphaned: 0, restored: 0, unchanged: 0 };
 
     for (let i = 0; i < items.length; i += BATCH) {
@@ -692,7 +783,7 @@ export class DeckSyncService {
       if (others.length) {
         const claimed = new Set<string>();
         for (const other of others) {
-          for (const item of await ADAPTERS[other.sourceKind as SupportedSubscriptionKind].list(this.db, other.sourceRef, this.readers, { noteTypeId: other.noteTypeId, cards: other.cards ?? ['full'], poem: other.poem })) claimed.add(item.ref);
+          for (const item of await ADAPTERS[other.sourceKind as SupportedSubscriptionKind].list(this.db, other.sourceRef, this.readers, { noteTypeId: other.noteTypeId, cards: other.cards ?? ['full'], poem: other.poem, lexicon: other.lexicon })) claimed.add(item.ref);
         }
         gone = gone.filter(n => !claimed.has(n.source_ref));
       }

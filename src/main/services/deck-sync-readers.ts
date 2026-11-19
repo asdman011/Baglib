@@ -9,6 +9,8 @@ import type { NarratorReaders } from './narrator-decks';
 import { readNarrator, readNarratorIdsForHadiths, readSunnahChapterForSync, readSunnahChapterNumbers } from '../ipc/sunnah';
 import { readPoemForSync, readPoetPoemIds } from '../ipc/poetry';
 import { readAyahTexts, readQuranSources } from '../ipc/quran';
+import { getDictionaryService } from '../ipc/dictionary';
+import { stripDictionaryHtml } from './lexicon-decks';
 import { collectionKeys } from '../../renderer/utils/sunnah-collections';
 import { translations } from '../../renderer/translations';
 import type { SunnahCollectionId } from '../../shared/types/sunnah';
@@ -31,6 +33,15 @@ export const corpusReaders: NarratorReaders = {
     const translation = sources.filter(s => s.kind === 'translation').map(s => s.text).join(' ');
     const tafsir = sources.find(s => s.kind === 'tafsir' && s.text.trim());
     return { text: ayahs.map(a => a.text).join(' '), translation, tafsir: tafsir?.text ?? '', tafsirTitle: tafsir?.title ?? '' };
+  },
+  // KEY-410: a followed dictionary's entries, read the way KEY-400's dictionary import reads them.
+  lexiconEntry: async (dictId, headword) => {
+    const service = getDictionaryService();
+    const dict = service.listDictionaries().find(d => d.id === dictId);
+    if (!dict) return null;
+    const raw = await service.readEntry(dict, headword).catch(() => null);
+    const text = raw ? stripDictionaryHtml(raw) : '';
+    return text || null;
   },
   narratorIdsForHadiths: readNarratorIdsForHadiths,
   narrator: readNarrator,
