@@ -3,13 +3,13 @@ import { EditorView, ViewPlugin, keymap, showTooltip, type Tooltip, type ViewUpd
 import { closeCompletion } from '@codemirror/autocomplete';
 import { SLASH_SCOPES, moveSelection, parseSlashCommand, suggestScopes, type SlashScope } from '../../../shared/slash-command';
 import { matchSlashCommands } from '../../../shared/note-slash-commands';
-import { searchSlashDatasets, slashResultInsert, slashResultLink, type SlashResult, type SlashSearchInput } from '../../utils/slash-search';
+import { searchSlashDatasets, slashResultInsert, slashResultLink, defaultWikipediaLang, type SlashResult, type SlashSearchInput } from '../../utils/slash-search';
 import { cancelMaterialOcr, getMaterialOcrState, prepareSlashMaterial, runMaterialOcr, searchSlashMaterial, type SlashMaterial } from '../../utils/slash-material';
 import { getSunnahIsnadScope, setSunnahIsnadScope } from '../../utils/corpus-lookup';
 
 export const slashInsertion = Annotation.define<boolean>();
 type MenuItem = { scope: SlashScope; result?: SlashResult; action?: 'more' | 'link' | 'inside' | 'ocr' | 'ocr-cancel' | 'transcribe'; offset?: number; after?: number };
-interface Menu { from: number; to: number; items: MenuItem[]; selected: number; busy: boolean; material?: SlashResult; noText?: boolean }
+interface Menu { from: number; to: number; items: MenuItem[]; selected: number; busy: boolean; material?: SlashResult; noText?: boolean; offline?: boolean }
 export interface SlashSearchLabels {
   scopes: Record<SlashScope, string>;
   loading: string;
@@ -34,6 +34,12 @@ export interface SlashSearchLabels {
   sunnahScopeIsnadAndMatn?: string;
   sunnahScopeToggleLabel?: string;
   sunnahUnsplitNotice?: string;
+  personScholar?: string;
+  personNarrator?: string;
+  wikiLangAr?: string;
+  wikiLangEn?: string;
+  wikiLangToggle?: string;
+  wikiOffline?: string;
 }
 interface Config extends Omit<SlashSearchInput, 'scope' | 'query' | 'stale'> { labels: SlashSearchLabels; dir: 'rtl' | 'ltr' }
 
@@ -145,6 +151,38 @@ export function slashSearchExtension(config: () => Config): Extension {
         toggleBar.append(matnBtn, allBtn);
         dom.append(toggleBar);
       }
+      if (activeScope === 'wikipedia') {
+        const activePlugin = view.plugin(plugin);
+        const uiLang = dir === 'rtl' ? 'ar' : 'en';
+        const currentWikiLang = activePlugin?.wikiLangOverride ?? defaultWikipediaLang(activePlugin?.query ?? '', uiLang);
+        const wikiBar = document.createElement('div');
+        wikiBar.className = 'cm-slash-sunnah-scope-bar cm-slash-wiki-lang-bar';
+        wikiBar.setAttribute('role', 'group');
+        wikiBar.setAttribute('aria-label', labels.wikiLangToggle || 'Wikipedia language');
+
+        const arBtn = document.createElement('button');
+        arBtn.type = 'button';
+        arBtn.dataset.wikiLang = 'ar';
+        arBtn.className = `cm-slash-scope-btn${currentWikiLang === 'ar' ? ' active' : ''}`;
+        arBtn.textContent = labels.wikiLangAr || 'العربية';
+        arBtn.addEventListener('mousedown', e => e.preventDefault());
+        arBtn.addEventListener('click', () => {
+          if (activePlugin) { activePlugin.wikiLangOverride = 'ar'; activePlugin.refresh(); }
+        });
+
+        const enBtn = document.createElement('button');
+        enBtn.type = 'button';
+        enBtn.dataset.wikiLang = 'en';
+        enBtn.className = `cm-slash-scope-btn${currentWikiLang === 'en' ? ' active' : ''}`;
+        enBtn.textContent = labels.wikiLangEn || 'English';
+        enBtn.addEventListener('mousedown', e => e.preventDefault());
+        enBtn.addEventListener('click', () => {
+          if (activePlugin) { activePlugin.wikiLangOverride = 'en'; activePlugin.refresh(); }
+        });
+
+        wikiBar.append(arBtn, enBtn);
+        dom.append(wikiBar);
+      }
       if (current.noText && current.material?.material) {
         const status = document.createElement('div');
         status.setAttribute('role', 'status');
@@ -162,9 +200,13 @@ export function slashSearchExtension(config: () => Config): Extension {
         dom.append(status);
       }
       let group: SlashScope | undefined;
+      let subGroup: string | undefined;
       current.items.forEach((item, index) => {
         if (item.result && group !== item.scope && !item.action) {
-          const heading = document.createElement('div'); heading.className = 'cm-slash-heading'; heading.textContent = labels.scopes[item.scope]; dom.append(heading); group = item.scope;
+          const heading = document.createElement('div'); heading.className = 'cm-slash-heading'; heading.textContent = labels.scopes[item.scope]; dom.append(heading); group = item.scope; subGroup = undefined;
+        }
+        if (item.result?.groupLabel && subGroup !== item.result.groupLabel && !item.action) {
+          const sub = document.createElement('div'); sub.className = 'cm-slash-subheading'; sub.textContent = item.result.groupLabel; dom.append(sub); subGroup = item.result.groupLabel;
         }
         const option = document.createElement('div'); option.id = `slash-option-${index}`;
         option.setAttribute('role', 'option'); option.setAttribute('aria-selected', String(index === current.selected));
@@ -179,13 +221,19 @@ export function slashSearchExtension(config: () => Config): Extension {
           : item.action === 'transcribe' ? labels.autoTranscribe || 'Auto-transcribe'
           : item.result?.label || labels.scopes[item.scope];
         option.append(label);
+        if (item.result?.role && !item.action) {
+          const badge = document.createElement('span');
+          badge.className = 'cm-slash-role-badge';
+          badge.textContent = item.result.role === 'narrator' ? (labels.personNarrator || 'Narrator') : (labels.personScholar || 'Scholar');
+          option.append(badge);
+        }
         if (item.result?.snippet && !item.action) { const snippet = document.createElement('div'); snippet.className = 'cm-slash-snippet'; snippet.dir = 'auto'; snippet.textContent = item.result.snippet; option.append(snippet); }
         option.addEventListener('mouseenter', () => { const latest = view.state.field(menu); if (latest && latest.selected !== index) view.dispatch({ effects: change.of({ ...latest, selected: index }) }); });
         option.addEventListener('mousedown', event => event.preventDefault()); option.addEventListener('click', () => choose(view, index)); dom.append(option);
       });
-      if (current.busy || (!current.items.length && !current.noText)) {
+      if (current.busy || current.offline || (!current.items.length && !current.noText)) {
         const status = document.createElement('div'); status.setAttribute('role', 'status'); status.className = 'cm-slash-heading';
-        status.textContent = current.busy ? labels.loading : current.material && !view.plugin(plugin)?.query ? labels.typeQuery || '' : labels.empty; dom.append(status);
+        status.textContent = current.busy ? labels.loading : current.offline ? (labels.wikiOffline || 'No internet connection') : current.material && !view.plugin(plugin)?.query ? labels.typeQuery || '' : labels.empty; dom.append(status);
       }
       const selected = dom.querySelector('[aria-selected="true"]'); selected?.scrollIntoView({ block: 'nearest' });
       view.contentDOM.setAttribute('aria-controls', 'slash-search-results'); dom.id = 'slash-search-results';
@@ -273,6 +321,7 @@ export function slashSearchExtension(config: () => Config): Extension {
   };
   const plugin = ViewPlugin.fromClass(class {
     timer?: ReturnType<typeof setTimeout>; revision = 0; requestId?: string; query = ''; scope: SlashScope | null = null;
+    wikiLangOverride?: 'ar' | 'en';
     material?: { result: SlashResult; ready: Promise<SlashMaterial> };
     constructor(readonly view: EditorView) { this.refresh(); }
     update(update: ViewUpdate) { if (update.docChanged || update.selectionSet || update.focusChanged) this.refresh(); }
@@ -292,9 +341,11 @@ export function slashSearchExtension(config: () => Config): Extension {
       const { view } = this; if (revision !== this.revision) return;
       const selection = view.state.selection.main, line = view.state.doc.lineAt(selection.head);
       const before = line.text.slice(0, selection.head - line.from);
-      const open = selection.empty && view.hasFocus ? parseSlashCommand(before) : null;
+      const focused = view.hasFocus || (!!view.root.activeElement && view.contentDOM.contains(view.root.activeElement));
+      const open = selection.empty && focused ? parseSlashCommand(before) : null;
       const legacy = !this.material && open && !open.scope && open.query && !suggestScopes(open.partialScope || open.query).length && matchSlashCommands(open.query).length;
-      if (!open || legacy || open.query.length > 200) { this.material = undefined; this.scope = null; view.dispatch({ effects: change.of(null) }); return; }
+      if (!open || legacy || open.query.length > 200) { this.material = undefined; this.scope = null; this.wikiLangOverride = undefined; view.dispatch({ effects: change.of(null) }); return; }
+      if (open.scope !== 'wikipedia') this.wikiLangOverride = undefined;
       closeCompletion(view); this.query = open.query; this.scope = open.scope;
       const scopeItems: MenuItem[] = !this.material && !open.scope ? suggestScopes(open.partialScope || (open.query ? '\0' : '')).map(scope => ({ scope })) : [];
       const initial: Menu = { from: line.from + open.start, to: selection.head, items: scopeItems, selected: 0, busy: !!open.query || !!open.scope || !!this.material, material: this.material?.result };
@@ -307,8 +358,11 @@ export function slashSearchExtension(config: () => Config): Extension {
       const selected = this.material ? await this.material.ready : undefined;
       if (stale()) return;
       const effectiveIsnadScope = open.modifier ?? getSunnahIsnadScope();
-      const results = selected ? await searchSlashMaterial(selected, open.query, limit, 0, stale) : await searchSlashDatasets({ ...config(), scope: open.scope, query: open.query, limit, requestId: this.requestId, isnadScope: effectiveIsnadScope, unsplitNotice: config().labels.sunnahUnsplitNotice, stale });
+      const uiLang = config().dir === 'rtl' ? 'ar' : 'en';
+      const results = selected ? await searchSlashMaterial(selected, open.query, limit, 0, stale) : await searchSlashDatasets({ ...config(), scope: open.scope, query: open.query, limit, requestId: this.requestId, isnadScope: effectiveIsnadScope, lang: uiLang, wikiLang: this.wikiLangOverride, unsplitNotice: config().labels.sunnahUnsplitNotice, stale });
       if (stale()) return;
+      const offline = results.some(r => r.offline);
+      const visibleResults = results.filter(r => !r.offline);
       let materialActionItems: MenuItem[] = [];
       if (selected && !selected.available && selected.result.material) {
         if (selected.result.scope === 'books') {
@@ -318,7 +372,7 @@ export function slashSearchExtension(config: () => Config): Extension {
           materialActionItems = [{ scope: 'lectures', action: 'transcribe', result: selected.result }];
         }
       }
-      view.dispatch({ effects: change.of({ ...initial, items: [...scopeItems, ...materialActionItems, ...this.items(results, limit)], busy: false, noText: selected && !selected.available }) });
+      view.dispatch({ effects: change.of({ ...initial, items: [...scopeItems, ...materialActionItems, ...this.items(visibleResults, limit)], busy: false, noText: selected && !selected.available, offline }) });
     }
     async more(current: Menu, item: MenuItem) {
       const revision = this.revision, stale = () => revision !== this.revision;
@@ -346,6 +400,8 @@ export function slashSearchExtension(config: () => Config): Extension {
     '.cm-slash-option': { padding: '.3rem .6rem', borderRadius: '.35rem', cursor: 'pointer', overflowWrap: 'anywhere' },
     '.cm-slash-option[aria-selected="true"]': { background: 'rgb(16 185 129 / .18)' },
     '.cm-slash-heading': { display: 'block', fontSize: '.75rem', opacity: '.75', padding: '.3rem .6rem', fontWeight: '600' },
+    '.cm-slash-subheading': { display: 'block', fontSize: '.7rem', opacity: '.85', padding: '.2rem .6rem', fontWeight: '600', color: 'var(--color-primary, #059669)' },
+    '.cm-slash-role-badge': { marginInlineStart: '.45rem', fontSize: '.7rem', padding: '.05rem .35rem', borderRadius: '.25rem', border: '1px solid rgb(128 128 128 / .35)', opacity: '.85' },
     '.cm-slash-snippet': { fontSize: '.75rem', opacity: '.75', maxHeight: '3.8em', overflow: 'hidden' },
     '.cm-dialog-backdrop': { position: 'fixed', inset: '0', zIndex: '9999', background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
     '.cm-auto-transcribe-modal': { background: 'var(--bg-surface, #ffffff)', color: 'var(--text-main, #111827)', border: '1px solid rgb(128 128 128 / .35)', borderRadius: '.75rem', boxShadow: '0 8px 30px rgba(0,0,0,0.25)', padding: '1.25rem', width: 'min(24rem, calc(100vw - 2rem))', textAlign: 'start', fontFamily: 'inherit' },

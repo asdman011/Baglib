@@ -191,7 +191,7 @@ export const QuickNoteScratchpad: React.FC<{
     </div>
     {linksOpen && <StudyLinkPicker notes={notes} onInsert={text => { insert(text); setLinksOpen(false); }} />}
     {preview ? <div data-scratchpad-preview className="min-h-32 max-h-72 overflow-auto rounded-lg border border-subtle p-3"><StudyNoteContent content={content} notes={notes} t={t} onOpen={(target, options) => { void openLink(target, options).catch(() => setStatus('studySourceUnavailable')); }} /></div> : <StudyNoteEditor ref={editor} disabled={!ready || saving} ariaLabel={t('dashScratchpadTitle')} placeholder={t('dashScratchpadPlaceholder')} value={content} onChange={changeContent} dir={effectiveDir} notes={notes} books={books} kindLabels={{ note: t('studyLinkKindNote'), book: t('studyLinkKindBook'), quran: t('studyLinkKindAyah'), hadith: t('studyLinkKindHadith'), poem: t('studyLinkKindPoem'), paragraph: t('studyLinkKindParagraph') }} relationLabels={relationLabels(t)} currentNoteId={initialNote?.id} onAnchorParagraph={anchorParagraphIn} searchCorpus={(kinds, query, options) => searchCorpus(kinds, query, id => t(collectionKeys[id]), options?.limit, 'hafs', { ...options, unsplitNotice: t('sunnahUnsplitNotice') })} autoFocus={autoFocus} onMakeCards={makeCards} expandHonorifics={honorificsOn} newLinePrefix={lineStamp} slashSearchLabels={{
-        scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') },
+        scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures'), dictionary: t('slashScopeDictionary'), people: t('slashScopePeople'), wikipedia: t('slashScopeWikipedia') },
         loading: t('quranLoading'),
         empty: t('studyNoResults'),
         label: t('studyLinkSearch'),
@@ -214,6 +214,12 @@ export const QuickNoteScratchpad: React.FC<{
         sunnahScopeIsnadAndMatn: t('sunnahScopeIsnadAndMatn'),
         sunnahScopeToggleLabel: t('sunnahScopeToggleLabel'),
         sunnahUnsplitNotice: t('sunnahUnsplitNotice'),
+        personScholar: t('slashPersonScholar'),
+        personNarrator: t('slashPersonNarrator'),
+        wikiLangAr: t('slashWikiLangAr'),
+        wikiLangEn: t('slashWikiLangEn'),
+        wikiLangToggle: t('slashWikiLangToggle'),
+        wikiOffline: t('slashWikiOffline'),
       }} slashLabels={slashLabels} dateText={() => { const today = new Date(); const hijri = calculateHijriDate(today); return `${today.toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'long' })} — ${lang === 'ar' ? hijri.formattedAr : hijri.formattedEn}`; }} onSave={() => void save()} />}
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <input data-scratchpad-tags aria-label={t('dashScratchpadTagsPlaceholder')} value={tagsInput} onChange={event => setTagsInput(event.target.value)} placeholder={t('dashScratchpadTagsPlaceholder')} className="rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs min-w-0" />

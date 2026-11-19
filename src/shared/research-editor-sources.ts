@@ -1,4 +1,4 @@
-export type ResearchSourceKind = 'ayah' | 'hadith' | 'verse' | 'book-quote';
+export type ResearchSourceKind = 'ayah' | 'hadith' | 'verse' | 'book-quote' | 'dictionary' | 'people' | 'wikipedia';
 export interface ResearchSourceProps {
   url: string; label: string; text: string; verses: { sadr: string; ajuz: string }[];
   collection: string; number: string; grade: string; poet: string; poem: string;
@@ -6,7 +6,7 @@ export interface ResearchSourceProps {
 }
 export interface ResearchSourceResult { kind: ResearchSourceKind; props: ResearchSourceProps }
 export interface ResearchSourceSearch {
-  search(kind: ResearchSourceKind, query: string, requestId: string): Promise<ResearchSourceResult[]>;
+  search(kind: ResearchSourceKind, query: string, requestId: string, options?: { wikiLang?: 'ar' | 'en' }): Promise<ResearchSourceResult[]>;
   cancel(requestId: string): Promise<void>;
   open(url: string): Promise<void>;
 }

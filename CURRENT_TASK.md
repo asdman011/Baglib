@@ -1,4 +1,30 @@
-﻿## KEY-244 review, KEY-432 created, Antigravity watchdog and progress window - 2026-11-20 - Agent: Claude Code
+﻿## KEY-432: slash search scopes (Dictionary, People, Wikipedia) — 2026-11-20 - Agent: Antigravity
+
+**Done:**
+- `src/shared/slash-command.ts`: added `dictionary`, `people`, and `wikipedia` to `SlashScope`, `SLASH_SCOPES`, and `SCOPE_TERMS` (with Arabic & English aliases: `/dictionary`, `/معجم`, `/قاموس`, `/people`, `/scholars`, `/narrators`, `/علماء`, `/رواة`, `/رجال`, `/أعلام`, `/wikipedia`, `/ويكيبيديا`, `/wiki`).
+- `src/shared/study-notes.ts` & `src/renderer/utils/study-navigation.ts`: added `parsePersonTarget`, `person:` validation in `validStudyTarget`, and `person:` navigation routing (`person:narrator:` -> `sunnah`, `person:card:` -> `notes`, `person:scholar:`/`author:` -> `library`).
+- `src/shared/types/dictionary.ts` & `src/shared/research-editor-sources.ts`: added `WikipediaSearchArticle`, `WikipediaSearchResult`, `PersonSearchItem`, and extended `ResearchSourceKind` with `dictionary`, `people`, `wikipedia`.
+- `src/main/services/dictionary/wikipedia.service.ts` & `src/main/ipc/dictionary.ts`: added `WikipediaService.searchArticles` and `parseWikipediaSearchResponse` using Node `fetch` against MediaWiki's public API with input/language validation, 5s timeout, offline error detection, and zero disk/DB caching (`dictionary:wikipedia-search`).
+- `src/main/services/person-search.ts`, `src/main/services/sunnah/{research-corpus,sunnah.service}.ts`, `src/main/ipc/{person-decks,sunnah}.ts`: added `searchPeople` across `author` (scholars), `card_note` (`stock-person` / `stock-narrator`), and `rijal_narrators` (when Sunnah research corpus is present) using `normalizeArabicText` (`people:search`).
+- `src/preload/index.ts`: exposed `wikipediaSearch` and `peopleSearch`.
+- `src/renderer/utils/slash-search.ts`, `src/renderer/components/notes/slash-search-extension.ts`, `StudyNoteEditor.tsx`, `NoteEditorPane.tsx`, `QuickNoteScratchpad.tsx`: wired Dictionary (grouped by dictionary name, inserted as quotation with source), People (scholar/narrator badge, inserted as `[[person:...]]` link), and Wikipedia (query sent only when scope is picked, `ar`/`en` auto-default + toggle bar, offline "No internet" status, inserted with title, summary, and link).
+- `research-editor/app/src/blocks/{dictionary,slash-widget,index}.ts`, `research-editor/app/src/main.ts`, `src/renderer/components/research/{source-search,ResearchEditorView}.tsx`: added all three scopes to the research editor slash menu and `SourceSearch` dialog, plus external `https://` and `person:` link opening.
+- `src/renderer/translations.ts`: added 9 bilingual (`ar` + `en`) keys.
+- `tests/shared/slash-command.test.ts`, `tests/ui/slash-search.test.ts`, `tests/services/key432-slash-scopes.test.ts`, `scripts/key432-live/{run.mjs,main.cjs}`: unit tests and live Electron verification in `ar` and `en`.
+
+**Tests:**
+- Focused (`slash-command`, `slash-search`, `key432-slash-scopes`, `slash-search-library-measure`): 45/45 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,852/2,852 pass (404 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `npm run check:vendor`: OK (2899 files). `npm run build:research-editor` & `npm run build:main`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key432-live/run.mjs`): PASS in `ar` and `en` with real PDFs, seeded person notes, and Sunnah narrators (`errors: []`, throwaway profile deleted).
+
+**Jira:**
+- Moved `KEY-432` to In Progress (`21`), and moved to Done (`41`) after commit+push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-432.md`, `research-editor/app/src/blocks/dictionary.ts`, `research-editor/app/src/blocks/index.ts`, `research-editor/app/src/blocks/slash-widget.ts`, `research-editor/app/src/main.ts`, `scripts/key432-live/main.cjs`, `scripts/key432-live/run.mjs`, `src/main/ipc/dictionary.ts`, `src/main/ipc/person-decks.ts`, `src/main/ipc/sunnah.ts`, `src/main/services/dictionary/wikipedia.service.ts`, `src/main/services/person-search.ts`, `src/main/services/sunnah/research-corpus.ts`, `src/main/services/sunnah/sunnah.service.ts`, `src/preload/index.ts`, `src/renderer/components/dashboard/QuickNoteScratchpad.tsx`, `src/renderer/components/notes/NoteEditorPane.tsx`, `src/renderer/components/notes/StudyNoteEditor.tsx`, `src/renderer/components/notes/slash-search-extension.ts`, `src/renderer/components/research/ResearchEditorView.tsx`, `src/renderer/components/research/source-search.ts`, `src/renderer/translations.ts`, `src/renderer/utils/slash-search.ts`, `src/renderer/utils/study-navigation.ts`, `src/shared/research-editor-sources.ts`, `src/shared/slash-command.ts`, `src/shared/study-notes.ts`, `src/shared/types/dictionary.ts`, `tests/services/key432-slash-scopes.test.ts`, `tests/shared/slash-command.test.ts`, `tests/ui/slash-search.test.ts`.
+
+## KEY-244 review, KEY-432 created, Antigravity watchdog and progress window - 2026-11-20 - Agent: Claude Code
 
 **KEY-244** (7d85889c, Antigravity): review passed.
 - Checks: tsc clean, focused tests 18/18, no vendor edits, only `baglib:` targets open.

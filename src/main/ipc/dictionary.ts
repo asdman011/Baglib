@@ -65,6 +65,18 @@ export function registerDictionaryIpc(): void {
     }
   });
 
+  // Wikipedia online-only search (KEY-432)
+  ipcMain.handle('dictionary:wikipedia-search', async (_, query: unknown, lang?: unknown, limit?: unknown) => {
+    try {
+      const wiki = getWikiService();
+      const safeLimit = typeof limit === 'number' && Number.isFinite(limit) ? limit : 8;
+      return await wiki.searchArticles(query, lang, safeLimit);
+    } catch (err) {
+      console.warn('[IPC:dictionary:wikipedia-search] Error:', err);
+      return { ok: false, error: 'failed', lang: lang === 'en' ? 'en' : 'ar', items: [] };
+    }
+  });
+
   // List registered dictionaries
   ipcMain.handle('dictionary:list', async (_, lang?: 'ar' | 'en') => {
     try {

@@ -7,20 +7,76 @@ import type { BookItem } from '../../../shared/types/work';
 import type { LibraryFtsResult, IndexedBookPage } from '../../../shared/types/full-text-search';
 
 /** Reuse existing preload IPCs; canonical text is fetched separately from FTS snippets. */
-export function createResearchSourceSearch(api: Window['electronAPI'], books: () => BookItem[], open: (url: string) => Promise<void>, collectionLabel: (id: string) => string): ResearchSourceSearch {
+export function createResearchSourceSearch(api: Window['electronAPI'], books: () => BookItem[], open: (url: string) => Promise<void>, collectionLabel: (id: string) => string, uiLang?: () => 'ar' | 'en'): ResearchSourceSearch {
   const pending = new Map<string, { cancelled: boolean }>();
   const normalize = (value: string) => normalizeArabicText(value, { normalizeTaaMarbuta: false });
   return {
-    open,
+    async open(url) {
+      if (/^https?:\/\//iu.test(url.trim())) {
+        await api.openExternal(url.trim());
+        return;
+      }
+      await open(url);
+    },
     async cancel(id) { const job = pending.get(id); if (job) job.cancelled = true; await api.cancelSlashSearch(id); },
-    async search(kind, raw, requestId) {
+    async search(kind, raw, requestId, options) {
       if (!/^[a-zA-Z0-9-]{1,100}$/u.test(requestId)) throw new Error('invalid-request');
       const query = raw.trim().slice(0, 200);
-      if (query.length < 2) return [];
+      if (kind !== 'people' && query.length < 2) return [];
       const job = { cancelled: false }; pending.set(requestId, job);
       const stale = () => job.cancelled || pending.get(requestId) !== job;
       const result = (props: Partial<ResearchSourceResult['props']>): ResearchSourceResult => ({ kind, props: { ...emptySourceProps(), ...props } });
       try {
+        if (kind === 'dictionary') {
+          const lang = uiLang?.() ?? (/[\u0600-\u06FF]/u.test(query) ? 'ar' : 'en');
+          const res = await api.dictionaryLookup(query, { lang, includeWikipedia: false });
+          if (stale() || !res) return [];
+          const grouped = new Map<string, typeof res.entries>();
+          for (const entry of res.entries) {
+            const key = entry.dictTitle || entry.dictId;
+            if (!grouped.has(key)) grouped.set(key, []);
+            grouped.get(key)!.push(entry);
+          }
+          const out: ResearchSourceResult[] = [];
+          for (const [dictName, entries] of grouped) {
+            for (const entry of entries) {
+              out.push(result({
+                url: `dictionary:${entry.dictId}:${entry.headword}`,
+                label: entry.headword,
+                text: entry.definitionText,
+                collection: dictName,
+              }));
+            }
+          }
+          return out.slice(0, LIMIT);
+        }
+        if (kind === 'people') {
+          const res = await api.peopleSearch(query, LIMIT);
+          if (stale() || !res.ok) return [];
+          return res.data.slice(0, LIMIT).map(p => result({
+            url: p.target,
+            label: p.name,
+            text: p.detail || '',
+            collection: p.role,
+            grade: p.role,
+          }));
+        }
+        if (kind === 'wikipedia') {
+          const defaultLang = /[\u0600-\u06FF]/u.test(query) ? 'ar' : (uiLang?.() ?? 'en');
+          const wikiLang = options?.wikiLang ?? defaultLang;
+          const res = await api.wikipediaSearch(query, wikiLang, LIMIT);
+          if (stale()) return [];
+          if (!res.ok) {
+            if (res.error === 'offline') throw new Error('offline');
+            return [];
+          }
+          return res.items.slice(0, LIMIT).map(a => result({
+            url: a.url,
+            label: a.title,
+            text: a.summary,
+            collection: a.lang,
+          }));
+        }
         if (kind === 'ayah') {
           const catalog = await api.quran.readerCatalog();
           if (!catalog.ok || stale()) return [];

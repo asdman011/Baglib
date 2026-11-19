@@ -5,17 +5,57 @@ import { extractPassages } from '../../shared/passage-extract';
 import { lectureTarget } from './lecture-navigation';
 import { quotePassage } from './slash-material';
 import type { LibraryFtsResult } from '../../shared/types/full-text-search';
+import type { DictionaryEntryMatch, PersonSearchItem, WikipediaSearchResult } from '../../shared/types/dictionary';
 import type { CorpusKind, CorpusOption, CorpusSearchOptions } from './corpus-lookup';
 
-export interface SlashResult { scope: SlashScope; target: string; label: string; snippet: string; score: number; quote?: string; cursor?: number; material?: SlashBook }
+export interface SlashResult {
+  scope: SlashScope;
+  target: string;
+  label: string;
+  snippet: string;
+  score: number;
+  quote?: string;
+  cursor?: number;
+  material?: SlashBook;
+  groupLabel?: string;
+  role?: 'scholar' | 'narrator';
+  offline?: boolean;
+}
 export interface SlashBook { id: string; title: string; author?: string; sourceId?: string; workType?: string; filePath?: string; digitalFormat?: string }
 export interface SlashSearchInput {
   scope: SlashScope | null; query: string; notes: StudyNote[]; books: SlashBook[];
   searchCorpus?: (kinds: CorpusKind[], query: string, options?: CorpusSearchOptions) => Promise<CorpusOption[]>;
   searchLibraryContent?: (query: string, options?: { bookId?: string; scope?: SlashScope; limit?: number; offset?: number; requestId?: string; stale?: () => boolean }) => Promise<LibraryFtsResult[]>;
+  searchDictionary?: (query: string) => Promise<DictionaryEntryMatch[]>;
+  searchPeople?: (query: string) => Promise<PersonSearchItem[]>;
+  searchWikipedia?: (query: string, lang: 'ar' | 'en') => Promise<WikipediaSearchResult>;
+  lang?: 'ar' | 'en';
+  wikiLang?: 'ar' | 'en';
   stale?: () => boolean; limit?: number; offset?: number; after?: number; requestId?: string;
   isnadScope?: 'all' | 'matn_only';
   unsplitNotice?: string;
+}
+
+export function defaultWikipediaLang(query: string, uiLang?: 'ar' | 'en'): 'ar' | 'en' {
+  if (/[\u0600-\u06FF]/u.test(query)) return 'ar';
+  return uiLang === 'ar' ? 'ar' : 'en';
+}
+
+export function formatDictionaryQuote(dictTitle: string, headword: string, definitionText: string): string {
+  const cleanBody = definitionText.replace(/\r?\n/gu, '\n').trim();
+  const lines = cleanBody.split('\n').map(line => `> ${line.trim()}`).filter(line => line !== '>');
+  const source = [dictTitle.trim(), headword.trim()].filter(Boolean).join(': ');
+  if (!lines.length) return `> — ${source}`;
+  return `${lines.join('\n')}\n> — ${source}`;
+}
+
+export function formatWikipediaQuote(title: string, summary: string, url: string): string {
+  const cleanTitle = title.trim();
+  const cleanSummary = summary.replace(/\s+/gu, ' ').trim();
+  const lines = [`> **${cleanTitle}**`];
+  if (cleanSummary) lines.push(`> ${cleanSummary}`);
+  lines.push(`> [${cleanTitle}](${url})`);
+  return lines.join('\n');
 }
 const corpusScopes = { quran: 'quran', hadith: 'sunnah', poem: 'albayan' } as const;
 const mediaTypes = new Set(['lecture', 'podcast', 'video']);
@@ -29,9 +69,9 @@ const matchTerm = (val: string, term: string) => {
   return false;
 };
 /** Cached normalized text, bounded result buffers and yielding scans keep large local collections responsive. */
-export async function searchSlashDatasets({ scope, query, notes, books, searchCorpus, searchLibraryContent, stale = () => false, limit = scope ? 20 : 8, offset = 0, after, requestId, isnadScope, unsplitNotice }: SlashSearchInput): Promise<SlashResult[]> {
+export async function searchSlashDatasets({ scope, query, notes, books, searchCorpus, searchLibraryContent, searchDictionary, searchPeople, searchWikipedia, lang, wikiLang, stale = () => false, limit = scope ? 20 : 8, offset = 0, after, requestId, isnadScope, unsplitNotice }: SlashSearchInput): Promise<SlashResult[]> {
   const text = query.trim().slice(0, 200);
-  if (text && text.length < 3 && !/^\d[:\d-]+$/u.test(text)) return [];
+  if (text && text.length < 3 && !/^\d[:\d-]+$/u.test(text) && scope !== 'dictionary' && scope !== 'people' && scope !== 'wikipedia') return [];
   const terms = normalize(text).split(/\s+/u).filter(Boolean);
   const normQ = normalize(text);
   const matches = (value: string) => terms.every(term => matchTerm(value, term));
@@ -147,7 +187,76 @@ export async function searchSlashDatasets({ scope, query, notes, books, searchCo
     if (stale()) return [];
     for (const item of found) results.push({ scope: corpusScopes[item.kind], target: item.target, label: item.label, snippet: item.snippet, score: 0, quote: item.quote, cursor: item.cursor });
   }
-  return SLASH_SCOPES.flatMap(dataset => results.filter(item => item.scope === dataset && !!studyLinkText(item.target, item.label)).slice(0, limit));
+  if (text && scopes.includes('dictionary') && !stale()) {
+    const lookupEntries = searchDictionary
+      ? await searchDictionary(text).catch(() => [])
+      : typeof window !== 'undefined' && window.electronAPI?.dictionaryLookup
+        ? (await window.electronAPI.dictionaryLookup(text, { lang, includeWikipedia: false }).catch(() => null))?.entries ?? []
+        : [];
+    if (stale()) return [];
+    const groupedByDict = new Map<string, DictionaryEntryMatch[]>();
+    for (const entry of lookupEntries) {
+      const key = entry.dictTitle || entry.dictId;
+      if (!groupedByDict.has(key)) groupedByDict.set(key, []);
+      groupedByDict.get(key)!.push(entry);
+    }
+    for (const [dictName, dictEntries] of groupedByDict) {
+      for (const entry of dictEntries) {
+        results.push({
+          scope: 'dictionary',
+          groupLabel: dictName,
+          target: `dictionary:${entry.dictId}:${entry.headword}`,
+          label: entry.headword,
+          snippet: entry.definitionText.slice(0, 160),
+          score: 0,
+          quote: formatDictionaryQuote(dictName, entry.headword, entry.definitionText),
+        });
+      }
+    }
+  }
+  if ((scope === 'people' || (text && scopes.includes('people'))) && !stale()) {
+    const people = searchPeople
+      ? await searchPeople(text).catch(() => [])
+      : typeof window !== 'undefined' && window.electronAPI?.peopleSearch
+        ? await window.electronAPI.peopleSearch(text, limit).then(res => (res.ok ? res.data : [])).catch(() => [])
+        : [];
+    if (stale()) return [];
+    for (const person of people) {
+      results.push({
+        scope: 'people',
+        target: person.target,
+        label: person.name,
+        snippet: person.detail || '',
+        role: person.role,
+        score: 0,
+      });
+    }
+  }
+  // Wikipedia query is sent ONLY after the user explicitly picks the wikipedia scope.
+  if (scope === 'wikipedia' && text && !stale()) {
+    const targetWikiLang = wikiLang ?? defaultWikipediaLang(text, lang);
+    const wikiRes = searchWikipedia
+      ? await searchWikipedia(text, targetWikiLang).catch((): WikipediaSearchResult => ({ ok: false, error: 'failed', lang: targetWikiLang, items: [] }))
+      : typeof window !== 'undefined' && window.electronAPI?.wikipediaSearch
+        ? await window.electronAPI.wikipediaSearch(text, targetWikiLang, limit).catch((): WikipediaSearchResult => ({ ok: false, error: 'failed', lang: targetWikiLang, items: [] }))
+        : undefined;
+    if (stale()) return [];
+    if (wikiRes && !wikiRes.ok && wikiRes.error === 'offline') {
+      results.push({ scope: 'wikipedia', target: 'wikipedia:offline', label: '', snippet: '', score: 0, offline: true });
+    } else if (wikiRes?.ok) {
+      for (const article of wikiRes.items) {
+        results.push({
+          scope: 'wikipedia',
+          target: article.url,
+          label: article.title,
+          snippet: article.summary.slice(0, 160),
+          score: 0,
+          quote: formatWikipediaQuote(article.title, article.summary, article.url),
+        });
+      }
+    }
+  }
+  return SLASH_SCOPES.flatMap(dataset => results.filter(item => item.scope === dataset && (item.offline || ((item.scope === 'dictionary' || item.scope === 'wikipedia') && !!item.quote) || !!studyLinkText(item.target, item.label))).slice(0, limit));
 }
 export const slashResultLink = (item: SlashResult) => studyLinkText(item.target, item.label);
 export const slashResultInsert = (item: SlashResult) => item.quote || slashResultLink(item);

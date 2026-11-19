@@ -370,7 +370,7 @@ async function mount() {
       void session.insertSource(payload.kind, payload.props as unknown as Record<string, unknown>);
     }, true);
     // KEY-244: open BagLib links, quick-note embeds, and source blocks when clicked on canvas (even behind edgeless-note-mask).
-    const isBaglibTargetUrl = (url: string) => /^(note|quran|sunnah|book|poetry|media|baglib):/i.test(url.trim());
+    const isBaglibTargetUrl = (url: string) => /^(note|quran|sunnah|book|poetry|media|person|baglib|https?):/i.test(url.trim());
     let downPos = { x: 0, y: 0 };
     document.addEventListener('pointerdown', event => { downPos = { x: event.clientX, y: event.clientY }; }, true);
     document.addEventListener('click', event => {

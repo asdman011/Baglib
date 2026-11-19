@@ -57,7 +57,7 @@ describe('slash dataset search', () => {
     assert.deepEqual(found.map(item => item.scope), ['notes', 'books', 'lectures']);
   });
   it('accepts every English scope and Arabic alias in either language', () => {
-    const aliases = ['القران', 'السنة', 'البيان', 'ملاحظات', 'كتب', 'محاضرات'];
+    const aliases = ['القران', 'السنة', 'البيان', 'ملاحظات', 'كتب', 'محاضرات', 'معجم', 'أعلام', 'ويكيبيديا'];
     SLASH_SCOPES.forEach((scope, i) => {
       assert.equal(parseSlashCommand(`/${scope} علم`)?.scope, scope);
       assert.equal(parseSlashCommand(`/${aliases[i]} علم`)?.scope, scope);

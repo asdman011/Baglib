@@ -5,7 +5,15 @@ import { SlashMenuExtension, type SlashMenuItem, type SlashMenuActionItem, type 
 import { html, css, LitElement } from 'lit';
 import { unsafeStatic } from 'lit/static-html.js';
 import { normalizeArabicText } from '../../../../src/shared/utils/text-normalizer';
+import { parseSlashCommand } from '../../../../src/shared/slash-command';
 import { sourceLabels } from './dictionary';
+
+let pendingSlashQuery = '';
+export function consumeSlashInitialQuery(): string {
+  const q = pendingSlashQuery;
+  pendingSlashQuery = '';
+  return q;
+}
 
 type Inline = NonNullable<ReturnType<typeof getInlineEditorByModel>>;
 const normalized = (value: string) => normalizeArabicText(value, { normalizeTaaMarbuta: false });
@@ -90,8 +98,24 @@ class BaglibSlashMenu extends LitElement {
   onClose = () => {};
   setItems(items: SlashMenuItem[]) {
     const flat = (values: SlashMenuItem[], ancestors: string[] = []): SlashMenuActionItem[] => values.flatMap(item => item.when && !item.when(this.context) ? [] : 'subMenu' in item ? flat(item.subMenu, [...ancestors, item.name, ...(item.searchAlias ?? [])]) : [{ ...item, searchAlias: [...(item.searchAlias ?? []), ...ancestors] }]);
+    const parsed = parseSlashCommand('/' + this.query);
+    const scopeTerms: Record<string, string[]> = {
+      quran: ['ayah', 'quran'],
+      sunnah: ['hadith', 'sunnah'],
+      albayan: ['poetry', 'verse'],
+      books: ['book', 'book-quote'],
+      dictionary: ['dictionary'],
+      people: ['people'],
+      wikipedia: ['wikipedia'],
+    };
+    const allFlat = flat(items);
     const query = normalized(this.query);
-    this.items = flat(items).filter(item => !query || [item.name,...(item.searchAlias ?? [])].some(alias => normalized(alias).includes(query)));
+    if (parsed?.scope) {
+      const targetAliases = scopeTerms[parsed.scope] ?? [parsed.scope];
+      this.items = allFlat.filter(item => [item.name, ...(item.searchAlias ?? [])].some(alias => targetAliases.includes(normalized(alias).toLowerCase())));
+    } else {
+      this.items = allFlat.filter(item => !query || [item.name,...(item.searchAlias ?? [])].some(alias => normalized(alias).includes(query)));
+    }
     this.selected = 0;
     this.dir = document.documentElement.dir;
     const range = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0).getBoundingClientRect() : null;
@@ -111,6 +135,8 @@ class BaglibSlashMenu extends LitElement {
     if (!range || range.index < this.start || this.inline.yText.toString().slice(this.start,range.index) !== '/' + this.query) { this.onClose(); return; }
     this.inline.yText.delete(this.start,range.index - this.start);
     this.inline.setInlineRange({index:this.start,length:0});
+    const parsed = parseSlashCommand('/' + this.query);
+    pendingSlashQuery = parsed?.scope ? parsed.query : '';
     const context = this.context; this.onClose();
     void this.inline.waitForUpdate().then(() => item.action(context)).catch(console.error);
   }

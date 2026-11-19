@@ -74,6 +74,9 @@ export function studyTargetView(target: string, books: BookItem[] = []): Workspa
   if (target.startsWith('sunnah:')) return 'sunnah';
   if (target.startsWith('poetry:')) return 'bayan';
   if (target.startsWith('media:')) return 'lectures';
+  if (target.startsWith('person:narrator:')) return 'sunnah';
+  if (target.startsWith('person:card:')) return 'notes';
+  if (target.startsWith('person:')) return 'library';
   if (target.startsWith('book:')) {
     const parsed = parseBookTarget(target);
     const book = parsed ? books.find(item => item.id === parsed.id) : undefined;
@@ -126,6 +129,10 @@ export async function navigateStudyReference(target: string, books: BookItem[], 
   if (target.startsWith('poetry:')) {
     const [, , poem, from, to] = target.split(':');
     openPoetryReference({ poemId: +poem, from: +from, to: +to, ...(tabId ? { tabId } : {}) });
+    return;
+  }
+  if (target.startsWith('person:')) {
+    dispatchCustomEvent('baglib:person-open', { target, ...(tabId ? { tabId } : {}) });
     return;
   }
   const [, collection, chapter, ...hadith] = target.split(':');

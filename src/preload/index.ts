@@ -258,6 +258,10 @@ export const API = {
   dictionarySetScience: (id: string, science: string | null) => ipcRenderer.invoke('dictionary:set-science', id, science),
   dictionaryWikipedia: (word: string, lang?: string) =>
     ipcRenderer.invoke('dictionary:wikipedia', word, lang),
+  wikipediaSearch: (query: string, lang?: 'ar' | 'en', limit?: number): Promise<import('../shared/types/dictionary').WikipediaSearchResult> =>
+    ipcRenderer.invoke('dictionary:wikipedia-search', query, lang, limit),
+  peopleSearch: (query: string, limit?: number): Promise<{ ok: true; data: import('../shared/types/dictionary').PersonSearchItem[] } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('people:search', query, limit),
   dictionaryList: (lang?: 'ar' | 'en') => ipcRenderer.invoke('dictionary:list', lang),
   dictionaryImport: (options: import('../shared/types/dictionary').ImportDictionaryOptions) =>
     ipcRenderer.invoke('dictionary:import', options),

@@ -86,8 +86,15 @@ export function validStudyTarget(target: string): boolean {
   if (parseNoteTarget(target)?.anchor) return true;
   if (/^media:[0-9a-f-]{36}:\d{1,6}(?::[0-9a-f-]{36})?$/u.test(target)) return true;
   if (target.startsWith('quran:')) return !!parseQuranTarget(target);
+  if (target.startsWith('person:')) return !!parsePersonTarget(target);
   const sunnah = /^sunnah:([^:]+):(\d+):([^\s\[\]|]{1,180})$/u.exec(target);
   return !!sunnah && [...SUNNAH_COLLECTION_IDS, ...SUNNAH_SOURCE_BOOK_IDS, 'MuwattaMalik', 'MusnadAhmad', 'SunanDarimi'].includes(sunnah[1]) && +sunnah[2] >= 0 && +sunnah[2] <= 1000;
+}
+
+/** `person:scholar:<id>`, `person:author:<id>`, `person:narrator:<id>`, or `person:card:<id>`. */
+export function parsePersonTarget(target: string): { kind: 'scholar' | 'author' | 'narrator' | 'card'; id: string } | null {
+  const match = /^person:(scholar|author|narrator|card):([^\s\[\]|:#]{1,180})$/u.exec(target);
+  return match ? { kind: match[1] as 'scholar' | 'author' | 'narrator' | 'card', id: match[2] } : null;
 }
 
 /** `quran:hafs:2:255` or a range in one surah, `quran:hafs:2:255-257`. */

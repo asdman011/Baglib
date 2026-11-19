@@ -288,6 +288,50 @@ export class SunnahResearchCorpus {
     }
     return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([id]) => id);
   }
+  /** KEY-432: search narrators in rijal_narrators with Arabic normalization. */
+  searchNarrators(query: string, limit = 20): Array<{ id: string; name: string; detail?: string }> {
+    const trimmed = query.trim().slice(0, 200);
+    if (!trimmed) return [];
+    const cap = Math.max(1, Math.min(30, Math.trunc(limit)));
+    const normQuery = normalizeArabicText(trimmed, { normalizeTaaMarbuta: false }).toLowerCase();
+    const terms = normQuery.split(/\s+/u).filter(Boolean);
+    if (!terms.length) return [];
+    const rows = this.db.prepare(
+      `SELECT rijal_id, primary_name_ar, kunya_ar, tabaqah, death_year_ah, jarh_tadil_tier FROM rijal_narrators`
+    ).all() as Array<{
+      rijal_id: string | number;
+      primary_name_ar: string | null;
+      kunya_ar: string | null;
+      tabaqah: string | null;
+      death_year_ah: number | null;
+      jarh_tadil_tier: string | null;
+    }>;
+    const scored: Array<{ id: string; name: string; detail?: string; score: number }> = [];
+    for (const row of rows) {
+      const name = (row.primary_name_ar ?? '').trim();
+      if (!name) continue;
+      const normName = normalizeArabicText(name, { normalizeTaaMarbuta: false }).toLowerCase();
+      const normKunya = row.kunya_ar ? normalizeArabicText(row.kunya_ar, { normalizeTaaMarbuta: false }).toLowerCase() : '';
+      const haystack = normKunya ? `${normName} ${normKunya}` : normName;
+      if (!terms.every(t => haystack.includes(t))) continue;
+      let score = 0;
+      if (normName === normQuery) score += 1000;
+      else if (normName.startsWith(normQuery)) score += 600;
+      else if (normName.includes(normQuery)) score += 300;
+      else score += 100;
+      score += Math.max(0, 50 - Math.abs(normName.length - normQuery.length));
+      const parts = [row.kunya_ar, row.jarh_tadil_tier, row.death_year_ah != null ? `${row.death_year_ah}هـ` : ''].filter(Boolean);
+      scored.push({
+        id: String(row.rijal_id),
+        name,
+        ...(parts.length ? { detail: parts.join(' · ') } : {}),
+        score,
+      });
+    }
+    scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    return scored.slice(0, cap).map(({ id, name, detail }) => ({ id, name, ...(detail ? { detail } : {}) }));
+  }
+
   narrator(id: string): SunnahNarrator {
     if (typeof id !== 'string' || !/^\d{1,20}$/.test(id)) throw new Error('Invalid narrator');
     const row = this.db.prepare('SELECT * FROM rijal_narrators WHERE rijal_id=?').get(id) as Row | undefined;

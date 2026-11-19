@@ -42,6 +42,12 @@ export class SunnahService {
     return this.researchCorpus.narrator(id);
   }
 
+  async searchNarrators(query: string, limit = 20) {
+    await this.catalog();
+    if (!this.researchCorpus) return [];
+    return this.researchCorpus.searchNarrators(query, limit);
+  }
+
   /** KEY-396: narrator ids for hadith research ids (needs the research corpus). */
   async narratorIdsForHadiths(hadithIds: number[]) {
     await this.catalog();

@@ -5,7 +5,9 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getDatabase } from '../database/connection';
 import { PersonDeckService, validateAuthorDeckInput, validateWikipediaCardInput } from '../services/person-decks';
+import { searchPeople } from '../services/person-search';
 import { WikipediaService } from '../services/dictionary/wikipedia.service';
+import { searchSunnahNarrators } from './sunnah';
 
 const KNOWN = ['invalid-request', 'no-people', 'not-found'];
 
@@ -36,6 +38,20 @@ export function registerPersonDeckIpc(): void {
       authorize(event);
       const request = validateWikipediaCardInput(input);
       return { ok: true, data: await new PersonDeckService(getDatabase()).wikipediaCard(request, (title, lang) => wikipedia.fetchSummary(title, lang)) };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+  ipcMain.handle('people:search', async (event, query: unknown, limit?: unknown) => {
+    try {
+      authorize(event);
+      if (query !== undefined && typeof query !== 'string') throw new Error('invalid-request');
+      if (limit !== undefined && (typeof limit !== 'number' || !Number.isFinite(limit))) throw new Error('invalid-request');
+      const items = await searchPeople(getDatabase(), query ?? '', {
+        limit: typeof limit === 'number' ? limit : 20,
+        searchNarrators: searchSunnahNarrators,
+      });
+      return { ok: true, data: items };
     } catch (error) {
       return failure(error);
     }

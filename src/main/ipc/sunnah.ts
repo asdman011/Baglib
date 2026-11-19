@@ -24,10 +24,13 @@ let syncChapterNumbers: ((collection: string) => Promise<number[]>) | null = nul
 export const readSunnahChapterForSync = (collection: string, chapter: number) => syncChapterReader ? syncChapterReader(collection, chapter) : Promise.resolve(null);
 let syncNarrators: ((hadithIds: number[]) => Promise<string[]>) | null = null;
 let syncNarrator: ((id: string) => Promise<import('../../shared/types/sunnah').SunnahNarrator | null>) | null = null;
+let syncNarratorSearch: ((query: string, limit?: number) => Promise<Array<{ id: string; name: string; detail?: string }>>) | null = null;
 /** KEY-396: narrator ids for hadith research ids; empty without the research corpus. */
 export const readNarratorIdsForHadiths = (hadithIds: number[]) => syncNarrators ? syncNarrators(hadithIds) : Promise.resolve([]);
 /** KEY-396: one narrator's profile, or null. */
 export const readNarrator = (id: string) => syncNarrator ? syncNarrator(id) : Promise.resolve(null);
+/** KEY-432: search narrators in the Sunnah research corpus; empty when unavailable. */
+export const searchSunnahNarrators = (query: string, limit = 20) => syncNarratorSearch ? syncNarratorSearch(query, limit) : Promise.resolve([]);
 /** KEY-409: the chapter numbers of one collection, for following a whole collection. */
 export const readSunnahChapterNumbers = (collection: string) => syncChapterNumbers ? syncChapterNumbers(collection) : Promise.resolve([]);
 
@@ -60,6 +63,7 @@ export function registerSunnahIpc(): void {
   };
   syncNarrators = async hadithIds => getService().narratorIdsForHadiths(hadithIds).catch(() => []);
   syncNarrator = async id => getService().narrator(id).catch(() => null);
+  syncNarratorSearch = async (query, limit) => getService().searchNarrators(query, limit).catch(() => []);
   syncChapterNumbers = async collection => ((await getService().catalog())?.collections.find(c => c.id === collection)?.chapters ?? []).map(c => c.number);
   chapterReader = async (collection, chapter) => (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths
     .map(hadith => ({ id: hadith.id, number: String(hadith.number), text: hadith.text.ar.matn || hadith.text.ar.full }));

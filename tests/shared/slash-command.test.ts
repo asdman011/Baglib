@@ -46,7 +46,9 @@ describe('suggestScopes', () => {
   });
 
   it('matches on Latin prefixes', () => {
-    assert.deepEqual(suggestScopes('s'), ['sunnah']);
+    assert.deepEqual(suggestScopes('s'), ['sunnah', 'people']);
+    assert.deepEqual(suggestScopes('d'), ['dictionary']);
+    assert.deepEqual(suggestScopes('w'), ['wikipedia']);
   });
 
   it('matches on Arabic aliases without tashkeel', () => {

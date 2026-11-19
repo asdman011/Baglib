@@ -102,3 +102,22 @@ export interface ImportDictionaryOptions {
   targetLang?: string;
   companionFiles?: string[];
 }
+
+export interface WikipediaSearchArticle {
+  title: string;
+  summary: string;
+  url: string;
+  lang: 'ar' | 'en';
+}
+
+export type WikipediaSearchResult =
+  | { ok: true; lang: 'ar' | 'en'; items: WikipediaSearchArticle[] }
+  | { ok: false; error: 'offline' | 'invalid-request' | 'failed'; lang: 'ar' | 'en'; items: [] };
+
+export interface PersonSearchItem {
+  id: string;
+  target: string;
+  name: string;
+  role: 'scholar' | 'narrator';
+  detail?: string;
+}

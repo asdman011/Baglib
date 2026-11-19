@@ -1,10 +1,10 @@
 import { normalizeArabicText } from './utils/text-normalizer';
 
 /** The scopes offered in the composer's slash menu. */
-export type SlashScope = 'quran' | 'sunnah' | 'albayan' | 'notes' | 'books' | 'lectures';
+export type SlashScope = 'quran' | 'sunnah' | 'albayan' | 'notes' | 'books' | 'lectures' | 'dictionary' | 'people' | 'wikipedia';
 
 /** Scope order used for grouping and for showing all scopes. */
-export const SLASH_SCOPES: readonly SlashScope[] = ['quran', 'sunnah', 'albayan', 'notes', 'books', 'lectures'];
+export const SLASH_SCOPES: readonly SlashScope[] = ['quran', 'sunnah', 'albayan', 'notes', 'books', 'lectures', 'dictionary', 'people', 'wikipedia'];
 
 /** Names and aliases that select each scope; both languages work in either interface language. */
 const SCOPE_TERMS: Record<SlashScope, readonly string[]> = {
@@ -14,6 +14,9 @@ const SCOPE_TERMS: Record<SlashScope, readonly string[]> = {
   notes: ['notes', 'ملاحظات', 'note'],
   books: ['books', 'كتب', 'book'],
   lectures: ['lectures', 'محاضرات', 'lecture'],
+  dictionary: ['dictionary', 'dict', 'معجم', 'قاموس', 'المعجم', 'القاموس'],
+  people: ['people', 'person', 'scholars', 'scholar', 'narrators', 'narrator', 'علماء', 'عالم', 'رواة', 'راوي', 'رجال', 'أعلام', 'اعلام'],
+  wikipedia: ['wikipedia', 'wiki', 'ويكيبيديا', 'ويكي'],
 };
 
 /** Uses established Arabic search normalization without conflating taa marbuta and haa. */

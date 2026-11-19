@@ -533,7 +533,7 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
       state: EditorState.create({
         doc: value,
         extensions: [
-          slashSearchExtension(() => ({ notes: latest.current.notes, books: latest.current.books, searchCorpus: latest.current.searchCorpus, labels: latest.current.slashSearchLabels ?? { scopes: { quran: latest.current.kindLabels.quran, sunnah: latest.current.kindLabels.hadith, albayan: latest.current.kindLabels.poem, notes: latest.current.kindLabels.note, books: latest.current.kindLabels.book, lectures: latest.current.kindLabels.book }, loading: '', empty: '', label: '' }, dir: latest.current.dir })),
+          slashSearchExtension(() => ({ notes: latest.current.notes, books: latest.current.books, searchCorpus: latest.current.searchCorpus, labels: latest.current.slashSearchLabels ?? { scopes: { quran: latest.current.kindLabels.quran, sunnah: latest.current.kindLabels.hadith, albayan: latest.current.kindLabels.poem, notes: latest.current.kindLabels.note, books: latest.current.kindLabels.book, lectures: latest.current.kindLabels.book, dictionary: 'Dictionary', people: 'People', wikipedia: 'Wikipedia' }, loading: '', empty: '', label: '' }, dir: latest.current.dir })),
           history(),
           markdown(),
           syntaxHighlighting(highlight),

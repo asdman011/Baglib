@@ -205,7 +205,8 @@ export function ResearchEditorView() {
         id => {
           const key = collectionKeys[id as keyof typeof collectionKeys];
           return key ? translations[current.current.lang][key] : id;
-        }
+        },
+        () => current.current.lang
       ),
       async connect(session) {
         await host.bridge.connect(session);

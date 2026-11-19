@@ -630,7 +630,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
               relationLabels={relationLabels(t)}
               currentNoteId={note?.id}
               slashSearchLabels={{
-                scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') },
+                scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures'), dictionary: t('slashScopeDictionary'), people: t('slashScopePeople'), wikipedia: t('slashScopeWikipedia') },
                 loading: t('quranLoading'),
                 empty: t('studyNoResults'),
                 label: t('studyLinkSearch'),
@@ -653,6 +653,12 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
                 sunnahScopeIsnadAndMatn: t('sunnahScopeIsnadAndMatn'),
                 sunnahScopeToggleLabel: t('sunnahScopeToggleLabel'),
                 sunnahUnsplitNotice: t('sunnahUnsplitNotice'),
+                personScholar: t('slashPersonScholar'),
+                personNarrator: t('slashPersonNarrator'),
+                wikiLangAr: t('slashWikiLangAr'),
+                wikiLangEn: t('slashWikiLangEn'),
+                wikiLangToggle: t('slashWikiLangToggle'),
+                wikiOffline: t('slashWikiOffline'),
               }} slashLabels={slashLabels}
               onMakeCards={makeCards}
               autoFocus={!note}
