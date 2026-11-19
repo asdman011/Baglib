@@ -7,10 +7,22 @@ import { isLectureFormat } from '../../../shared/lectures';
 import { openLecture } from '../../utils/lecture-navigation';
 import { openStudyNote } from '../../utils/study-navigation';
 import { matchesShortcut } from '../actions/shortcuts';
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { BookItem } from '../../types/library';
 import { translations, TranslationKey } from '../../translations';
 import { removeTempSelectionOverlay, clearActiveSelectionHighlight } from '../../libs/reader/highlight-manager';
+import {
+  activeTab as getActiveTab,
+  currentLocation,
+  findTab,
+  homeLocation,
+  newTab,
+  tabsReducer,
+  type TabLocation,
+  type TabsState,
+  type ViewSnapshot,
+  type WorkspaceView,
+} from '../../../shared/workspace-tabs';
 
 import type { CategoryNode } from '../../../shared/types/category';
 import type { TagWithCount } from '../../../shared/types/tag';
@@ -19,7 +31,7 @@ export type LayoutDirection = 'rtl' | 'ltr';
 export type ThemeMode = 'dark' | 'light';
 export type LanguageMode = 'ar' | 'en';
 export type SplitOrientationMode = 'vertical' | 'horizontal' | 'none' | 'full_notes';
-export type WorkspaceViewMode = 'islamic' | 'statistics' | 'dashboard' | 'planner' | 'pathways' | 'lectures' | 'quran' | 'sunnah' | 'bayan' | 'library' | 'categories' | 'reader' | 'notes' | 'notes-editor' | 'settings';
+export type WorkspaceViewMode = WorkspaceView;
 
 export interface PageNote {
   id: string;
@@ -30,7 +42,7 @@ export interface PageNote {
   createdAt: string;
 }
 
-export interface WorkspaceState {
+export interface WorkspaceGlobalState {
   researchEditorAvailable: boolean;
   dir: LayoutDirection;
   theme: ThemeMode;
@@ -41,16 +53,22 @@ export interface WorkspaceState {
   isSidebarCollapsed: boolean;
   isNavPinned: boolean;
   isNavPeekOpen: boolean;
-  
+
   // Real Books Library State
   books: BookItem[];
   booksLoading: boolean;
   booksError: boolean;
-  
+
   // Categories & Tags State (Story 10)
   categoryTree: CategoryNode[];
   allTags: TagWithCount[];
 
+  activeLibraryCategory: string;
+  isMobileNavOpen?: boolean;
+  isSupportSheetOpen?: boolean;
+}
+
+export interface TabScopeState {
   // Single Book Reading Flow State
   activeBook: BookItem | null;
   readingPage: number;
@@ -61,12 +79,11 @@ export interface WorkspaceState {
 
   // App Main View Mode
   viewMode: WorkspaceViewMode;
-  activeLibraryCategory: string;
-  isMobileNavOpen?: boolean;
-  isSupportSheetOpen?: boolean;
 }
 
-interface WorkspaceContextType extends WorkspaceState {
+export interface WorkspaceState extends WorkspaceGlobalState, TabScopeState {}
+
+export interface WorkspaceGlobalContextType extends WorkspaceGlobalState {
   toggleDirection: () => void;
   toggleTheme: () => void;
   toggleLanguage: () => void;
@@ -94,36 +111,96 @@ interface WorkspaceContextType extends WorkspaceState {
   setIsImportWizardOpen: (open: boolean) => void;
   droppedImportPaths: string[];
   setDroppedImportPaths: (paths: string[]) => void;
-  setViewMode: (mode: WorkspaceViewMode) => void;
   setActiveLibraryCategory: (catId: string) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  
+
   // Book Library Management
   refreshBooks: () => Promise<void>;
   refreshCategoryTree: () => Promise<void>;
   refreshTags: () => Promise<void>;
   addBook: (book: BookItem) => void;
-
   updateBook: (book: BookItem) => void;
   deleteBook: (bookId: string) => Promise<void>;
   updateBookReadingStatus: (bookId: string, status: import('../../types/library').ReadingStatus, progress?: number) => Promise<void>;
-  
+}
+
+export interface TabScopeContextType extends TabScopeState {
+  setViewMode: (mode: WorkspaceViewMode) => void;
+
   // Reader Flow
   openBookForReading: (book: BookItem) => void;
   closeReaderToLibrary: () => void;
   setReadingPage: (page: number) => void;
   setSplitOrientation: (mode: SplitOrientationMode) => void;
-  
+
   // Notes & Highlights
   addPageNote: (note: { pageNumber: number; highlightedText?: string; content: string }) => void;
   deletePageNote: (noteId: string) => void;
   addHighlight: (pageNumber: number, text: string, color?: string) => void;
 }
 
-const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
+export interface WorkspaceContextType extends WorkspaceGlobalContextType, TabScopeContextType {}
+
+export interface TabSnapshotHandlers {
+  saveState?: () => Promise<ViewSnapshot | undefined> | ViewSnapshot | undefined;
+  restoreState?: (snapshot: ViewSnapshot) => void;
+}
+
+export interface UseTabResult {
+  id: string;
+  isFocused: boolean;
+  location: TabLocation;
+  registerSnapshot: (handlers: TabSnapshotHandlers) => () => void;
+}
+
+export interface UseTabsResult {
+  state: TabsState;
+  open: (location: TabLocation, options?: { afterId?: string; background?: boolean }) => string;
+  close: (id: string) => void;
+  activate: (id: string) => void;
+  navigate: (id: string, location: TabLocation) => void;
+}
+
+interface BookSyncSubscriber {
+  onUpdate: (book: BookItem) => void;
+  onDelete: (bookId: string) => void;
+}
+
+interface TabsInternalApi {
+  subscribeBookSync: (subscriber: BookSyncSubscriber) => () => void;
+  notifyBookUpdate: (book: BookItem) => void;
+  notifyBookDelete: (bookId: string) => void;
+  publishFocusedScope: (tabId: string, scope: TabScopeContextType) => void;
+  unpublishFocusedScope: (tabId: string) => void;
+}
+
+const WorkspaceGlobalContext = createContext<WorkspaceGlobalContextType | undefined>(undefined);
+const TabScopeContext = createContext<TabScopeContextType | undefined>(undefined);
+const FocusedTabScopeContext = createContext<TabScopeContextType | undefined>(undefined);
+const TabContext = createContext<UseTabResult | undefined>(undefined);
+const TabsContext = createContext<UseTabsResult | undefined>(undefined);
+const TabsInternalContext = createContext<TabsInternalApi | undefined>(undefined);
+
 const GlobalImportWizard = React.lazy(() => import('../library/ImportWizardModal').then(module => ({ default: module.ImportWizardModal })));
 
-export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+function createInitialTabsState(): TabsState {
+  return {
+    tabs: [newTab('tab-1', homeLocation(), 0)],
+    activeId: 'tab-1',
+  };
+}
+
+function clearReaderSelection() {
+  try {
+    removeTempSelectionOverlay();
+    clearActiveSelectionHighlight();
+    if (typeof window !== 'undefined') {
+      window.getSelection()?.removeAllRanges();
+    }
+  } catch {}
+}
+
+export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialTabs?: TabsState }> = ({ children, initialTabs }) => {
   // Initialize with canonical server defaults to guarantee 100% hydration match with SSR
   const [researchEditorAvailable, setResearchEditorAvailable] = useState(false);
   useEffect(() => {
@@ -151,22 +228,30 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } catch {}
     });
   }, []);
+
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSearchHubOpen, setIsSearchHubOpen] = useState(false);
   const [isImportWizardOpen, setImportWizardOpen] = useState(false);
-  const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
+  const [droppedImportPaths, setDroppedImportPathsState] = useState<string[]>([]);
   const [importStarted, setImportStarted] = useState(false);
   const [importRequest, setImportRequest] = useState(0);
-  const setIsImportWizardOpen = (open: boolean) => {
+  const setIsImportWizardOpen = useCallback((open: boolean) => {
     if (open) { setImportStarted(true); setImportRequest(value => value + 1); }
     setImportWizardOpen(open);
-  };
+  }, []);
+  const setDroppedImportPaths = useCallback((paths: string[]) => {
+    setImportWizardOpen(open => {
+      if (!open) setDroppedImportPathsState(paths);
+      return open;
+    });
+  }, []);
+
   const [isZenMode, setIsZenMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   // Pin-or-Peek side navigation state (KEY-310)
   const [isNavPinned, setIsNavPinnedState] = useState<boolean>(true);
   const [isNavPeekOpen, setIsNavPeekOpen] = useState<boolean>(false);
-  const peekCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const peekCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     void Promise.resolve().then(async () => {
@@ -186,14 +271,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   }, []);
 
-  const cancelCloseNavPeek = React.useCallback(() => {
+  const cancelCloseNavPeek = useCallback(() => {
     if (peekCloseTimerRef.current) {
       clearTimeout(peekCloseTimerRef.current);
       peekCloseTimerRef.current = null;
     }
   }, []);
 
-  const setNavPinned = React.useCallback((pinned: boolean) => {
+  const setNavPinned = useCallback((pinned: boolean) => {
     cancelCloseNavPeek();
     setIsNavPinnedState(pinned);
     setIsNavPeekOpen(false);
@@ -205,7 +290,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch {}
   }, [cancelCloseNavPeek]);
 
-  const toggleNavPinned = React.useCallback(() => {
+  const toggleNavPinned = useCallback(() => {
     cancelCloseNavPeek();
     setIsNavPinnedState((prev) => {
       const next = !prev;
@@ -220,19 +305,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   }, [cancelCloseNavPeek]);
 
-  const openNavPeek = React.useCallback(() => {
+  const openNavPeek = useCallback(() => {
     cancelCloseNavPeek();
     if (!isNavPinned) {
       setIsNavPeekOpen(true);
     }
   }, [cancelCloseNavPeek, isNavPinned]);
 
-  const closeNavPeek = React.useCallback(() => {
+  const closeNavPeek = useCallback(() => {
     cancelCloseNavPeek();
     setIsNavPeekOpen(false);
   }, [cancelCloseNavPeek]);
 
-  const scheduleCloseNavPeek = React.useCallback(() => {
+  const scheduleCloseNavPeek = useCallback(() => {
     cancelCloseNavPeek();
     peekCloseTimerRef.current = setTimeout(() => {
       setIsNavPeekOpen(false);
@@ -257,51 +342,37 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     window.addEventListener('keydown', handleNavKey);
     return () => window.removeEventListener('keydown', handleNavKey);
   }, [toggleNavPinned, isNavPeekOpen, isNavPinned, closeNavPeek]);
+
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSupportSheetOpen, setIsSupportSheetOpen] = useState(false);
-  const toggleMobileNav = () => setIsMobileNavOpen((prev) => !prev);
-  
-  // Navigation & View Mode
-  const [viewMode, setViewModeState] = useState<WorkspaceViewMode>('dashboard');
-  const setViewMode = React.useCallback((mode: WorkspaceViewMode) => {
-    const guard = mode === 'notes-editor' ? undefined : editorLeaveGuard();
-    if (guard) {
-      void guard().then(allowed => {
-        if (allowed) {
-          setViewModeState(mode);
-          setIsSidebarCollapsed(true);
-        }
-      });
-    } else {
-      setViewModeState(mode);
-      setIsSidebarCollapsed(true);
-    }
-  }, []);
+  const toggleMobileNav = useCallback(() => setIsMobileNavOpen((prev) => !prev), []);
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<string>('ALL');
-  
+
   // Pure Real Data (Zero Mock Items)
   const [books, setBooks] = useState<BookItem[]>([]);
+  const booksRef = useRef<BookItem[]>(books);
+  useEffect(() => { booksRef.current = books; }, [books]);
   const [booksLoading, setBooksLoading] = useState(true);
   const [booksError, setBooksError] = useState(false);
   const [categoryTree, setCategoryTree] = useState<CategoryNode[]>([]);
   const [allTags, setAllTags] = useState<TagWithCount[]>([]);
-  const [activeBook, setActiveBook] = useState<BookItem | null>(null);
-  const [readingPage, setReadingPage] = useState<number>(1);
-  const [totalPages] = useState<number>(100);
-  const [splitOrientation, setSplitOrientation] = useState<SplitOrientationMode>('none');
 
-  const [bookNotes, setBookNotes] = useState<PageNote[]>([]);
-  useEffect(() => {
-    const refresh = () => {
-      const api = window.electronAPI;
-      if (api?.getAllNotes) void api.getAllNotes().then(notes => { if (Array.isArray(notes)) setBookNotes(notes); }).catch(() => {});
+  // Book sync subscribers for mounted TabScopes
+  const bookSubscribersRef = useRef<Set<BookSyncSubscriber>>(new Set());
+  const subscribeBookSync = useCallback((subscriber: BookSyncSubscriber) => {
+    bookSubscribersRef.current.add(subscriber);
+    return () => {
+      bookSubscribersRef.current.delete(subscriber);
     };
-    window.addEventListener('baglib:notes-changed', refresh);
-    return () => window.removeEventListener('baglib:notes-changed', refresh);
   }, []);
-  const [highlights, setHighlights] = useState<{ id: string; pageNumber: number; text: string; color: string }[]>([]);
+  const notifyBookUpdate = useCallback((book: BookItem) => {
+    for (const sub of bookSubscribersRef.current) sub.onUpdate(book);
+  }, []);
+  const notifyBookDelete = useCallback((bookId: string) => {
+    for (const sub of bookSubscribersRef.current) sub.onDelete(bookId);
+  }, []);
 
-  const toggleLanguage = () => {
+  const toggleLanguage = useCallback(() => {
     setLang((prev) => {
       const nextLang = prev === 'ar' ? 'en' : 'ar';
       const nextDir = nextLang === 'ar' ? 'rtl' : 'ltr';
@@ -315,9 +386,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       return nextLang;
     });
-  };
+  }, []);
 
-  const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
+  const t = useCallback((key: TranslationKey, params?: Record<string, string | number>): string => {
     let text = translations[lang][key] || key;
     if (params) {
       for (const [k, v] of Object.entries(params)) {
@@ -325,16 +396,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     }
     return text;
-  };
+  }, [lang]);
 
-  const toggleDirection = () => setDir((prev) => (prev === 'rtl' ? 'ltr' : 'rtl'));
-  const toggleZenMode = () => setIsZenMode((prev) => !prev);
-  const toggleSidebar = () => setIsSidebarCollapsed((prev) => !prev);
-  const setSidebarCollapsed = React.useCallback((collapsed: boolean) => setIsSidebarCollapsed(collapsed), []);
-  const collapseSidebar = React.useCallback(() => setIsSidebarCollapsed(true), []);
-  const expandSidebar = React.useCallback(() => setIsSidebarCollapsed(false), []);
-  
-  const toggleTheme = () => {
+  const toggleDirection = useCallback(() => setDir((prev) => (prev === 'rtl' ? 'ltr' : 'rtl')), []);
+  const toggleZenMode = useCallback(() => setIsZenMode((prev) => !prev), []);
+  const toggleSidebar = useCallback(() => setIsSidebarCollapsed((prev) => !prev), []);
+  const setSidebarCollapsed = useCallback((collapsed: boolean) => setIsSidebarCollapsed(collapsed), []);
+  const collapseSidebar = useCallback(() => setIsSidebarCollapsed(true), []);
+  const expandSidebar = useCallback(() => setIsSidebarCollapsed(false), []);
+
+  const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
       if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
@@ -349,17 +420,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       return next;
     });
-  };
+  }, []);
 
   // Refresh books from SQLite database
-  const refreshBooks = async () => {
+  const refreshBooks = useCallback(async () => {
     if (typeof window !== 'undefined' && window.electronAPI?.getAllBooks) {
       try {
         setBooksLoading(true);
         const fetchedBooks: BookItem[] = await window.electronAPI.getAllBooks();
         setBooksError(false);
         if (Array.isArray(fetchedBooks)) {
-          // Deduplicate fetchedBooks by unique ID and unique filePath
           const seenIds = new Set<string>();
           const seenPaths = new Set<string>();
           const uniqueBooks: BookItem[] = [];
@@ -379,7 +449,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setBooksLoading(false);
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -387,10 +457,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
     window.addEventListener('baglib:refresh-books', handleRefresh);
     return () => window.removeEventListener('baglib:refresh-books', handleRefresh);
-  }, []);
+  }, [refreshBooks]);
 
-  // Refresh category tree with direct and recursive counts
-  const refreshCategoryTree = async () => {
+  const refreshCategoryTree = useCallback(async () => {
     if (typeof window !== 'undefined') {
       try {
         const api = window.electronAPI;
@@ -405,21 +474,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         console.error('[baglib/ui] Failed to refresh category tree:', err);
       }
     }
-  };
+  }, []);
 
-  // Refresh tags with work counts
-  const refreshTags = async () => {
+  const refreshTags = useCallback(async () => {
     if (typeof window !== 'undefined' && window.electronAPI?.tags) {
       try {
-        const tags = await (window.electronAPI).tags.getAll();
+        const tags = await window.electronAPI.tags.getAll();
         setAllTags(tags || []);
       } catch (err: unknown) {
         console.error('[baglib/ui] Failed to refresh tags:', err);
       }
     }
-  };
+  }, []);
 
-  // Load books, categories, tags, and notes from SQLite database on mount
+  // Load books, categories, tags from SQLite database on mount
   useEffect(() => {
     const api = window.electronAPI;
     let alive = true;
@@ -437,29 +505,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const categoriesRequest = api?.categories?.getTree?.({ includeCounts: true }) ?? api?.getCategoryTree?.({ includeCounts: true });
     void categoriesRequest?.then(tree => { if (alive) setCategoryTree(tree || []); }).catch(console.warn);
     void api?.tags?.getAll?.().then(tags => { if (alive) setAllTags(tags || []); }).catch(console.warn);
-    if (typeof window !== 'undefined' && typeof window.electronAPI?.getAllNotes === 'function') {
-      (window.electronAPI)
-        .getAllNotes()
-        .then((fetchedNotes: PageNote[]) => {
-          if (Array.isArray(fetchedNotes)) {
-            setBookNotes(fetchedNotes);
-          }
-        })
-        .catch((err) => {
-          console.error('[baglib/ui] Failed to load notes from database:', err);
-        });
-    }
     return () => { alive = false; };
   }, []);
 
   // Add or Update book in library with SQLite persistence
-  const addBook = async (newBook: BookItem) => {
-    // 1. Optimistic state update so UI changes immediately
+  const addBook = useCallback(async (newBook: BookItem) => {
     setBooks((prev) => {
       const existingIdx = prev.findIndex(
         (b) => (b.id && b.id === newBook.id) || (newBook.filePath && b.filePath === newBook.filePath)
       );
-
       if (existingIdx >= 0) {
         const updated = [...prev];
         updated[existingIdx] = { ...updated[existingIdx], ...newBook };
@@ -473,10 +527,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return [newBook, ...filtered];
     });
 
-    // Sync activeBook if currently open in reader
-    setActiveBook((prev) => (prev && prev.id === newBook.id ? { ...prev, ...newBook } : prev));
+    notifyBookUpdate(newBook);
 
-    // 2. Persist to SQLite
     if (typeof window !== 'undefined' && window.electronAPI?.addBook) {
       try {
         const savedBook = await window.electronAPI.addBook(newBook);
@@ -491,21 +543,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             const filtered = prev.filter((b) => b.id !== savedBook.id);
             return [{ ...newBook, ...savedBook }, ...filtered];
           });
-          setActiveBook((prev) => (prev && (prev.id === savedBook.id || prev.id === newBook.id) ? { ...prev, ...savedBook } : prev));
+          notifyBookUpdate(savedBook);
         }
       } catch (err) {
         console.error('[baglib/ui] Failed to persist book to SQLite:', err);
       }
     }
-  };
+  }, [notifyBookUpdate]);
 
-  const updateBook = async (updatedBook: BookItem) => {
-    // 1. Optimistic state update so UI changes immediately
+  const updateBook = useCallback(async (updatedBook: BookItem) => {
     setBooks((prev) => {
       const existingIdx = prev.findIndex(
         (b) => (b.id && b.id === updatedBook.id) || (updatedBook.filePath && b.filePath === updatedBook.filePath)
       );
-
       if (existingIdx >= 0) {
         const updated = [...prev];
         updated[existingIdx] = { ...updated[existingIdx], ...updatedBook };
@@ -519,10 +569,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return [updatedBook, ...filtered];
     });
 
-    // Sync activeBook if currently open in reader
-    setActiveBook((prev) => (prev && prev.id === updatedBook.id ? { ...prev, ...updatedBook } : prev));
+    notifyBookUpdate(updatedBook);
 
-    // 2. Persist to SQLite
     if (typeof window !== 'undefined') {
       const api = window.electronAPI;
       try {
@@ -538,7 +586,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               }
               return prev;
             });
-            setActiveBook((prev) => (prev && (prev.id === res.id || prev.id === updatedBook.id) ? { ...prev, ...res } : prev));
+            notifyBookUpdate(res);
           }
         } else if (api?.addBook) {
           const savedBook = await api.addBook(updatedBook);
@@ -552,18 +600,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               }
               return prev;
             });
-            setActiveBook((prev) => (prev && (prev.id === savedBook.id || prev.id === updatedBook.id) ? { ...prev, ...savedBook } : prev));
+            notifyBookUpdate(savedBook);
           }
         }
       } catch (err) {
         console.error('[baglib/ui] Failed to update book in SQLite:', err);
       }
     }
-  };
+  }, [notifyBookUpdate]);
 
-
-  // Direct fast reading status updater
-  const updateBookReadingStatus = async (
+  const updateBookReadingStatus = useCallback(async (
     bookId: string,
     status: import('../../types/library').ReadingStatus,
     progress?: number
@@ -572,7 +618,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       ? progress
       : (status === 'completed' ? 100 : (status === 'unread' ? 0 : undefined));
 
-    // Optimistic UI update
     setBooks((prev) =>
       prev.map((b) => {
         if (b.id !== bookId) return b;
@@ -593,7 +638,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           console.error('[baglib/ui] Failed to update reading status in SQLite:', err);
         }
       } else if (api?.addBook) {
-        const current = books.find((b) => b.id === bookId);
+        const current = booksRef.current.find((b) => b.id === bookId);
         if (current) {
           api.addBook({
             ...current,
@@ -603,9 +648,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       }
     }
-  };
+  }, []);
 
-  const deleteBook = async (bookId: string) => {
+  const deleteBook = useCallback(async (bookId: string) => {
     if (typeof window !== 'undefined' && window.electronAPI?.deleteBook) {
       try {
         await window.electronAPI.deleteBook(bookId);
@@ -616,97 +661,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
-    if (activeBook?.id === bookId) {
-      setActiveBook(null);
-      setViewMode('library');
-    }
-  };
-
-  const safeSetViewMode = (mode: WorkspaceViewMode) => {
-    setIsMobileNavOpen(false);
-    setIsSidebarCollapsed(true);
-    if (viewMode === 'reader' && mode !== 'reader') {
-      try {
-        removeTempSelectionOverlay();
-        clearActiveSelectionHighlight();
-        if (typeof window !== 'undefined') {
-          window.getSelection()?.removeAllRanges();
-        }
-      } catch {}
-    }
-    setViewMode(mode);
-  };
-
-  const openBookForReading = (book: BookItem) => {
-    if (book.workType === 'lecture' && book.filePath && isLectureFormat(book.digitalFormat)) {
-      openLecture({ id: book.id, seconds: 0 });
-      setViewMode('lectures');
-      return;
-    }
-    try {
-      removeTempSelectionOverlay();
-      clearActiveSelectionHighlight();
-      if (typeof window !== 'undefined') {
-        window.getSelection()?.removeAllRanges();
-      }
-    } catch {}
-    setActiveBook(book);
-    setViewMode('reader');
-    setReadingPage(1);
-    setSplitOrientation('none');
-  };
-
-  const closeReaderToLibrary = () => {
-    try {
-      removeTempSelectionOverlay();
-      clearActiveSelectionHighlight();
-      if (typeof window !== 'undefined') {
-        window.getSelection()?.removeAllRanges();
-      }
-    } catch {}
-    setViewMode('library');
-  };
-
-  const addPageNote = async ({ pageNumber, highlightedText, content }: { pageNumber: number; highlightedText?: string; content: string }) => {
-    if (!content.trim() || !activeBook) return;
-    const newNote: PageNote = {
-      id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      bookId: activeBook.id,
-      pageNumber,
-      highlightedText,
-      content,
-      createdAt: new Date().toISOString(),
-    };
-
-    if (typeof window !== 'undefined' && typeof window.electronAPI?.addNote === 'function') {
-      try {
-        await (window.electronAPI).addNote(newNote);
-      } catch (err) {
-        console.error('[baglib/ui] Failed to persist note to SQLite:', err);
-      }
-    }
-
-    setBookNotes((prev) => [newNote, ...prev]);
-  };
-
-  const deletePageNote = async (noteId: string) => {
-    if (typeof window !== 'undefined' && typeof window.electronAPI?.deleteNote === 'function') {
-      try {
-        await (window.electronAPI).deleteNote(noteId);
-      } catch (err) {
-        console.error('[baglib/ui] Failed to delete note from SQLite:', err);
-      }
-    }
-    setBookNotes((prev) => prev.filter((n) => n.id !== noteId));
-  };
-
-  const addHighlight = (pageNumber: number, text: string, color = 'bg-amber-500/30') => {
-    if (!text.trim()) return;
-    setHighlights((prev) => [
-      ...prev,
-      { id: `hl-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, pageNumber, text, color }
-    ]);
-  };
+    notifyBookDelete(bookId);
+  }, [notifyBookDelete]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -726,7 +682,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.documentElement.dir = dir;
@@ -734,91 +689,469 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [dir]);
 
-  return (
-    <WorkspaceContext.Provider
-      value={{
-        researchEditorAvailable,
-        dir,
-        theme,
-        lang,
-        isCommandPaletteOpen,
-        isZenMode,
-        isSidebarCollapsed,
-        isNavPinned,
-        isNavPeekOpen,
-        toggleNavPinned,
-        setNavPinned,
-        setIsNavPeekOpen,
-        openNavPeek,
-        closeNavPeek,
-        scheduleCloseNavPeek,
-        cancelCloseNavPeek,
-        isMobileNavOpen,
-        setIsMobileNavOpen,
-        toggleMobileNav,
-        isSupportSheetOpen,
-        setIsSupportSheetOpen,
-        books,
-        booksLoading,
-        booksError,
-        categoryTree,
-        allTags,
-        activeBook,
-        readingPage,
-        totalPages,
-        splitOrientation,
-        bookNotes,
-        highlights,
-        viewMode,
-        toggleDirection,
-        toggleTheme,
-        toggleLanguage,
-        t,
-        toggleZenMode,
-        toggleSidebar,
-        setSidebarCollapsed,
-        collapseSidebar,
-        expandSidebar,
-        setCommandPaletteOpen: setIsCommandPaletteOpen,
-        isSearchHubOpen,
-        setSearchHubOpen: setIsSearchHubOpen,
-        isImportWizardOpen,
-        setIsImportWizardOpen,
-        droppedImportPaths,
-        setDroppedImportPaths: paths => { if (!isImportWizardOpen) setDroppedImportPaths(paths); },
-        setViewMode: safeSetViewMode,
-        activeLibraryCategory,
-        setActiveLibraryCategory,
-        refreshBooks,
-        refreshCategoryTree,
-        refreshTags,
-        addBook,
-        updateBook,
-        deleteBook,
+  const globalValue = useMemo<WorkspaceGlobalContextType>(() => ({
+    researchEditorAvailable,
+    dir,
+    theme,
+    lang,
+    isCommandPaletteOpen,
+    isSearchHubOpen,
+    isZenMode,
+    isSidebarCollapsed,
+    isNavPinned,
+    isNavPeekOpen,
+    toggleNavPinned,
+    setNavPinned,
+    setIsNavPeekOpen,
+    openNavPeek,
+    closeNavPeek,
+    scheduleCloseNavPeek,
+    cancelCloseNavPeek,
+    isMobileNavOpen,
+    setIsMobileNavOpen,
+    toggleMobileNav,
+    isSupportSheetOpen,
+    setIsSupportSheetOpen,
+    books,
+    booksLoading,
+    booksError,
+    categoryTree,
+    allTags,
+    toggleDirection,
+    toggleTheme,
+    toggleLanguage,
+    t,
+    toggleZenMode,
+    toggleSidebar,
+    setSidebarCollapsed,
+    collapseSidebar,
+    expandSidebar,
+    setCommandPaletteOpen: setIsCommandPaletteOpen,
+    setSearchHubOpen: setIsSearchHubOpen,
+    isImportWizardOpen,
+    setIsImportWizardOpen,
+    droppedImportPaths,
+    setDroppedImportPaths,
+    activeLibraryCategory,
+    setActiveLibraryCategory,
+    refreshBooks,
+    refreshCategoryTree,
+    refreshTags,
+    addBook,
+    updateBook,
+    deleteBook,
+    updateBookReadingStatus,
+  }), [
+    researchEditorAvailable,
+    dir,
+    theme,
+    lang,
+    isCommandPaletteOpen,
+    isSearchHubOpen,
+    isZenMode,
+    isSidebarCollapsed,
+    isNavPinned,
+    isNavPeekOpen,
+    toggleNavPinned,
+    setNavPinned,
+    openNavPeek,
+    closeNavPeek,
+    scheduleCloseNavPeek,
+    cancelCloseNavPeek,
+    isMobileNavOpen,
+    toggleMobileNav,
+    isSupportSheetOpen,
+    books,
+    booksLoading,
+    booksError,
+    categoryTree,
+    allTags,
+    toggleDirection,
+    toggleTheme,
+    toggleLanguage,
+    t,
+    toggleZenMode,
+    toggleSidebar,
+    setSidebarCollapsed,
+    collapseSidebar,
+    expandSidebar,
+    isImportWizardOpen,
+    setIsImportWizardOpen,
+    droppedImportPaths,
+    setDroppedImportPaths,
+    activeLibraryCategory,
+    refreshBooks,
+    refreshCategoryTree,
+    refreshTags,
+    addBook,
+    updateBook,
+    deleteBook,
+    updateBookReadingStatus,
+  ]);
 
-        updateBookReadingStatus,
-        openBookForReading,
-        closeReaderToLibrary,
-        setReadingPage,
-        setSplitOrientation,
-        addPageNote,
-        deletePageNote,
-        addHighlight,
-      }}
-    >
-      <ToastProvider>
-        <MediaCoverBackfill />
-        {children}
-        {importStarted && <React.Suspense fallback={null}><GlobalImportWizard isOpen={isImportWizardOpen} initialPaths={droppedImportPaths} requestId={importRequest} onClose={() => { setImportWizardOpen(false); setDroppedImportPaths([]); }} /></React.Suspense>}
-      </ToastProvider>
-    </WorkspaceContext.Provider>
+  return (
+    <WorkspaceGlobalContext.Provider value={globalValue}>
+      <TabsProvider
+        initialTabs={initialTabs}
+        subscribeBookSync={subscribeBookSync}
+        notifyBookUpdate={notifyBookUpdate}
+        notifyBookDelete={notifyBookDelete}
+      >
+        <ToastProvider>
+          <MediaCoverBackfill />
+          {children}
+          {importStarted && (
+            <React.Suspense fallback={null}>
+              <GlobalImportWizard
+                isOpen={isImportWizardOpen}
+                initialPaths={droppedImportPaths}
+                requestId={importRequest}
+                onClose={() => { setImportWizardOpen(false); setDroppedImportPathsState([]); }}
+              />
+            </React.Suspense>
+          )}
+        </ToastProvider>
+      </TabsProvider>
+    </WorkspaceGlobalContext.Provider>
   );
 };
 
-export const useWorkspace = () => {
-  const context = useContext(WorkspaceContext);
-  if (!context) {
+interface TabsProviderProps {
+  children: React.ReactNode;
+  initialTabs?: TabsState;
+  subscribeBookSync: (subscriber: BookSyncSubscriber) => () => void;
+  notifyBookUpdate: (book: BookItem) => void;
+  notifyBookDelete: (bookId: string) => void;
+}
+
+const TabsProvider: React.FC<TabsProviderProps> = ({
+  children,
+  initialTabs,
+  subscribeBookSync,
+  notifyBookUpdate,
+  notifyBookDelete,
+}) => {
+  const [state, dispatch] = useReducer(tabsReducer, initialTabs, (init) => init ?? createInitialTabsState());
+  const nextIdRef = useRef(2);
+  const allocateId = useCallback(() => `tab-${nextIdRef.current++}`, []);
+
+  const open = useCallback((location: TabLocation, options?: { afterId?: string; background?: boolean }) => {
+    const id = allocateId();
+    dispatch({ type: 'open', id, location, now: Date.now(), afterId: options?.afterId, background: options?.background });
+    return id;
+  }, [allocateId]);
+
+  const close = useCallback((id: string) => {
+    const homeId = allocateId();
+    dispatch({ type: 'close', id, homeId, now: Date.now() });
+  }, [allocateId]);
+
+  const activate = useCallback((id: string) => {
+    dispatch({ type: 'activate', id, now: Date.now() });
+  }, []);
+
+  const navigate = useCallback((id: string, location: TabLocation) => {
+    dispatch({ type: 'navigate', id, location, now: Date.now() });
+  }, []);
+
+  const tabsValue = useMemo<UseTabsResult>(() => ({
+    state,
+    open,
+    close,
+    activate,
+    navigate,
+  }), [state, open, close, activate, navigate]);
+
+  // Focused scope registry so `useWorkspace()` outside any `<TabScope>` reads the focused tab's scope.
+  const [publishedFocus, setPublishedFocus] = useState<{ tabId: string; scope: TabScopeContextType } | null>(null);
+  const publishFocusedScope = useCallback((tabId: string, scope: TabScopeContextType) => {
+    setPublishedFocus(prev => (prev && prev.tabId === tabId && prev.scope === scope ? prev : { tabId, scope }));
+  }, []);
+  const unpublishFocusedScope = useCallback((tabId: string) => {
+    setPublishedFocus(prev => (prev && prev.tabId === tabId ? null : prev));
+  }, []);
+
+  const internalApi = useMemo<TabsInternalApi>(() => ({
+    subscribeBookSync,
+    notifyBookUpdate,
+    notifyBookDelete,
+    publishFocusedScope,
+    unpublishFocusedScope,
+  }), [subscribeBookSync, notifyBookUpdate, notifyBookDelete, publishFocusedScope, unpublishFocusedScope]);
+
+  const focusedTabId = state.activeId ?? state.tabs[0]?.id ?? 'tab-1';
+
+  return (
+    <TabsContext.Provider value={tabsValue}>
+      <TabsInternalContext.Provider value={internalApi}>
+        <FallbackTabScopeBridge tabId={focusedTabId} publishedFocus={publishedFocus}>
+          {children}
+        </FallbackTabScopeBridge>
+      </TabsInternalContext.Provider>
+    </TabsContext.Provider>
+  );
+};
+
+/**
+ * Provides a working `TabScope` for `FocusedTabScopeContext` even before a child `<TabScope>` mounts
+ * (or in tests that mount `<WorkspaceProvider>` directly without `<AppLayout>`).
+ * When a child `<TabScope>` for `tabId` is mounted, its published scope takes precedence.
+ */
+const FallbackTabScopeBridge: React.FC<{
+  tabId: string;
+  publishedFocus: { tabId: string; scope: TabScopeContextType } | null;
+  children: React.ReactNode;
+}> = ({ tabId, publishedFocus, children }) => {
+  const scope = useTabScopeState(tabId);
+  const activeScope = publishedFocus && publishedFocus.tabId === tabId ? publishedFocus.scope : scope;
+  return (
+    <FocusedTabScopeContext.Provider value={activeScope}>
+      {children}
+    </FocusedTabScopeContext.Provider>
+  );
+};
+
+function useTabScopeState(tabId: string): TabScopeContextType {
+  const global = useContext(WorkspaceGlobalContext);
+  const tabsCtx = useContext(TabsContext);
+  const internal = useContext(TabsInternalContext);
+
+  const tab = tabsCtx ? findTab(tabsCtx.state, tabId) : undefined;
+  const location = tab ? currentLocation(tab) : homeLocation();
+  const viewMode: WorkspaceViewMode = location.view;
+  const viewModeRef = useRef<WorkspaceViewMode>(viewMode);
+  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+
+  const [activeBook, setActiveBook] = useState<BookItem | null>(null);
+  const activeBookRef = useRef<BookItem | null>(activeBook);
+  useEffect(() => { activeBookRef.current = activeBook; }, [activeBook]);
+  const [readingPage, setReadingPage] = useState<number>(1);
+  const [totalPages] = useState<number>(100);
+  const [splitOrientation, setSplitOrientation] = useState<SplitOrientationMode>('none');
+  const [bookNotes, setBookNotes] = useState<PageNote[]>([]);
+  const [highlights, setHighlights] = useState<{ id: string; pageNumber: number; text: string; color: string }[]>([]);
+
+  useEffect(() => {
+    const refresh = () => {
+      const api = window.electronAPI;
+      if (api?.getAllNotes) void api.getAllNotes().then(notes => { if (Array.isArray(notes)) setBookNotes(notes); }).catch(() => {});
+    };
+    refresh();
+    window.addEventListener('baglib:notes-changed', refresh);
+    return () => window.removeEventListener('baglib:notes-changed', refresh);
+  }, []);
+
+  const setIsMobileNavOpen = global?.setIsMobileNavOpen;
+  const setIsSidebarCollapsed = global?.setSidebarCollapsed;
+  const navigateTab = tabsCtx?.navigate;
+
+  const setViewMode = useCallback((mode: WorkspaceViewMode) => {
+    const apply = () => {
+      setIsMobileNavOpen?.(false);
+      setIsSidebarCollapsed?.(true);
+      if (viewModeRef.current === 'reader' && mode !== 'reader') {
+        clearReaderSelection();
+      }
+      navigateTab?.(tabId, { view: mode, title: '' });
+    };
+    const guard = mode === 'notes-editor' ? undefined : editorLeaveGuard();
+    if (guard) {
+      void guard().then(allowed => {
+        if (allowed) apply();
+      });
+    } else {
+      apply();
+    }
+  }, [tabId, navigateTab, setIsMobileNavOpen, setIsSidebarCollapsed]);
+
+  const subscribeBookSync = internal?.subscribeBookSync;
+  useEffect(() => {
+    if (!subscribeBookSync) return;
+    return subscribeBookSync({
+      onUpdate: (book) => {
+        setActiveBook((prev) => (prev && prev.id === book.id ? { ...prev, ...book } : prev));
+      },
+      onDelete: (bookId) => {
+        if (activeBookRef.current?.id === bookId) {
+          setActiveBook(null);
+          setViewMode('library');
+        }
+      },
+    });
+  }, [subscribeBookSync, setViewMode]);
+
+  const openBookForReading = useCallback((book: BookItem) => {
+    if (book.workType === 'lecture' && book.filePath && isLectureFormat(book.digitalFormat)) {
+      openLecture({ id: book.id, seconds: 0, tabId });
+      setViewMode('lectures');
+      return;
+    }
+    clearReaderSelection();
+    setActiveBook(book);
+    setViewMode('reader');
+    setReadingPage(1);
+    setSplitOrientation('none');
+  }, [tabId, setViewMode]);
+
+  const closeReaderToLibrary = useCallback(() => {
+    clearReaderSelection();
+    setViewMode('library');
+  }, [setViewMode]);
+
+  const addPageNote = useCallback(async ({ pageNumber, highlightedText, content }: { pageNumber: number; highlightedText?: string; content: string }) => {
+    const book = activeBookRef.current;
+    if (!content.trim() || !book) return;
+    const newNote: PageNote = {
+      id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      bookId: book.id,
+      pageNumber,
+      highlightedText,
+      content,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.addNote === 'function') {
+      try {
+        await window.electronAPI.addNote(newNote);
+      } catch (err) {
+        console.error('[baglib/ui] Failed to persist note to SQLite:', err);
+      }
+    }
+
+    setBookNotes((prev) => [newNote, ...prev]);
+  }, []);
+
+  const deletePageNote = useCallback(async (noteId: string) => {
+    if (typeof window !== 'undefined' && typeof window.electronAPI?.deleteNote === 'function') {
+      try {
+        await window.electronAPI.deleteNote(noteId);
+      } catch (err) {
+        console.error('[baglib/ui] Failed to delete note from SQLite:', err);
+      }
+    }
+    setBookNotes((prev) => prev.filter((n) => n.id !== noteId));
+  }, []);
+
+  const addHighlight = useCallback((pageNumber: number, text: string, color = 'bg-amber-500/30') => {
+    if (!text.trim()) return;
+    setHighlights((prev) => [
+      ...prev,
+      { id: `hl-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, pageNumber, text, color },
+    ]);
+  }, []);
+
+  return useMemo<TabScopeContextType>(() => ({
+    activeBook,
+    readingPage,
+    totalPages,
+    splitOrientation,
+    bookNotes,
+    highlights,
+    viewMode,
+    setViewMode,
+    openBookForReading,
+    closeReaderToLibrary,
+    setReadingPage,
+    setSplitOrientation,
+    addPageNote,
+    deletePageNote,
+    addHighlight,
+  }), [
+    activeBook,
+    readingPage,
+    totalPages,
+    splitOrientation,
+    bookNotes,
+    highlights,
+    viewMode,
+    setViewMode,
+    openBookForReading,
+    closeReaderToLibrary,
+    addPageNote,
+    deletePageNote,
+    addHighlight,
+  ]);
+}
+
+export const TabScope: React.FC<{ tabId: string; children: React.ReactNode }> = ({ tabId, children }) => {
+  const tabsCtx = useContext(TabsContext);
+  const internal = useContext(TabsInternalContext);
+  const scopeValue = useTabScopeState(tabId);
+  const snapshotHandlersRef = useRef<TabSnapshotHandlers | null>(null);
+
+  const registerSnapshot = useCallback((handlers: TabSnapshotHandlers) => {
+    snapshotHandlersRef.current = handlers;
+    return () => {
+      if (snapshotHandlersRef.current === handlers) {
+        snapshotHandlersRef.current = null;
+      }
+    };
+  }, []);
+
+  const tab = tabsCtx ? findTab(tabsCtx.state, tabId) : undefined;
+  const activeTab = tabsCtx ? getActiveTab(tabsCtx.state) : undefined;
+  const isFocused = tabsCtx ? (activeTab ? activeTab.id === tabId : tabsCtx.state.tabs[0]?.id === tabId) : true;
+  const location = tab ? currentLocation(tab) : homeLocation();
+
+  const tabResult = useMemo<UseTabResult>(() => ({
+    id: tabId,
+    isFocused,
+    location,
+    registerSnapshot,
+  }), [tabId, isFocused, location, registerSnapshot]);
+
+  const publishFocusedScope = internal?.publishFocusedScope;
+  const unpublishFocusedScope = internal?.unpublishFocusedScope;
+
+  useLayoutEffect(() => {
+    if (isFocused && publishFocusedScope) {
+      publishFocusedScope(tabId, scopeValue);
+    }
+  }, [isFocused, tabId, scopeValue, publishFocusedScope]);
+
+  useLayoutEffect(() => {
+    return () => {
+      unpublishFocusedScope?.(tabId);
+    };
+  }, [tabId, unpublishFocusedScope]);
+
+  return (
+    <TabContext.Provider value={tabResult}>
+      <TabScopeContext.Provider value={scopeValue}>
+        {children}
+      </TabScopeContext.Provider>
+    </TabContext.Provider>
+  );
+};
+
+export const useWorkspace = (): WorkspaceContextType => {
+  const global = useContext(WorkspaceGlobalContext);
+  if (!global) {
     throw new Error('useWorkspace must be used within a WorkspaceProvider');
   }
-  return context;
+  const localTab = useContext(TabScopeContext);
+  const tab = localTab ?? React.use(FocusedTabScopeContext);
+  if (!tab) {
+    throw new Error('useWorkspace must be used within a WorkspaceProvider');
+  }
+  return useMemo(() => ({ ...global, ...tab }), [global, tab]);
+};
+
+export const useTab = (): UseTabResult => {
+  const tab = useContext(TabContext);
+  if (!tab) {
+    throw new Error('useTab must be used within a TabScope');
+  }
+  return tab;
+};
+
+/** Optional `useTab()` for views that may be mounted standalone in unit tests without a `TabScope`. */
+export const useOptionalTab = (): UseTabResult | null => useContext(TabContext) ?? null;
+
+export const useTabs = (): UseTabsResult => {
+  const tabs = useContext(TabsContext);
+  if (!tabs) {
+    throw new Error('useTabs must be used within a WorkspaceProvider');
+  }
+  return tabs;
 };

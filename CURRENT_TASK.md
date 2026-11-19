@@ -81,6 +81,32 @@ A "source only" option in Settings shares the plain material instead.
 
 **Pending:** implementation. The setting is planned for the settings key-value store, so no schema change is expected. Any new field would be a hard gate.
 
+## KEY-418 WS-2: WorkspaceContext split into global state and per-tab TabScope - 2026-11-19 - Agent: Antigravity
+
+**Request.** Split `WorkspaceContext.tsx` into global state and a per-tab `TabScope` with no visible change (epic KEY-380, WS-2).
+
+**What changed:**
+- **`src/renderer/components/context/WorkspaceContext.tsx` & `index.ts`:**
+  - `WorkspaceGlobalContext` keeps shared state (theme, language, direction, `books`, `categoryTree`, `allTags`, nav pin/peek, command palette, search hub, import wizard, zen/sidebar/mobile/support).
+  - `TabsProvider` drives `TabsState` via `tabsReducer` (`src/shared/workspace-tabs.ts`), starting with 1 tab (`tab-1`), and provides `FocusedTabScopeContext` so global UI outside `<TabScope>` reads the focused tab.
+  - `TabScope` owns `viewMode` (from `currentLocation(tab).view`), `activeBook`, `readingPage`, `totalPages`, `splitOrientation`, `bookNotes`, `highlights`, and their setters/helpers (`setViewMode` with `editorLeaveGuard` + reader cleanup + `navigate`, `openBookForReading`, `closeReaderToLibrary`, `addPageNote`, `deletePageNote`, `addHighlight`).
+  - `useWorkspace()` returns memoized `{ ...global, ...tab }` with unchanged API/types (`WorkspaceViewMode` aliased to `WorkspaceView`). Added `useTab()` (with `registerSnapshot` stub), `useOptionalTab()`, and `useTabs()`.
+- **`src/renderer/components/layout/AppLayout.tsx`:** wraps the active view inside `<TabScope tabId={activeTabId}>` and routes `detail.tabId` open events.
+- **Pending-target helpers & 7 listening views:** added optional `tabId` to `quran-navigation.ts`, `poetry-navigation.ts`, `lecture-navigation.ts`, `study-navigation.ts` (plus `isTabEventTarget`), and filtered listeners in `QuranView.tsx`, `QuranReaderView.tsx`, `SunnahView.tsx`, `BayanView.tsx`, `LecturesView.tsx`, `NotesOverviewView.tsx`, and `FullPageBookReader.tsx`.
+- **`tests/ui/workspace-tab-scope.test.ts`:** 3 tests covering `useWorkspace()` shape, `setViewMode` history, two-scope focus/named-tab event routing, global focused-tab reads, and render/mount isolation.
+- **Plan status & report:** updated `docs/features/feature - Multi-tab Workspace.md` and wrote `docs/agent-ops/reports/KEY-418.md`.
+
+**Verified (2026-11-19):**
+- `tests/ui/workspace-tab-scope.test.ts`: 3/3 pass.
+- `tests/ui/study-navigation.test.ts`: 1/1 pass.
+- Full suite (`npm test -- --test-concurrency=2`): 2719/2719 pass (377 suites, 0 fail).
+- `tsc --noEmit` 0 errors; `eslint` on changed files 0 errors / 0 warnings; `npm run build:main` clean.
+- Live harnesses: `shell-ui-live`, `research-editor-live`, `companion-live`, `library-ui-live`, `reader-pages-live` (real ar/en PDFs) passed (EXIT 0). `layout-live`, `dashboard-live`, `islamic-ui-live`, `sunnah-live` are pre-existing failures proven on clean HEAD `82e2c3be`; `note-editor-live` and `deeplink-live` timed out on autocomplete/export steps (deep-link `note:link-note#^para` passed).
+
+**Files:** src/renderer/components/context/WorkspaceContext.tsx, src/renderer/components/context/index.ts, src/renderer/components/layout/AppLayout.tsx, src/renderer/utils/quran-navigation.ts, src/renderer/utils/poetry-navigation.ts, src/renderer/utils/lecture-navigation.ts, src/renderer/utils/study-navigation.ts, src/renderer/components/quran/QuranView.tsx, src/renderer/components/quran/QuranReaderView.tsx, src/renderer/components/sunnah/SunnahView.tsx, src/renderer/components/poetry/BayanView.tsx, src/renderer/components/lectures/LecturesView.tsx, src/renderer/components/notes/NotesOverviewView.tsx, src/renderer/components/reader/FullPageBookReader.tsx, tests/ui/workspace-tab-scope.test.ts, docs/features/feature - Multi-tab Workspace.md, docs/agent-ops/reports/KEY-418.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-380 additions: tear-off windows, drag to reorder, multi-select, tab menu and groups (WS-10 to WS-12) - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user asked for Chrome- and Edge-style tabs:

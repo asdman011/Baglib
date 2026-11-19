@@ -1,12 +1,13 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import type { PoetrySummary, PoetryDetail, PoetryFacets, PoetryProvisionStatus } from '../../../shared/types/poetry';
 import { togglePoetryPanel, type PoetryPanel } from '../../../shared/poetry';
 import { PoetryReader } from './PoetryReader';
 import { PoetBrowser } from './PoetBrowser';
 import { PoetryExcerpt } from './PoetryExcerpt';
 import { consumePoetryReference, POETRY_OPEN_EVENT } from '../../utils/poetry-navigation';
+import { isTabEventTarget } from '../../utils/study-navigation';
 import { usePersonalLists, useListFilter, useListMembership } from '../../libs/personal-lists';
 import { ListFilterBar, ListItemControls } from '../lists/PersonalListControls';
 import { poemListRef } from '../../../shared/personal-lists';
@@ -111,8 +112,15 @@ export function BayanView() {
       if (result.ok && result.data) { setInitialVerse(from); setInitialTo(to); setPoem(result.data); } else setFailed(true);
     } catch { if (request === selection.current && mounted.current) setFailed(true); }
   }, []);
+  const tab = useOptionalTab();
+  const tabRef = React.useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => {
-    const open = () => { const target = consumePoetryReference(); if (target) void openPoem(target.poemId, target.from, target.to); };
+    const open = (event?: Event) => {
+      if (event && !isTabEventTarget(tabRef.current, event)) return;
+      const target = consumePoetryReference(tabRef.current);
+      if (target) void openPoem(target.poemId, target.from, target.to);
+    };
     open(); window.addEventListener(POETRY_OPEN_EVENT, open);
     return () => window.removeEventListener(POETRY_OPEN_EVENT, open);
   }, [openPoem]);

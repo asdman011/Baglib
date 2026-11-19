@@ -11,13 +11,13 @@ import { ContextMenu } from '../ui/ContextMenu';
 import { usePersonalLists, useListFilter, useListMembership } from '../../libs/personal-lists';
 import { ListFilterBar, ListItemControls } from '../lists/PersonalListControls';
 import { ayahListRef } from '../../../shared/personal-lists';
-import { navigateStudyReference } from '../../utils/study-navigation';
+import { isTabEventTarget, navigateStudyReference } from '../../utils/study-navigation';
 import { quranActions } from '../actions/quran-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, CopyCheck, Layers, Play, Pause, X, Maximize2, Minimize2 } from 'lucide-react';
 import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranStructure, QuranSurahIntro } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { QuranMushafWorkspace } from './QuranMushafWorkspace';
 import { QuranAudioPlayer, type QuranAudioState } from './QuranAudioPlayer';
 import { QuranSurahIntroCard } from './QuranSurahIntroCard';
@@ -330,10 +330,14 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
   }, [visible, page, loading, loadedKey, queryKey, options, setup, inspected, showIntro, dir, pageNumber, navigatePage]);
   const clearStudyTarget = useCallback(() => setStudyTarget(null), []);
   // A restored reading position only moves to its page; the study panel opens only for targets the user asked for.
+  const tab = useOptionalTab();
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
   const restoringTarget = useRef(false);
   useEffect(() => {
-    const open = () => {
-      const target = consumeQuranAyah();
+    const open = (event?: Event) => {
+      if (event && !isTabEventTarget(tabRef.current, event)) return;
+      const target = consumeQuranAyah(tabRef.current);
       if (!target) return;
       navigationVersion.current++;
       setSelection(previous => previous.script === target.script ? previous : { ...emptySelection, script: target.script });
@@ -342,7 +346,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
       if ('page' in target) { setLayoutId(target.layout); setTargetKhatmah(target.khatmah); }
       setAudioOpen(false); setAudioState(null);
     };
-    const timer = setTimeout(open, 0);
+    const timer = setTimeout(() => open(), 0);
     window.addEventListener(QURAN_OPEN_EVENT, open);
     return () => { clearTimeout(timer); window.removeEventListener(QURAN_OPEN_EVENT, open); };
   }, []);

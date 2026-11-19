@@ -9,7 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpenText, Check, Languages, LoaderCircle, Search, Upload } from 'lucide-react';
 import type { SunnahAPI, SunnahCatalog, SunnahChapter, SunnahCollectionId } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { normalizeSunnahSearch } from '../../libs/sunnah/text';
 import { SunnahChapterView } from './SunnahChapterView';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
@@ -17,7 +17,7 @@ import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
 import './sunnah.css';
 import { SunnahSearch, type SunnahSearchScope, type SunnahSearchTarget } from './SunnahSearch';
 import { SunnahInsightsPanel } from './SunnahInsightsPanel';
-import { consumeSunnahReference } from '../../utils/study-navigation';
+import { consumeSunnahReference, isTabEventTarget } from '../../utils/study-navigation';
 
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { useCompanionContext } from '../../utils/companion-context';
@@ -86,10 +86,14 @@ export function SunnahView() {
   const more = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
   const requestedReference = useRef<SunnahSearchTarget | null>(null);
+  const tab = useOptionalTab();
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
 
   useEffect(() => {
     const open = (event: Event) => {
-      const target = consumeSunnahReference() || (event as CustomEvent<SunnahSearchTarget>).detail;
+      if (!isTabEventTarget(tabRef.current, event)) return;
+      const target = consumeSunnahReference(tabRef.current) || (event as CustomEvent<SunnahSearchTarget>).detail;
       requestedReference.current = target;
       setPosition(previous => ({ ...previous, ...target, mode: 'single' }));
       setQuery('');
@@ -101,7 +105,7 @@ export function SunnahView() {
   useEffect(() => {
     mounted.current = true;
     const api: SunnahAPI | undefined = window.electronAPI?.sunnah;
-    const pending = consumeSunnahReference();
+    const pending = consumeSunnahReference(tabRef.current);
     if (pending) requestedReference.current = pending;
     const restored = restorePosition();
     let cancelled = false;

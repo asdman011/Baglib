@@ -22,7 +22,7 @@ import {
   ChevronRight,
   ListChecks,
 } from 'lucide-react';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { useAssistant } from '../ai/AssistantContext';
 import { BoardsWorkspace } from './BoardsWorkspace';
@@ -51,6 +51,7 @@ import {
 } from '../../../shared/study-notes';
 import {
   consumeStudyNote,
+  isTabEventTarget,
   navigateStudyReference,
   STUDY_NOTE_OPEN,
 } from '../../utils/study-navigation';
@@ -182,28 +183,36 @@ export const NotesOverviewView: React.FC = () => {
     };
   }, [notes]);
 
+  const tab = useOptionalTab();
+  const tabRef = React.useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
+
   // Handle cross-workspace events from navigation rail and elsewhere
   useEffect(() => {
-    const handleOpenBoards = () => setActiveTab('boards');
-    const handleOpenCards = () => setActiveTab('cards');
+    const handleOpenBoards = (e: Event) => { if (isTabEventTarget(tabRef.current, e)) setActiveTab('boards'); };
+    const handleOpenCards = (e: Event) => { if (isTabEventTarget(tabRef.current, e)) setActiveTab('cards'); };
     const handleStartReview = (e: Event) => {
+      if (!isTabEventTarget(tabRef.current, e)) return;
       const custom = e as CustomEvent<{ deckId?: string | null }>;
       setReviewDeckId(custom.detail?.deckId ?? null);
       setActiveTab('review');
     };
-    const handleNewNote = () => {
+    const handleNewNote = (e: Event) => {
+      if (!isTabEventTarget(tabRef.current, e)) return;
       setActiveTab('notes');
       setSelectedId(null);
       setCreatingNew(true);
       setEditorDraft({ content: '', key: Date.now() });
       setMobileScreen('editor');
     };
-    const handleNewCard = () => {
+    const handleNewCard = (e: Event) => {
+      if (!isTabEventTarget(tabRef.current, e)) return;
       setActiveTab('cards');
     };
 
     // KEY-412: "Revise next" asks to review a deck, or to open the narrator deck dialog (in the cards tab).
-    const handleRevisionIntent = () => {
+    const handleRevisionIntent = (e?: Event) => {
+      if (e && !isTabEventTarget(tabRef.current, e)) return;
       const review = takeRevisionIntent('review');
       if (review) {
         setReviewDeckId(review.deckId);
@@ -233,8 +242,9 @@ export const NotesOverviewView: React.FC = () => {
 
   // Handle deep links and external note targets
   useEffect(() => {
-    const consume = () => {
-      const pending = consumeStudyNote();
+    const consume = (event?: Event) => {
+      if (event && !isTabEventTarget(tabRef.current, event)) return;
+      const pending = consumeStudyNote(tabRef.current);
       if (!pending) return;
       setActiveTab('notes');
       setMobileScreen('editor');

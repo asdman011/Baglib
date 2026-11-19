@@ -19,7 +19,7 @@ import { SupportSheet } from './SupportSheet';
 import { HomeDashboardView, CompanionMiniWidget } from '../dashboard';
 import { QuotaWarningBanner } from './QuotaWarningBanner';
 import { SearchHubModal } from '../search/SearchHubModal';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
 import { useAthan } from '../../hooks/useAthan';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
 import { LECTURE_OPEN_EVENT } from '../../utils/lecture-navigation';
@@ -83,6 +83,10 @@ const AppLayoutContent: React.FC = () => {
     scheduleCloseNavPeek,
     cancelCloseNavPeek,
   } = useWorkspace();
+  const { state: tabsState, navigate: navigateTab } = useTabs();
+  const activeTabId = tabsState.activeId ?? tabsState.tabs[0]?.id ?? 'tab-1';
+  const activeTabIdRef = React.useRef(activeTabId);
+  React.useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
   useAppCloseBridge();
   // The companion note pane (decision S10) sits beside these views and keeps its note while you move between them.
   const companion = useCompanionPane();
@@ -130,34 +134,40 @@ const AppLayoutContent: React.FC = () => {
     const handleWindowDrop = (e: DragEvent) => {
       e.preventDefault();
     };
-    const handleQuranOpen = () => {
-      setViewMode('quran');
+    const openForTab = (view: Parameters<typeof setViewMode>[0], event?: Event) => {
+      const targetTabId = (event as CustomEvent<{ tabId?: string }> | undefined)?.detail?.tabId;
+      if (targetTabId && targetTabId !== activeTabIdRef.current) {
+        navigateTab(targetTabId, { view, title: '' });
+        return;
+      }
+      setViewMode(view);
     };
-    const handleNoteOpen = () => setViewMode('notes');
-    const handleSunnahOpen = () => setViewMode('sunnah');
-    const handlePoetryOpen = () => setViewMode('bayan');
-    const handleManuscriptOpen = () => setViewMode('notes-editor');
+    const handleQuranOpen = (event: Event) => openForTab('quran', event);
+    const handleNoteOpen = (event: Event) => openForTab('notes', event);
+    const handleSunnahOpen = (event: Event) => openForTab('sunnah', event);
+    const handlePoetryOpen = (event: Event) => openForTab('bayan', event);
+    const handleManuscriptOpen = (event: Event) => openForTab('notes-editor', event);
     window.addEventListener(MANUSCRIPT_OPEN_EVENT, handleManuscriptOpen);
 
     window.addEventListener('dragover', handleWindowDragOver);
     window.addEventListener('drop', handleWindowDrop);
-    window.addEventListener(QURAN_OPEN_EVENT, handleQuranOpen as EventListener);
+    window.addEventListener(QURAN_OPEN_EVENT, handleQuranOpen);
     window.addEventListener(STUDY_NOTE_OPEN, handleNoteOpen);
     window.addEventListener('baglib:sunnah-open', handleSunnahOpen);
-    const handleLectureOpen = () => setViewMode('lectures');
+    const handleLectureOpen = (event: Event) => openForTab('lectures', event);
     window.addEventListener(LECTURE_OPEN_EVENT, handleLectureOpen);
     window.addEventListener('baglib:poetry-open', handlePoetryOpen);
     return () => {
       window.removeEventListener('dragover', handleWindowDragOver);
       window.removeEventListener('drop', handleWindowDrop);
-      window.removeEventListener(QURAN_OPEN_EVENT, handleQuranOpen as EventListener);
+      window.removeEventListener(QURAN_OPEN_EVENT, handleQuranOpen);
       window.removeEventListener(STUDY_NOTE_OPEN, handleNoteOpen);
       window.removeEventListener('baglib:sunnah-open', handleSunnahOpen);
       window.removeEventListener(MANUSCRIPT_OPEN_EVENT, handleManuscriptOpen);
       window.removeEventListener(LECTURE_OPEN_EVENT, handleLectureOpen);
       window.removeEventListener('baglib:poetry-open', handlePoetryOpen);
     };
-  }, [setViewMode]);
+  }, [setViewMode, navigateTab]);
 
   if (isCompanionWindow === null) return <div className="h-screen w-screen bg-canvas" suppressHydrationWarning />;
   if (isCompanionWindow) {
@@ -238,23 +248,25 @@ const AppLayoutContent: React.FC = () => {
           {/* Quota-Saver & Search Limit Banner */}
           <QuotaWarningBanner />
 
-          <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
-            {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
-            {viewMode === 'statistics' && <StatisticsWorkspace />}
-            {viewMode === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
-            {viewMode === 'pathways' && <PathwaysView />}
-            {viewMode === 'lectures' && <LecturesView />}
-            {viewMode === 'islamic' && <IslamicStudiesHub />}
-            {viewMode === 'quran' && <QuranView />}
-            {viewMode === 'sunnah' && <SunnahView />}
-            {viewMode === 'bayan' && <BayanView />}
-            {viewMode === 'library' && <LibraryGridView />}
-            {viewMode === 'categories' && <CategoriesOverviewView />}
-            {viewMode === 'reader' && <FullPageBookReader />}
-            {viewMode === 'notes-editor' && researchEditorAvailable && <ResearchEditorView />}
-            {viewMode === 'notes' && <NotesOverviewView />}
-            {viewMode === 'settings' && <SettingsDirectory athan={athanState} />}
-          </React.Suspense>
+          <TabScope tabId={activeTabId}>
+            <React.Suspense fallback={<div className="flex-1 bg-canvas" />}>
+              {viewMode === 'dashboard' && <HomeDashboardView athanState={athanState} />}
+              {viewMode === 'statistics' && <StatisticsWorkspace />}
+              {viewMode === 'planner' && <StudyPlannerView adjustment={athanState.snapshot?.settings.hijriAdjustmentDays || 0} />}
+              {viewMode === 'pathways' && <PathwaysView />}
+              {viewMode === 'lectures' && <LecturesView />}
+              {viewMode === 'islamic' && <IslamicStudiesHub />}
+              {viewMode === 'quran' && <QuranView />}
+              {viewMode === 'sunnah' && <SunnahView />}
+              {viewMode === 'bayan' && <BayanView />}
+              {viewMode === 'library' && <LibraryGridView />}
+              {viewMode === 'categories' && <CategoriesOverviewView />}
+              {viewMode === 'reader' && <FullPageBookReader />}
+              {viewMode === 'notes-editor' && researchEditorAvailable && <ResearchEditorView />}
+              {viewMode === 'notes' && <NotesOverviewView />}
+              {viewMode === 'settings' && <SettingsDirectory athan={athanState} />}
+            </React.Suspense>
+          </TabScope>
           {companionViews.includes(viewMode) && <CompanionToggle open={companion.open} onToggle={companion.toggle} />}
         </main>
         {companionViews.includes(viewMode) && companion.open && <CompanionNotePane onClose={companion.close} overlay={viewMode === 'reader'} />}

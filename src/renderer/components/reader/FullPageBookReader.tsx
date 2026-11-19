@@ -53,7 +53,7 @@ import {
   Cloud,
   Puzzle,
 } from 'lucide-react';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { DocumentLoader, detectFormat } from '../../libs/reader/document-loader';
 import { paginateBookSections, type FormattedPage } from '../../libs/reader/epub-paginator';
 import { chaptersFromPages, inlineBlobImages } from '../../libs/reader/book-pdf-export';
@@ -2178,13 +2178,14 @@ const SourceBookReader: React.FC = () => {
     }
   };
 
+  const tab = useOptionalTab();
   // Retain the consumed request across Strict Mode effect replay.
   const requestedLocation = useRef<{ book: typeof activeBook; page: number | null; cfi: string | null }>({ book: null, page: null, cfi: null });
   // Explicit links win over the saved work location, including same-work/source navigation.
   useEffect(() => {
     if (!activeBook?.id) return;
     if (requestedLocation.current.book !== activeBook) {
-      requestedLocation.current = { book: activeBook, page: consumePendingPage(activeBook.id), cfi: consumePendingCfi(activeBook.id) };
+      requestedLocation.current = { book: activeBook, page: consumePendingPage(activeBook.id, tab), cfi: consumePendingCfi(activeBook.id, tab) };
     }
     if (requestedLocation.current.cfi) return;
     const linkedPage = requestedLocation.current.page;

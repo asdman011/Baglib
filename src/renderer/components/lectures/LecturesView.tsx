@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, Clapperboard, Columns2, ListPlus, NotebookPen, Plus, Trash2 } from 'lucide-react';
 import { addPlaceToList } from '../lists/PersonalListControls';
 import { lectureListRef } from '../../../shared/personal-lists';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
-import { openStudyNote } from '../../utils/study-navigation';
+import { isTabEventTarget, openStudyNote } from '../../utils/study-navigation';
 import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/lecture-navigation';
 import { studyLinks, studyLinkText, studyNoteHeading } from '../../../shared/study-notes';
 import { passageNote } from '../actions/passage-actions';
@@ -198,8 +198,15 @@ export function LecturesView() {
   const [selected, setSelected] = useState<{ id: string; seek: number | null; autoplay?: boolean } | null>(null);
   const [failed, setFailed] = useState(false);
   const api = window.electronAPI.lectures;
+  const tab = useOptionalTab();
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => {
-    const open = () => { const target = consumeLecture(); if (target) setSelected({ id: target.id, seek: target.seconds }); };
+    const open = (event?: Event) => {
+      if (event && !isTabEventTarget(tabRef.current, event)) return;
+      const target = consumeLecture(tabRef.current);
+      if (target) setSelected({ id: target.id, seek: target.seconds });
+    };
     void Promise.all([api.list(), api.series.list()]).then(([rows, groups]) => { setLectures(rows); setSeries(groups); open(); }).catch(() => setFailed(true));
     window.addEventListener(LECTURE_OPEN_EVENT, open);
     return () => window.removeEventListener(LECTURE_OPEN_EVENT, open);

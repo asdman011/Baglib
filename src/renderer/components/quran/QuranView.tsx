@@ -4,11 +4,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, Download, FolderOpen, RefreshCw, Search, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { QURAN_CATEGORIES, type QuranCategory, type QuranError, type QuranLibrary, type QuranResource, type QuranJob } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { QuranReaderView } from './QuranReaderView';
 import { QuranKhatmah } from './QuranKhatmah';
 import { QuranFrequencyPanel } from './QuranFrequencyPanel';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
+import { isTabEventTarget } from '../../utils/study-navigation';
 import { quranErrorKeys as errorKeys } from '../../utils/quran-errors';
 import { quranResourceBundles, quranResourceGuidance, type QuranResourceBundle, type QuranResourceFeature } from '../../../shared/quran-resource-guidance';
 import { readerPresets } from '../../../shared/quran-resource-presets';
@@ -150,8 +151,18 @@ export function QuranResourceView() {
 
 export function QuranView() {
   const { t, dir } = useWorkspace();
+  const tab = useOptionalTab();
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
   const [view, setView] = useState<'reader' | 'resources' | 'khatmah' | 'frequency'>('reader');
-  useEffect(() => { const open = () => setView('reader'); window.addEventListener(QURAN_OPEN_EVENT, open); return () => window.removeEventListener(QURAN_OPEN_EVENT, open); }, []);
+  useEffect(() => {
+    const open = (event: Event) => {
+      if (!isTabEventTarget(tabRef.current, event)) return;
+      setView('reader');
+    };
+    window.addEventListener(QURAN_OPEN_EVENT, open);
+    return () => window.removeEventListener(QURAN_OPEN_EVENT, open);
+  }, []);
   const navigation = <nav className="flex flex-wrap gap-2 px-4 py-3 border-b border-subtle bg-surface" aria-label={t('navQuran')}>
       {(['reader', 'resources', 'khatmah', 'frequency'] as const).map(value => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`rounded-xl px-4 py-2 text-sm ${view === value ? 'bg-pale-sky-600 text-white' : 'border border-subtle'}`}>{t(value === 'reader' ? 'quranRead' : value === 'resources' ? 'quranResources' : value === 'khatmah' ? 'khatmahTitle' : 'quranFrequencyTitle')}</button>)}
     </nav>;
