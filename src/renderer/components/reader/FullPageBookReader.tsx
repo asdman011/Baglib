@@ -169,6 +169,7 @@ import { HighlightActionPopover } from './HighlightActionPopover';
 import { segmentTextIntoSentences } from '../../../shared/utils/tts-text';
 import { readerAssetUrl } from '../../../shared/utils/reader-asset-url';
 import { useCompanionContext } from '../../utils/companion-context';
+import { addPlaceToList } from '../lists/PersonalListControls';
 import { useMaterialSave } from '../../hooks/useMaterialSave';
 import { saveReaderKnowledge } from '../../libs/reader/save-reader-knowledge';
 import { registerCloseGuard } from '../../utils/close-guard';
@@ -3585,6 +3586,7 @@ const SourceBookReader: React.FC = () => {
             },
           }] : []),
           ...(pdf?.overflowItems ?? []),
+          { id: 'reader-add-page-to-list', label: t('listsAddPage'), onClick: () => { const page = Math.max(1, readingPage); addPlaceToList({ kind: 'page', itemRef: bookStudyTarget(activeBook, page), label: t('readerStudyPage', { title: activeBook.title, page }) }); } },
           { label: t('tableOfContents'), onClick: () => { pdf?.closeTools(); chrome.select('toc'); } },
           { label: t('readerPanelMarks'), onClick: () => { pdf?.closeTools(); chrome.select('knowledge'); } },
           { label: t('readerPanelNotes'), onClick: () => { pdf?.closeTools(); chrome.select('annotations'); } },

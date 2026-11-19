@@ -28,6 +28,8 @@ import { Menu } from '../ui/Menu';
 import { StudyNoteEditor, type StudyNoteEditorHandle } from './StudyNoteEditor';
 import { StudyNoteContent } from './StudyNoteContent';
 import { KnowledgeGraphButton } from './KnowledgeGraph';
+import { ItemListButtons } from '../lists/PersonalListControls';
+import { noteListRef } from '../../../shared/personal-lists';
 import { detectTextDirection } from '../dashboard/QuickNoteScratchpad';
 import { calculateHijriDate } from '../../../shared/athan-calculator';
 import { relationLabels } from '../../utils/relation-labels';
@@ -447,6 +449,8 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
 
       {/* Metadata Chips Bar */}
       <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2 border-b border-subtle/80 bg-canvas/50 text-xs">
+        {/* KEY-415: star the note or add it to a personal list. */}
+        {note && <ItemListButtons item={{ kind: 'note', itemRef: noteListRef(note.id), label: title.trim() || note.title || t('dashScratchpadGeneralNote') }} className="-my-1" />}
         {/* Work / Source Attachment Chip */}
         {currentBook ? (
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-subtle text-primary-text shadow-xs">

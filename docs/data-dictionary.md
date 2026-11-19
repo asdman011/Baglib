@@ -726,10 +726,12 @@ Migration 038 seeds the `starred` row.
 | --- | --- | --- |
 | id | TEXT PRIMARY KEY | UUID |
 | list_id | TEXT NOT NULL, FK personal_list(id), ON DELETE CASCADE | Parent list |
-| item_kind | TEXT NOT NULL, CHECK IN ('book','ayah','hadith','poem') | Kind of material |
-| item_ref | TEXT NOT NULL | `book:<workId>`, `quran:<hafs\|warsh>:<surah>:<ayah>[-<to>]`, `sunnah:<collection>:<chapter>:<hadithId>`, `poetry:ashaar:<poemId>:0:0`; opened with the study-link navigation |
+| item_kind | TEXT NOT NULL, CHECK IN ('book','ayah','hadith','poem','lecture','note','page') | Kind of material (`lecture`, `note` and `page` added by migration 039, KEY-415) |
+| item_ref | TEXT NOT NULL | `book:<workId>`, `quran:<hafs\|warsh>:<surah>:<ayah>[-<to>]`, `sunnah:<collection>:<chapter>:<hadithId>`, `poetry:ashaar:<poemId>:0:0`, `media:<lectureId>:<seconds>` (a lecture moment), `note:<id>` (a whole note), `book:<workId>[@<sourceId>]#p=<page>` or `…#cfi=<epubcfi>` (an exact page); opened with the study-link navigation |
 | label | TEXT NOT NULL DEFAULT '' | Short preview (title, ayah or hadith opening, poem title) kept when added, at most 300 characters |
 | position | INTEGER NOT NULL DEFAULT 0 | Order within the list |
 | added_at | TEXT NOT NULL | When it was added |
 
 UNIQUE (list_id, item_kind, item_ref). Indexes: `idx_personal_list_item_item (item_kind, item_ref)` for list chips and section filters, and `idx_personal_list_item_list (list_id, position)` for the list view. Deleting a book does not remove its list rows; the hub then reports the source as unavailable when opened.
+
+Migration 039 (KEY-415, approved 2026-11-19) widened the `item_kind` CHECK. SQLite can't alter a CHECK, so the table was rebuilt with the same columns, every row copied and both indexes recreated. `book` stays the whole work, so section filters for books don't include pages. Lecture moments, notes and pages make no revision cards yet (the KEY-399 `list` adapter skips them).

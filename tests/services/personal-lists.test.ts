@@ -57,7 +57,7 @@ test('a custom list holds a mix of material in order, and keeps its name as type
   assert.deepEqual(items.map(i => i.itemRef), [AYAH, HADITH, POEM, BOOK]);
   assert.equal(items[0].label, 'يا أيها الذين آمنوا استعينوا بالصبر');
   assert.deepEqual(lists.items(list.id, 'hadith').map(i => i.itemRef), [HADITH]);
-  assert.deepEqual(lists.all().find(l => l.id === list.id)!.counts, { book: 1, ayah: 1, hadith: 1, poem: 1 });
+  assert.deepEqual(lists.all().find(l => l.id === list.id)!.counts, { book: 1, ayah: 1, hadith: 1, poem: 1, lecture: 0, note: 0, page: 0 });
 
   lists.reorderItems(list.id, [items[3].id, items[0].id]);
   assert.deepEqual(lists.items(list.id).map(i => i.itemRef), [BOOK, AYAH, HADITH, POEM]);

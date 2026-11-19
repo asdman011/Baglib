@@ -246,6 +246,7 @@ async function listItems(db: Database, listId: string, readers: SourceReaders, o
   const basic = LIST_BASIC_TYPES.includes(options.noteTypeId) ? options.noteTypeId : 'stock-basic';
   const items: SourceItem[] = [];
   for (const row of rows) {
+    // KEY-415: lecture moments, notes and book pages make no cards yet; that is a later decision.
     if (row.item_kind === 'book') {
       const workId = row.item_ref.slice(5);
       if (!/^[A-Za-z0-9_-]{1,128}$/u.test(workId)) continue;

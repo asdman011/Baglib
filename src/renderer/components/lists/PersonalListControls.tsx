@@ -7,10 +7,13 @@
  *   ListChips        small chips naming the lists an item is in; a click filters, × removes
  *   ListFilterBar    a section's "in list" filter (lists holding that kind), any/all, and the matches
  *   listMenuItems    the same choices for right-click menus
+ *   ItemListButtons  star and add-to-list for one item, loading its own membership (notes; KEY-415)
+ *   addPlaceToList   "Add this moment / page to a list": a dialog for a place that keeps moving,
+ *                    such as a lecture's playback time or the reader's page (KEY-415)
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BookOpen, BookText, Feather, ListPlus, ScrollText, Star, X } from 'lucide-react';
+import { BookOpen, BookText, Clapperboard, Feather, FileText, ListPlus, ScrollText, Star, StickyNote, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { MenuItemProps } from '../ui/Menu';
 import type { TranslationKey } from '../../translations';
@@ -31,6 +34,9 @@ export const KIND_ICON: Record<PersonalListItemKind, React.ComponentType<{ class
   ayah: BookText,
   hadith: ScrollText,
   poem: Feather,
+  lecture: Clapperboard,
+  note: StickyNote,
+  page: FileText,
 };
 
 export const KIND_LABEL: Record<PersonalListItemKind, TranslationKey> = {
@@ -38,6 +44,9 @@ export const KIND_LABEL: Record<PersonalListItemKind, TranslationKey> = {
   ayah: 'listsKindAyah',
   hadith: 'listsKindHadith',
   poem: 'listsKindPoem',
+  lecture: 'listsKindLecture',
+  note: 'listsKindNote',
+  page: 'listsKindPage',
 };
 
 export const listName = (list: Pick<PersonalList, 'kind' | 'name'>, t: T) => (list.kind === 'starred' ? t('listsStarred') : list.name);
@@ -50,14 +59,100 @@ export async function toggleInList(listId: string, item: ListItemInput, inList: 
 }
 
 const NEW_LIST_EVENT = 'baglib:personal-list-new';
+const ADD_PLACE_EVENT = 'baglib:personal-list-add-place';
 
 /** Opens the "New list" dialog (mounted once by NewListDialogHost); the item, if any, goes into the new list. */
 export function createListWith(item: ListItemInput | null): void {
   window.dispatchEvent(new CustomEvent(NEW_LIST_EVENT, { detail: item }));
 }
 
-/** The one "New list" dialog. Electron has no window.prompt, so this asks for the name. */
+/**
+ * Opens the "Add to list" dialog for a place read at the moment of the click (a lecture moment, a
+ * book page). Its reference changes as the user plays or reads, so no membership is shown.
+ */
+export function addPlaceToList(item: ListItemInput): void {
+  window.dispatchEvent(new CustomEvent(ADD_PLACE_EVENT, { detail: item }));
+}
+
+/** Star and add-to-list for one item whose reference is stable (a note), with its own membership. */
+export function ItemListButtons({ item, className = '' }: { item: ListItemInput; className?: string }) {
+  const { lists } = usePersonalLists();
+  const membership = useListMembership(item.kind, [item.itemRef]);
+  const heldBy = membership[item.itemRef] ?? [];
+  return (
+    <span className={`inline-flex items-center ${className}`} data-list-controls={item.itemRef}>
+      <ListStarButton item={item} heldBy={heldBy} />
+      <AddToListButton item={item} heldBy={heldBy} lists={lists} />
+    </span>
+  );
+}
+
+function AddPlaceDialog({ item, onClose }: { item: ListItemInput; onClose: () => void }) {
+  const { t, dir } = useWorkspace();
+  const { lists } = usePersonalLists();
+  const [added, setAdded] = useState<string[]>([]);
+  const [error, setError] = useState(false);
+  const add = async (listId: string) => {
+    setError(false);
+    try {
+      await personalLists.add(listId, toInput(item));
+      setAdded(current => [...current, listId]);
+    } catch {
+      setError(true);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="add-place-title" onMouseDown={onClose}>
+      <div dir={dir} data-add-place-dialog={item.kind} onMouseDown={event => event.stopPropagation()} onKeyDown={event => event.key === 'Escape' && onClose()} className="w-full max-w-sm space-y-3 rounded-2xl border border-subtle bg-surface p-4 shadow-2xl">
+        <h3 id="add-place-title" className="font-bold text-main">{t('listsAddTo')}</h3>
+        <p className="text-sm text-muted" dir="auto" data-add-place-label>{item.label}</p>
+        <ul className="max-h-64 space-y-1 overflow-y-auto">
+          {lists.map(l => {
+            const done = added.includes(l.id);
+            return (
+              <li key={l.id}>
+                <button type="button" autoFocus={l.kind === 'starred'} disabled={done} data-add-place-list={l.id} onClick={() => void add(l.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-main hover:bg-canvas disabled:opacity-70">
+                  {l.kind === 'starred' ? <Star className="size-4 shrink-0 text-amber-500" fill="currentColor" /> : <ListPlus className="size-4 shrink-0 text-muted" />}
+                  <span className="min-w-0 flex-1 truncate" dir="auto">{listName(l, t)}</span>
+                  {done && <span className="text-xs text-success" data-add-place-added>{t('listsAdded')}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {error && <p role="alert" className="text-xs text-danger">{t('listsActionFailed')}</p>}
+        <div className="flex justify-between gap-2">
+          <button type="button" data-add-place-new onClick={() => { onClose(); createListWith(item); }} className="rounded-lg px-3 py-1.5 text-sm text-accent hover:bg-canvas">{t('listsNew')}</button>
+          <button type="button" data-add-place-close onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-canvas">{t('close')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Hosts the "Add this moment / page to a list" dialog; mounted once with the "New list" dialog. */
+function AddPlaceDialogHost() {
+  const [item, setItem] = useState<ListItemInput | null>(null);
+  useEffect(() => {
+    const open = (event: Event) => setItem(((event as CustomEvent).detail as ListItemInput | null) ?? null);
+    window.addEventListener(ADD_PLACE_EVENT, open);
+    return () => window.removeEventListener(ADD_PLACE_EVENT, open);
+  }, []);
+  return item ? <AddPlaceDialog key={item.itemRef} item={item} onClose={() => setItem(null)} /> : null;
+}
+
+/** The one "New list" dialog, plus the "Add this moment / page" dialog. */
 export function NewListDialogHost() {
+  return (
+    <>
+      <NewListDialog />
+      <AddPlaceDialogHost />
+    </>
+  );
+}
+
+/** The "New list" dialog. Electron has no window.prompt, so this asks for the name. */
+function NewListDialog() {
   const { t, dir } = useWorkspace();
   const [pending, setPending] = useState<{ item: ListItemInput | null } | null>(null);
   const [name, setName] = useState('');

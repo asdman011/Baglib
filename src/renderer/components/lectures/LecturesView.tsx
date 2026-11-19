@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Clapperboard, Columns2, NotebookPen, Plus, Trash2 } from 'lucide-react';
+import { Camera, Clapperboard, Columns2, ListPlus, NotebookPen, Plus, Trash2 } from 'lucide-react';
+import { addPlaceToList } from '../lists/PersonalListControls';
+import { lectureListRef } from '../../../shared/personal-lists';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { openStudyNote } from '../../utils/study-navigation';
@@ -150,6 +152,7 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay, 
       {cues.length > 0 && layout === 'overlay' && <button data-toggle-transcript type="button" className={button} aria-expanded={transcript} onClick={() => setTranscript(value => !value)}>{t('lectureTranscript')}</button>}
       {layout === 'overlay' && <button type="button" className={button} onClick={note}><NotebookPen className="size-4" />{t('lectureNoteHere')}</button>}
       <button type="button" className={button} disabled={lecture.kind === 'audio'} onClick={() => void shot()}><Camera className="size-4" />{t('lectureShot')}</button>
+      <button type="button" data-lecture-add-to-list className={button} onClick={() => { const at = media.current?.currentTime ?? 0; addPlaceToList({ kind: 'lecture', itemRef: lectureListRef(lecture.id, at), label: label(at) }); }}><ListPlus className="size-4" />{t('listsAddMoment')}</button>
       <bdi className="text-xs text-muted">{clockTime(now)}{current && <> · <span dir="auto">{current.title}</span></>}</bdi>
     </div>
     {series && <label className="flex items-center gap-2 text-sm leading-relaxed"><input data-lecture-autoplay type="checkbox" checked={series.autoplayNext} onChange={event => void setAutoplay(event.target.checked)} />{t('lectureSeriesAutoplay')}</label>}

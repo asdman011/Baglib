@@ -1,3 +1,56 @@
+## KEY-415 Personal lists hold lecture moments, whole notes and exact book pages (migration 039) - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user approved migration 039 ("yes approve 039"). Lists should hold a lecture at a timestamp, a whole note and an exact book page, so tabs can later be saved as a list (KEY-380). The Dashboard is never saved.
+
+**What changed:**
+- **Migration `039_personal_list_kinds.ts`.** Rebuilds `personal_list_item` with `item_kind` CHECK widened to add `lecture`, `note` and `page`:
+  - same columns, every row copied, both indexes recreated, the cascade FK kept;
+  - `down` drops only the new kinds.
+- **`src/shared/personal-lists.ts`:**
+  - the three new kinds;
+  - `canonicalItemRef`:
+    - lecture `media:<uuid>:<s>` (a screenshot id is dropped);
+    - note `note:<id>` (an anchor is dropped);
+    - page `book:<id>[@source]#p=N` or `#cfi=` (a page or cfi is required; `book` still drops the page);
+  - ref limit raised to 600 for EPUB cfi;
+  - `lectureListRef` and `noteListRef`.
+- **`PersonalListControls.tsx`:**
+  - icons and labels for the new kinds;
+  - `ItemListButtons` (star and add, with their own membership);
+  - `addPlaceToList` plus the "Add to list" dialog for a moving place (Starred and every list, "Added" per list, New list). It's hosted inside `NewListDialogHost`, so `AppLayout` is untouched.
+- **Places:**
+  - lecture player: "Add this moment to a list" (current time);
+  - reader `⋯` menu: "Add this page to a list" (current page and its source);
+  - note editor: star and add-to-list in the chips bar under the header. Kept out of the header so the editor's own `⋯` menu stays its first menu button.
+- **`deck-sync.ts`:** the `list` adapter skips the new kinds, with a comment (no cards yet).
+- **Docs and strings:** data dictionary (LF), ar and en strings.
+
+**Verified (2026-11-19):**
+- `tests/services/personal-list-kinds.test.ts` 3/3:
+  - migration on a profile with lists: rows identical, indexes, FK check, new kinds, cascade;
+  - down;
+  - canonical refs.
+- `personal-lists` and `list-decks`: 16/16 focused.
+- Full suite **2649/2649**.
+- tsc 0. eslint: no new errors (the one `FullPageBookReader` error, refs during render, exists at HEAD).
+- **`scripts/list-kinds-live` passed in ar and en,** with real files (the ar and en mp4 lectures, the ar and en text-layer PDFs) and off-screen windows:
+  - lecture moment added (ar 1:52, en 3:54);
+  - PDF page added (ar page 45, which is that PDF's last page; en page 57);
+  - note opened from a list, then starred in the editor;
+  - the hub shows all three kinds;
+  - the lecture reopens at that second, and the PDF reopens at that page after being left on page 1;
+  - dialog and hub RTL/LTR; no renderer errors.
+  - Evidence: `.baglib-data/key415-evidence/`.
+
+**Limits:**
+- EPUB pages are saved as the reader's page number. A cfi is accepted by the data layer, but the reader menu doesn't produce one yet.
+- Lecture, note and page items make no revision cards.
+- A note's label is the title at the time it was added.
+
+**Files:** src/main/database/migrations/039_personal_list_kinds.ts, src/main/database/migrations/index.ts, src/shared/personal-lists.ts, src/main/services/deck-sync.ts, src/renderer/components/lists/PersonalListControls.tsx, src/renderer/components/lectures/LecturesView.tsx, src/renderer/components/reader/FullPageBookReader.tsx, src/renderer/components/notes/NoteEditorPane.tsx, src/renderer/translations.ts, tests/services/personal-list-kinds.test.ts, tests/services/personal-lists.test.ts, scripts/list-kinds-live/run.mjs, scripts/list-kinds-live/main.cjs, docs/data-dictionary.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-380 plan approved with the user's decisions; WS-1…WS-9 created as KEY-417…KEY-425 - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user chose "Plan multi-tab workspace" and answered the 4 plan decisions. This updates the planning entry below; its "waiting for approval" status is superseded.

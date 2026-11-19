@@ -8,11 +8,14 @@
  *   ayah   `quran:<hafs|warsh>:<surah>:<ayah>` or a range `…:<from>-<to>`
  *   hadith `sunnah:<collection>:<chapter>:<hadithId>`
  *   poem   `poetry:ashaar:<poemId>:0:0` (the whole poem)
+ *   lecture `media:<lectureId>:<seconds>` (a moment in a lecture; KEY-415)
+ *   note   `note:<id>` (the whole note; KEY-415)
+ *   page   `book:<workId>[@<sourceId>]#p=<page>` or `…#cfi=<epubcfi>` (an exact place in a book; KEY-415)
  */
 
-import { parseBookTarget, parseQuranTarget, validStudyTarget, matchesStudyQuery } from './study-notes';
+import { parseBookTarget, parseNoteTarget, parseQuranTarget, validStudyTarget, matchesStudyQuery } from './study-notes';
 
-export const PERSONAL_LIST_KINDS = ['book', 'ayah', 'hadith', 'poem'] as const;
+export const PERSONAL_LIST_KINDS = ['book', 'ayah', 'hadith', 'poem', 'lecture', 'note', 'page'] as const;
 export type PersonalListItemKind = (typeof PERSONAL_LIST_KINDS)[number];
 export const STARRED_LIST_ID = 'starred';
 export const PERSONAL_LISTS_CHANGED = 'baglib:personal-lists-changed';
@@ -66,7 +69,7 @@ export const isListItemKind = (value: unknown): value is PersonalListItemKind =>
 
 /** The canonical reference for an item, or null when the reference doesn't fit its kind. */
 export function canonicalItemRef(kind: PersonalListItemKind, ref: unknown): string | null {
-  if (typeof ref !== 'string' || ref.length > 400) return null;
+  if (typeof ref !== 'string' || ref.length > 600) return null;
   switch (kind) {
     case 'book': {
       const parsed = ref.startsWith('book:') ? parseBookTarget(ref) : null;
@@ -83,6 +86,22 @@ export function canonicalItemRef(kind: PersonalListItemKind, ref: unknown): stri
       const match = /^poetry:ashaar:(\d{1,9})(?::\d+:\d+)?$/u.exec(ref);
       return match && +match[1] > 0 ? `poetry:ashaar:${+match[1]}:0:0` : null;
     }
+    case 'lecture': {
+      // A screenshot id appended to the link is dropped: the item is the moment, not the frame.
+      const match = /^media:([0-9a-f-]{36}):(\d{1,6})(?::[0-9a-f-]{36})?$/u.exec(ref);
+      return match ? `media:${match[1]}:${+match[2]}` : null;
+    }
+    case 'note': {
+      // The whole note: a paragraph anchor is dropped.
+      const parsed = ref.startsWith('note:') ? parseNoteTarget(ref) : null;
+      return parsed ? `note:${parsed.id}` : null;
+    }
+    case 'page': {
+      const parsed = ref.startsWith('book:') ? parseBookTarget(ref) : null;
+      if (!parsed || (parsed.page === undefined && parsed.cfi === undefined)) return null;
+      const base = `book:${parsed.id}${parsed.sourceId ? `@${parsed.sourceId}` : ''}`;
+      return parsed.cfi !== undefined ? `${base}#cfi=${encodeURIComponent(parsed.cfi)}` : `${base}#p=${parsed.page}`;
+    }
   }
 }
 
@@ -91,6 +110,8 @@ export const ayahListRef = (surah: number, from: number, to = from, profile: 'ha
   to > from ? `quran:${profile}:${surah}:${from}-${to}` : `quran:${profile}:${surah}:${from}`;
 export const hadithListRef = (collection: string, chapter: number, hadithId: string) => `sunnah:${collection}:${chapter}:${hadithId}`;
 export const poemListRef = (poemId: number) => `poetry:ashaar:${poemId}:0:0`;
+export const lectureListRef = (lectureId: string, seconds: number) => `media:${lectureId}:${Math.max(0, Math.floor(seconds))}`;
+export const noteListRef = (noteId: string) => `note:${noteId}`;
 
 /** List names are kept as typed; only surrounding space is trimmed and control characters dropped. */
 export function cleanListName(name: unknown): string | null {
