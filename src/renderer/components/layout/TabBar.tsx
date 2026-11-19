@@ -28,9 +28,18 @@ export interface TabBarProps {
   onNew: () => void;
   /** Tabs that are asleep (unmounted after saving), shown slightly dimmed. */
   asleep?: ReadonlySet<string>;
-  /** Room after the + button, for the quick-open panel (WS-6). */
+  /** Room after the + button. */
   endSlot?: React.ReactNode;
+  /**
+   * KEY-422 (WS-6): the quick-open panel. Hovering the + button, or focusing it and pressing ↓, shows it;
+   * clicking + still opens a new Home tab.
+   */
+  renderQuickOpen?: (props: { close: () => void; autoFocus: boolean }) => React.ReactNode;
 }
+
+/** Hover delays for the + panel, so passing over the button doesn't flash it. */
+const QUICK_OPEN_DELAY_MS = 250;
+const QUICK_OPEN_CLOSE_MS = 200;
 
 interface DragState { id: string; startX: number; spans: TabSpan[]; target: number; moved: boolean }
 
@@ -43,12 +52,22 @@ function previewOrder(tabs: WorkspaceTab[], drag: DragState | null): WorkspaceTa
   return [...rest.slice(0, drag.target), dragged, ...rest.slice(drag.target)];
 }
 
-export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, endSlot }) => {
+export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, endSlot, renderQuickOpen }) => {
   const listRef = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
   const suppressClick = React.useRef(false);
   const [announcement, setAnnouncement] = React.useState('');
+  const [quickOpen, setQuickOpen] = React.useState<null | 'hover' | 'keyboard'>(null);
+  // Whether the pointer rests on the + button; the panel follows it after a short delay.
+  const [hovering, setHovering] = React.useState(false);
+  React.useEffect(() => {
+    if (!renderQuickOpen) return;
+    if (hovering && !quickOpen) { const id = setTimeout(() => setQuickOpen('hover'), QUICK_OPEN_DELAY_MS); return () => clearTimeout(id); }
+    if (!hovering && quickOpen === 'hover') { const id = setTimeout(() => setQuickOpen(null), QUICK_OPEN_CLOSE_MS); return () => clearTimeout(id); }
+  }, [hovering, quickOpen, renderQuickOpen]);
+  // Closing also forgets the hover, so the panel doesn't reopen until the pointer comes back.
+  const closeQuickOpen = () => { setHovering(false); setQuickOpen(null); };
 
   const setDragState = (next: DragState | null) => { dragRef.current = next; setDrag(next); };
 
@@ -191,16 +210,31 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
           );
         })}
       </div>
-      <button
-        type="button"
-        onClick={onNew}
-        aria-label={t('workspaceTabNew')}
-        title={t('workspaceTabNew')}
-        data-tab-new
-        className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-canvas hover:text-main focus-visible:outline-2 focus-visible:outline-focus"
+      <div
+        className="relative shrink-0"
+        data-quick-open-anchor
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
       >
-        <Plus className="h-4 w-4" aria-hidden="true" />
-      </button>
+        <button
+          type="button"
+          onClick={() => { closeQuickOpen(); onNew(); }}
+          onKeyDown={event => { if (event.key === 'ArrowDown' && renderQuickOpen) { event.preventDefault(); setQuickOpen('keyboard'); } }}
+          aria-label={t('workspaceTabNew')}
+          title={t('workspaceTabNew')}
+          aria-haspopup={renderQuickOpen ? 'menu' : undefined}
+          aria-expanded={renderQuickOpen ? !!quickOpen : undefined}
+          data-tab-new
+          className="rounded-lg p-1.5 text-muted transition-colors hover:bg-canvas hover:text-main focus-visible:outline-2 focus-visible:outline-focus"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        </button>
+        {quickOpen && renderQuickOpen && (
+          <div className="absolute top-full z-50 pt-1 [inset-inline-start:0]">
+            {renderQuickOpen({ close: closeQuickOpen, autoFocus: quickOpen === 'keyboard' })}
+          </div>
+        )}
+      </div>
       {endSlot}
       <span className="sr-only" aria-live="polite">{announcement}</span>
     </div>

@@ -1,3 +1,22 @@
+## KEY-420 / KEY-422 part A: back/forward strip and the + quick-open panel (WS-4, WS-6; not yet wired) - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user is away and asked for nonstop work in parallel with Antigravity, skipping anything that needs approval. KEY-418 (WS-2, Antigravity) holds WorkspaceContext, AppLayout and the navigation files, so these pieces were built in new files and in Claude's own tab-bar files.
+
+**Done:**
+- `src/renderer/components/layout/tab-bar-model.ts`:
+  - `locationLabel`, which tabLabel now uses;
+  - `historyShortcut`: Alt+Left/Right by what the user sees (in Arabic, Alt+Right goes back), plus the BrowserBack/BrowserForward keys;
+  - `mouseHistoryButton`: buttons 3 and 4;
+  - `HISTORY_HOLD_MS`.
+- `src/renderer/components/layout/TabHistoryStrip.tsx` (new): back and forward arrows for the focused tab, mirrored in Arabic. Click steps. Holding an arrow, right-clicking it, or pressing ↓ on it opens that direction's history list, nearest first, with an icon and a title; picking an entry jumps there. Escape or a click elsewhere closes the list.
+- `src/renderer/components/layout/QuickOpenPanel.tsx` (new): a "Most used" section (rankDestinations; Library, Quran and Sunnah until enough use) and "Recent" (up to 8). Arrows, Home, End and Enter work; Escape closes.
+- `src/renderer/components/layout/TabBar.tsx`: a new `renderQuickOpen` prop. Hovering + (after 250 ms) or pressing ↓ on it opens the panel; clicking + still opens a new Home tab.
+- `src/renderer/translations.ts`: workspaceTabBack, workspaceTabForward, workspaceTabBackList, workspaceTabForwardList and workspaceQuickOpen{Label,MostUsed,Recent,NoRecent}, in ar and en.
+- `tests/ui/tab-history-quick-open.test.ts` (new).
+
+**Tests:** the tab tests pass 39/39, with ar and en for the strip, the panel and the + popover. ESLint shows 0 errors on these files, and tsc shows no errors in them.
+
+**Not done:** wiring. The strip goes under the tab bar and Alt+arrows and mouse buttons become global listeners. The panel is fed from workspace.usage.v1 and workspace.recent.v1. Both wait for KEY-418 and WS-3 part B. Nothing is visible in the app yet.
 ## KEY-419 part A: tab bar, shortcuts and keep-alive components (WS-3, not yet wired) - 2026-11-19 - Agent: Claude Code
 
 **Request.** WS-3 of the multi-tab workspace (epic KEY-380). Part A was built in new files only, while Antigravity holds KEY-418 (WS-2) and its files (WorkspaceContext, AppLayout, navigation helpers, listening views). Part B wires these into Titlebar/AppLayout once KEY-418 lands.

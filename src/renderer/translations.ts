@@ -6199,6 +6199,14 @@ export const translations = {
     workspaceTabClose: "إغلاق علامة التبويب (Ctrl+W)",
     workspaceTabUntitled: "بلا عنوان",
     workspaceTabMoved: "نُقلت علامة التبويب إلى الموضع {position} من {count}",
+    workspaceTabBack: "رجوع (Alt+→)",
+    workspaceTabForward: "إلى الأمام (Alt+←)",
+    workspaceTabBackList: "سجل الرجوع",
+    workspaceTabForwardList: "سجل التقدّم",
+    workspaceQuickOpenLabel: "فتح في علامة تبويب جديدة",
+    workspaceQuickOpenMostUsed: "الأكثر استخدامًا",
+    workspaceQuickOpenRecent: "فُتح مؤخرًا",
+    workspaceQuickOpenNoRecent: "لم يُفتح شيء بعد",
   },
   en: {
     ...researchEditorTranslations.en,
@@ -12399,6 +12407,14 @@ export const translations = {
     workspaceTabClose: "Close tab (Ctrl+W)",
     workspaceTabUntitled: "Untitled",
     workspaceTabMoved: "Tab moved to position {position} of {count}",
+    workspaceTabBack: "Back (Alt+Left)",
+    workspaceTabForward: "Forward (Alt+Right)",
+    workspaceTabBackList: "Back history",
+    workspaceTabForwardList: "Forward history",
+    workspaceQuickOpenLabel: "Open in a new tab",
+    workspaceQuickOpenMostUsed: "Most used",
+    workspaceQuickOpenRecent: "Recent",
+    workspaceQuickOpenNoRecent: "Nothing opened yet",
   }
 };
 

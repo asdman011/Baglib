@@ -6,7 +6,7 @@ import type { LucideIcon } from 'lucide-react';
 import { FileQuestion } from 'lucide-react';
 import { NAV_ITEMS } from './nav-model';
 import type { TranslationKey } from '../../translations';
-import { currentLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
+import { currentLocation, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
 
 export type TabCommand =
   | { type: 'new' }
@@ -83,11 +83,43 @@ export function tabIcon(view: WorkspaceView): LucideIcon {
   return navItemFor(view)?.icon ?? FileQuestion;
 }
 
-/** The tab's own title (a book, surah, hadith, note…), or the name of its view. */
-export function tabLabel(tab: WorkspaceTab, t: (key: TranslationKey) => string): string {
-  const location = currentLocation(tab);
+/** A place's own title (a book, surah, hadith, note…), or the name of its view. */
+export function locationLabel(location: Pick<TabLocation, 'view' | 'title'>, t: (key: TranslationKey) => string): string {
   const title = location.title.trim();
   if (title) return title;
   const key = navItemFor(location.view)?.labelKey;
   return key ? t(key) : t('workspaceTabUntitled');
 }
+
+/** The tab's own title, or the name of its view. */
+export function tabLabel(tab: WorkspaceTab, t: (key: TranslationKey) => string): string {
+  return locationLabel(currentLocation(tab), t);
+}
+
+// KEY-420 (WS-4): back and forward inside a tab.
+
+export type HistoryCommand = 'back' | 'forward';
+
+/**
+ * Alt+Left / Alt+Right. The arrows follow what the user sees: in Arabic the back arrow points right, so
+ * Alt+Right goes back. The BrowserBack / BrowserForward keys work in both languages.
+ */
+export function historyShortcut(event: KeyLike, dir: 'rtl' | 'ltr'): HistoryCommand | null {
+  if (event.key === 'BrowserBack') return 'back';
+  if (event.key === 'BrowserForward') return 'forward';
+  if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return null;
+  const left = event.key === 'ArrowLeft' || event.code === 'ArrowLeft';
+  const right = event.key === 'ArrowRight' || event.code === 'ArrowRight';
+  if (!left && !right) return null;
+  return (left === (dir === 'ltr')) ? 'back' : 'forward';
+}
+
+/** The mouse's back (button 3) and forward (button 4) buttons. */
+export function mouseHistoryButton(button: number): HistoryCommand | null {
+  if (button === 3) return 'back';
+  if (button === 4) return 'forward';
+  return null;
+}
+
+/** Pressing an arrow this long opens its history list, as a right-click does. */
+export const HISTORY_HOLD_MS = 450;
