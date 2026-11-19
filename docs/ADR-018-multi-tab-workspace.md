@@ -65,6 +65,14 @@ The user wants browser-style tabs, with:
    - `useWorkspace()` merges the two, so its 200 callers don't change.
    - Navigation events carry an optional tab id, and only the focused tab, or the named tab, consumes them.
 
+9. **Added by the user on 2026-11-19 (plan section 7):** several windows, multi-select, a tab menu and tab groups.
+   - **Several windows.** A tab can be dragged out into a new window, or into another window, and moving it works like sleep: save, then hand over the snapshot. A main-process window registry replaces the single main window.
+   - **One manuscript, one tab.** A given manuscript is open in only one tab across all windows.
+   - **Restore by window.** `workspace.tabs.v1` stores each window and its bounds, through a versioned migration of the value.
+   - **Keep-alive per window.** Each window keeps its own 6 tabs awake.
+   - **Selection, menu and groups.** Ctrl and Shift multi-select feed a tab right-click menu: copy links, add to list, groups, move to window, and close variants. Tab groups have a name, a colour and a collapsed flag, and are saved with the tabs.
+   - **No schema change.** Saving a group for good uses personal lists (KEY-415). Sharing waits for KEY-416.
+
 ## Consequences
 
 - **Tabs can be saved, restored and shared later** (plan section 5a) without schema changes, because a place is a target string plus a small snapshot.

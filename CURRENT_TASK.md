@@ -1,3 +1,35 @@
+## KEY-380 additions: tear-off windows, drag to reorder, multi-select, tab menu and groups (WS-10 to WS-12) - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user asked for Chrome- and Edge-style tabs:
+- drag a tab out to open it as its own window;
+- drag tabs left and right to reorder them;
+- select several tabs with Ctrl+click;
+- a right-click menu to group, copy, share or add the tabs to a list.
+
+This is planning only, with no code.
+
+**What changed:**
+- **Plan section 7** (`docs/features/feature - Multi-tab Workspace.md`):
+  - 7.1 reorder, part of WS-3;
+  - 7.2 tear-off and cross-window drag. A main-process window registry replaces `mainWindow` (33 uses in 13 files under `src/main`), and a tab moves the way it sleeps: save first, then hand over the snapshot. Restore covers every window, and keep-alive is per window;
+  - 7.3 multi-select (click, Ctrl, Shift, Esc, keys);
+  - 7.4 the tab menu. Share is hidden until KEY-416 is decided; "Copy links" uses the `baglib:` deep link, and "Add to list" uses the KEY-415 kinds;
+  - 7.5 tab groups (name, 8 colours, collapse, drag as a block, saved with the tabs);
+  - 7.6 delivery.
+- **ADR-018** gains decision 9. There is still no schema change.
+
+**Jira:**
+- Created KEY-428 (WS-10, multi-select and the tab menu), KEY-426 (WS-11, groups) and KEY-427 (WS-12, windows, starting with a spike). All three are children of KEY-380, labelled Dashboard, with Suggested agent: Claude Code.
+- Links: KEY-423 blocks KEY-428; KEY-428 blocks KEY-426 and KEY-427.
+- Comments on KEY-419 (reorder, drag designed to carry selections and groups) and KEY-416 (the Share slot in the tab menu).
+- The earlier WS-1 entry's commit and Jira lines are included in this commit.
+
+**Verified:** documentation only. No tests were needed.
+
+**Files:** docs/features/feature - Multi-tab Workspace.md, docs/ADR-018-multi-tab-workspace.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-417 WS-1: ADR-018 and the pure multi-tab model - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user said "Start WS-1", the first step of the multi-tab workspace (epic KEY-380). No UI and no schema change: everything is stored in `settings` keys.
@@ -37,6 +69,10 @@
 **Limits:**
 - The renderer's `WorkspaceViewMode` is mirrored by `WORKSPACE_VIEWS`. WS-2 should derive one from the other so they can't drift.
 - Snapshot size is measured in JSON characters, a close bound on the settings value.
+
+**Commit and push:** ef57670f, pushed to origin/feature/library-domain (remote hash verified).
+
+**Jira:** KEY-417 has a completion comment (10498) and is moved to Done.
 
 **Files:** docs/ADR-018-multi-tab-workspace.md, src/shared/workspace-tabs.ts, tests/shared/workspace-tabs.test.ts, tests/ui/settings-directory-coverage.test.ts, docs/features/feature - Multi-tab Workspace.md, CURRENT_TASK.md.
 

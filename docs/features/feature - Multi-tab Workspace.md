@@ -178,3 +178,91 @@ Each step: ar and en, live run with real files, harness windows off-screen, full
 3. **Links:** a setting, "open in a new tab" (default) or "the same tab".
    - **Added by the user:** per-tab back and forward, with arrows under the tabs, Alt+Left/Right, and hold or right-click for the history list, as in Edge.
 4. **Storage:** `settings` keys, with no new tables.
+
+## 7. Added by the user (2026-11-19): tear-off windows, drag to reorder, multi-select and the tab menu
+
+The user asked for these to work as tabs do in Chrome and Edge.
+
+### 7.1 Drag to reorder
+
+- **Dragging a tab along the tab bar moves it,** to the right or to the left. The other tabs slide aside while it moves. This is part of WS-3.
+- **The order follows the language.** In Arabic the first tab is on the right, so the tab bar mirrors.
+- **Several selected tabs move together** (7.3). A group moves as one block (7.5).
+
+### 7.2 Tear a tab off into its own window (WS-12)
+
+- **Dragging a tab out of the tab bar opens it in a new window,** like Chrome.
+  - The tab counts as torn off once the pointer leaves the bar by more than about 30 px.
+  - While dragging, a small preview of the tab follows the pointer.
+  - On release, a new BagLib window opens at that spot, holding the tab.
+- **Dropping a tab onto another BagLib window's tab bar moves it into that window,** at the drop position.
+- **Dragging the only tab of a window moves the whole window,** as in Chrome.
+- **Selected tabs or a group tear off together.**
+- **The tab's right-click menu offers the same thing:** "Move to new window", and "Move to window ▸" with a list of the open windows.
+- **Nothing is lost on the way.** Moving a tab works like sleep (Tab State spec):
+  - The tab saves first, and an editor runs its normal save.
+  - It sends its snapshot and history to the other window, which restores it there.
+  - A tab that is playing or has a dialog open asks before it moves. A tab whose save failed doesn't move.
+- **How it works:**
+  - **Main process.** A window registry replaces the single `mainWindow`. About 33 places in `src/main` assume one window. Each one gets the right target:
+    - replies go to the window that asked;
+    - broadcasts (settings, theme, language, sync and notifications) go to every window;
+    - "bring to front" goes to the last focused window.
+  - **Renderer.** Each window runs its own tab model. Pointer capture keeps the drag going outside the window. On release, main checks whether a BagLib window's tab bar is under the screen point, and either moves the tab there or opens a new window.
+  - **Settings.** Every window reads the same `settings`. A change in one window (language, theme, the `workspace.prefs.v1` options) reaches the others through a settings-changed broadcast to all windows.
+- **Single instances apply across windows.** Opening Settings or Statistics focuses the window and tab that already show it.
+  - **The same manuscript is open in only one tab at a time.** Opening it again focuses that tab, so two editors never save over each other.
+- **Restore covers windows.** `workspace.tabs.v1` gains a `windows` list (each with its bounds and its tabs) through a versioned migration of the settings value, still with no schema change. On launch every window comes back, and the restore settings from 3.6 apply to each window.
+- **Keep-alive is per window.** Each window keeps its own 6 tabs awake. Every window is its own renderer process, so memory is measured with real PDFs, with 2 windows of 6 tabs.
+- **The startup splash and the app lock** appear only in the first window. Locking the app locks every window.
+- **Risk.** A drag across monitors with different scaling on Windows is checked in the live run. If cross-window drag proves unreliable, the menu items still work. The first step of WS-12 is a short spike to prove the drag before the rest is built.
+
+### 7.3 Select several tabs (WS-10)
+
+| Action | Result |
+|---|---|
+| Click | Selects and focuses that tab, and clears the selection |
+| Ctrl+click | Adds or removes a tab from the selection |
+| Shift+click | Selects every tab from the focused tab to the clicked one |
+| Esc | Clears the selection |
+
+- **Selected tabs are highlighted.** The focused tab is always part of the selection.
+- **Keyboard:** Ctrl+Shift+←/→ extends the selection. The arrows follow the visual direction in Arabic.
+
+### 7.4 The tab right-click menu (WS-10)
+
+The menu acts on the selection, or on the tab under the pointer when nothing is selected. When several tabs are selected, the menu title says how many ("3 tabs").
+
+| Item | What it does |
+|---|---|
+| New tab to the right | Opens a Home tab after this one; "to the left" in Arabic, following the bar's direction |
+| Duplicate | Copies each selected tab, with its history |
+| Add to group ▸ | "New group…" (name and colour), or an existing group (7.5) |
+| Remove from group | Shown when a selected tab is in a group |
+| Open side by side | Shown when exactly 2 tabs are selected. Shows both in the split view (WS-9) |
+| Move to new window / Move to window ▸ | 7.2 |
+| Copy links | Copies one line per tab: the title and its `baglib:` deep link (`src/shared/deep-link.ts`). Tabs without an item, such as Home or Library, copy their title only |
+| Add to list ▸ | Adds each tab's item to a personal list, or "Save as a new list…". It uses the KEY-415 kinds: book page, Quran, hadith, poem, lecture moment, note. Tabs without an item are skipped, and a short message says how many |
+| Share ▸ | Waits for the KEY-416 decision, because book, lecture and note links break for someone who doesn't own the item. Until then the item is hidden and "Copy links" is the way to share |
+| Close / Close other tabs / Close tabs to the right | "To the right" follows the bar's direction. An unsaved editor asks first (WS-7) |
+| Reopen closed tab | Ctrl+Shift+T |
+
+### 7.5 Tab groups (WS-11)
+
+- **What a group is.** It has a name and one of 8 colours. It appears as a coloured label in front of its tabs, with a line of the same colour under them.
+- **Collapsing.** Clicking the label collapses the group to just its label, and clicking again expands it. A collapsed group's tabs sleep (Tab State rules, exemptions still apply).
+- **The label's right-click menu:** rename, change colour, collapse, ungroup, close the group, move the group to a new window, and save the group as a list.
+- **Dragging.** Dragging the label moves the whole group, within the bar, into another window or into a new window. Dragging a tab out of the group removes it from the group.
+- **Restore.** Groups are saved with the tabs in `workspace.tabs.v1` and come back after a restart. No table: "save the group as a list" is how a group is kept for good (5a).
+
+### 7.6 Delivery
+
+| Step | Task | Depends on | Visible change |
+|---|---|---|---|
+| WS-10 | Multi-select (click, Ctrl, Shift, Esc, keys) and the tab right-click menu (7.4), except the window and group items, which arrive with WS-11 and WS-12. The model gains a selection with tests. | WS-7 | select tabs, tab menu |
+| WS-11 | Tab groups (7.5). The model gains groups (name, colour, collapsed), with tests. | WS-10 | coloured groups |
+| WS-12 | Windows: a spike first, then the main-process window registry, tear-off, dropping into another window, the "Move to window" menu, multi-window restore and per-window keep-alive, with a memory check | WS-10 | tabs as windows |
+
+Jira: WS-10 KEY-428, WS-11 KEY-426, WS-12 KEY-427. KEY-423 (WS-7) blocks KEY-428, which blocks KEY-426 and KEY-427.
+
+Order: these follow WS-9. KEY-381 still only needs WS-9.
