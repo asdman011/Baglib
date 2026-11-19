@@ -9,6 +9,13 @@ import { SaveSettings } from './SaveSettings';
 import { PackStatus, ONBOARDING_KEY, type OnboardingPreferences } from './FirstRunGuide';
 import { SETTINGS_GROUPS, searchSettings } from './settings-directory-model';
 import { StudyRhythmSettings } from '../dashboard/StudyRhythm';
+import {
+  DEFAULT_WORKSPACE_PREFS,
+  parsePrefs,
+  restoreFocusEnabled,
+  WORKSPACE_PREFS_SETTING,
+  type WorkspacePrefs,
+} from '../../../shared/workspace-tabs';
 import type { useAthan } from '../../hooks/useAthan';
 
 const Providers = React.lazy(() => import('../library/ProviderSettingsModal').then(module => ({ default: module.ProviderSettingsModal })));
@@ -123,6 +130,125 @@ function SrsRolloverPreference() {
   );
 }
 
+function WorkspaceRestoreSettings() {
+  const { t } = useWorkspace();
+  const [prefs, setPrefs] = useState<WorkspacePrefs>(DEFAULT_WORKSPACE_PREFS);
+  const [busy, setBusy] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void window.electronAPI.settings.get(WORKSPACE_PREFS_SETTING).then(
+      saved => {
+        if (alive) {
+          setPrefs(parsePrefs(saved));
+          setBusy(false);
+        }
+      },
+      () => {
+        if (alive) {
+          setFailed(true);
+          setBusy(false);
+        }
+      },
+    );
+    return () => { alive = false; };
+  }, []);
+
+  const updatePrefs = async (patch: Partial<WorkspacePrefs>) => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const latest = parsePrefs(await window.electronAPI.settings.get(WORKSPACE_PREFS_SETTING).catch(() => prefs));
+      const next: WorkspacePrefs = { ...latest, ...patch };
+      if (await window.electronAPI.settings.set(WORKSPACE_PREFS_SETTING, next) !== true) throw new Error();
+      setPrefs(next);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const focusEnabled = restoreFocusEnabled(prefs);
+
+  return (
+    <div className="space-y-5" data-workspace-restore-settings>
+      <p className="text-xs leading-loose text-muted">{t('settingWorkspaceDescription')}</p>
+
+      <div className="space-y-2" role="group" aria-labelledby="workspace-on-startup-label">
+        <span id="workspace-on-startup-label" className="block text-sm font-semibold leading-loose">
+          {t('settingWorkspaceOnStartup')}
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-workspace-restore-tabs="restore"
+            aria-pressed={prefs.restoreTabs}
+            disabled={busy}
+            onClick={() => void updatePrefs({ restoreTabs: true })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+              prefs.restoreTabs ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceRestorePrevious')}
+          </button>
+          <button
+            type="button"
+            data-workspace-restore-tabs="fresh"
+            aria-pressed={!prefs.restoreTabs}
+            disabled={busy}
+            onClick={() => void updatePrefs({ restoreTabs: false })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+              !prefs.restoreTabs ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceStartFresh')}
+          </button>
+        </div>
+      </div>
+
+      <div className={`space-y-2 ${focusEnabled ? '' : 'opacity-60'}`} role="group" aria-labelledby="workspace-after-restore-label">
+        <span id="workspace-after-restore-label" className="block text-sm font-semibold leading-loose">
+          {t('settingWorkspaceAfterRestore')}
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-workspace-restore-focus="new"
+            aria-pressed={prefs.restoreFocus === 'new'}
+            disabled={busy || !focusEnabled}
+            onClick={() => void updatePrefs({ restoreFocus: 'new' })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+              !focusEnabled ? 'cursor-not-allowed' : 'cursor-pointer'
+            } ${
+              prefs.restoreFocus === 'new' ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceShowNewHome')}
+          </button>
+          <button
+            type="button"
+            data-workspace-restore-focus="last"
+            aria-pressed={prefs.restoreFocus === 'last'}
+            disabled={busy || !focusEnabled}
+            onClick={() => void updatePrefs({ restoreFocus: 'last' })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+              !focusEnabled ? 'cursor-not-allowed' : 'cursor-pointer'
+            } ${
+              prefs.restoreFocus === 'last' ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceShowLastTab')}
+          </button>
+        </div>
+      </div>
+
+      {failed && <p role="alert">{t('studyActionFailed')}</p>}
+    </div>
+  );
+}
+
 export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAthan> }) {
   const { t, lang, dir, theme, toggleTheme, toggleLanguage, toggleNavPinned, setViewMode, setIsSupportSheetOpen, activeBook, books } = useWorkspace();
   const [query, setQuery] = useState('');
@@ -188,7 +314,8 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
       {panel === 'lock' && <Lock {...modalProps} lang={lang} />}
       {panel === 'plugins' && <Plugins {...modalProps} lang={lang} />}
       {panel === 'wird' && <Wird {...modalProps} />}
-      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'rss', 'prayer', 'searchProviders', 'srsRollover', 'bookFinished'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
+      {['advanced', 'saving', 'rhythm', 'packs', 'folder', 'reader', 'honorifics', 'questions', 'rss', 'prayer', 'searchProviders', 'srsRollover', 'bookFinished', 'workspace'].includes(panel || '') && <Modal open onClose={close} title={t(selected?.label || 'settingReader')}>
+        {panel === 'workspace' && <WorkspaceRestoreSettings />}
         {panel === 'searchProviders' && <SearchProviderSettings />}
         {panel === 'srsRollover' && <SrsRolloverPreference />}
         {panel === 'advanced' && <AdvancedSettings />}

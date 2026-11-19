@@ -1,5 +1,6 @@
 import { translations, type TranslationKey } from '../../translations';
 import { normalizeSearchString } from '../../../shared/utils/text-normalizer';
+import { WORKSPACE_PREFS_SETTING } from '../../../shared/workspace-tabs';
 
 export const SETTINGS_GROUPS = [
   { id: 'general', label: 'settingsGroupGeneral' },
@@ -24,6 +25,7 @@ export interface SettingEntry {
 export const SETTINGS_DIRECTORY: readonly SettingEntry[] = [
   { id: 'advanced', group: 'advanced', label: 'advancedTools', description: 'advancedToolsDescription', action: 'advanced', keys: [] },
   { id: 'language', group: 'general', label: 'settingLanguage', description: 'settingLanguageDescription', action: 'language', keys: ["baglib-lang"] },
+  { id: 'workspace', group: 'general', label: 'settingWorkspace', description: 'settingWorkspaceDescription', action: 'workspace', keys: [WORKSPACE_PREFS_SETTING] },
   { id: 'guide', group: 'general', label: 'settingGuide', description: 'settingGuideDescription', action: 'guide', keys: ["onboarding.v1"] },
   { id: 'theme', group: 'appearance', label: 'settingTheme', description: 'settingThemeDescription', action: 'theme', keys: ["baglib-theme"] },
   { id: 'navigation', group: 'appearance', label: 'settingNavigation', description: 'settingNavigationDescription', action: 'navigation', keys: ["shell.navPinned.v1"] },

@@ -6210,6 +6210,14 @@ export const translations = {
     workspaceQuickOpenNoRecent: "لم يُفتح شيء بعد",
     workspaceSplitDivider: "تغيير عرض اللوحين",
     workspaceSplitClose: "إغلاق العرض جنبًا إلى جنب",
+    settingWorkspace: "مساحة العمل وعلامات التبويب",
+    settingWorkspaceDescription: "اختر استعادة علامات التبويب السابقة عند التشغيل أو البدء بصفحة رئيسية جديدة.",
+    settingWorkspaceOnStartup: "عند التشغيل",
+    settingWorkspaceRestorePrevious: "استعادة علامات التبويب السابقة",
+    settingWorkspaceStartFresh: "بدء جلسة جديدة",
+    settingWorkspaceAfterRestore: "بعد الاستعادة، اعرض",
+    settingWorkspaceShowNewHome: "علامة تبويب رئيسية جديدة",
+    settingWorkspaceShowLastTab: "آخر علامة تبويب كنت عليها",
   },
   en: {
     ...researchEditorTranslations.en,
@@ -12421,6 +12429,14 @@ export const translations = {
     workspaceQuickOpenNoRecent: "Nothing opened yet",
     workspaceSplitDivider: "Resize the two panes",
     workspaceSplitClose: "Close side by side",
+    settingWorkspace: "Workspace & tabs",
+    settingWorkspaceDescription: "Choose whether to restore previous tabs on startup or start fresh with a Home tab.",
+    settingWorkspaceOnStartup: "On startup",
+    settingWorkspaceRestorePrevious: "Restore previous tabs",
+    settingWorkspaceStartFresh: "Start fresh",
+    settingWorkspaceAfterRestore: "After restoring, show",
+    settingWorkspaceShowNewHome: "A new Home tab",
+    settingWorkspaceShowLastTab: "The tab I was on last",
   }
 };
 

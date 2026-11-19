@@ -1,6 +1,7 @@
 'use client';
 
 import { editorLeaveGuard } from '../research/editor-leave';
+import { registerCloseGuard } from '../../utils/close-guard';
 import { MediaCoverBackfill } from '../library/MediaCoverBackfill';
 import { ToastProvider } from '../ui/Toast';
 import { isLectureFormat } from '../../../shared/lectures';
@@ -18,9 +19,18 @@ import {
   findTab,
   homeLocation,
   newTab,
+  parseClosed,
+  parsePrefs,
+  parseTabs,
   pushClosed,
+  serializeTabs,
+  startupTabs,
   tabsReducer,
+  WORKSPACE_CLOSED_SETTING,
+  WORKSPACE_PREFS_SETTING,
+  WORKSPACE_TABS_SETTING,
   type TabLocation,
+  type TabsAction,
   type TabsState,
   type WorkspaceTab,
   type ViewSnapshot,
@@ -836,6 +846,15 @@ interface TabsProviderProps {
   notifyBookDelete: (bookId: string) => void;
 }
 
+type ProviderTabsAction = TabsAction | { type: '__restore'; state: TabsState };
+
+function providerTabsReducer(state: TabsState, action: ProviderTabsAction): TabsState {
+  if (action.type === '__restore') return action.state;
+  return tabsReducer(state, action);
+}
+
+const TAB_PERSIST_DEBOUNCE_MS = 500;
+
 const TabsProvider: React.FC<TabsProviderProps> = ({
   children,
   initialTabs,
@@ -843,7 +862,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
   notifyBookUpdate,
   notifyBookDelete,
 }) => {
-  const [state, dispatch] = useReducer(tabsReducer, initialTabs, (init) => init ?? createInitialTabsState());
+  const [state, dispatch] = useReducer(providerTabsReducer, initialTabs, (init) => init ?? createInitialTabsState());
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
   // Ids carry the session start, so they never collide with restored or reopened tabs (WS-7).
@@ -854,14 +873,133 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     return `tab-${sessionRef.current}-${nextIdRef.current++}`;
   }, []);
   const [closedTabs, setClosedTabs] = useState<WorkspaceTab[]>([]);
+  const closedRef = useRef(closedTabs);
+  useEffect(() => { closedRef.current = closedTabs; }, [closedTabs]);
+
+  const restoredRef = useRef(initialTabs !== undefined);
+  const skipNextTabsPersistRef = useRef(false);
+  const userMutatedRef = useRef(false);
+  const tabsDirtyRef = useRef(false);
+  const closedDirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushPersist = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (!restoredRef.current || initialTabs !== undefined) return;
+    const api = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
+    if (!api?.set) return;
+    if (tabsDirtyRef.current) {
+      tabsDirtyRef.current = false;
+      try {
+        await api.set(WORKSPACE_TABS_SETTING, serializeTabs(stateRef.current));
+      } catch {
+        // Ignore persistence errors so tab operations never break.
+      }
+    }
+    if (closedDirtyRef.current) {
+      closedDirtyRef.current = false;
+      try {
+        await api.set(WORKSPACE_CLOSED_SETTING, closedRef.current);
+      } catch {
+        // Ignore persistence errors so tab operations never break.
+      }
+    }
+  }, [initialTabs]);
+
+  const schedulePersist = useCallback(() => {
+    if (!restoredRef.current || initialTabs !== undefined) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void flushPersist();
+    }, TAB_PERSIST_DEBOUNCE_MS);
+  }, [initialTabs, flushPersist]);
+
+  // Restore saved tabs, preferences, and closed tabs once on startup after initial hydration.
+  useEffect(() => {
+    if (initialTabs !== undefined) return;
+    let alive = true;
+    const api = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
+    if (!api?.get) {
+      restoredRef.current = true;
+      return;
+    }
+    void Promise.all([
+      api.get(WORKSPACE_TABS_SETTING).catch(() => undefined),
+      api.get(WORKSPACE_PREFS_SETTING).catch(() => undefined),
+      api.get(WORKSPACE_CLOSED_SETTING).catch(() => undefined),
+    ]).then(([rawTabs, rawPrefs, rawClosed]) => {
+      if (!alive) return;
+      const closed = parseClosed(rawClosed);
+      closedRef.current = closed;
+      setClosedTabs(closed);
+      if (!userMutatedRef.current) {
+        const saved = parseTabs(rawTabs);
+        const prefs = parsePrefs(rawPrefs);
+        const next = startupTabs(saved, prefs, allocateId(), Date.now());
+        stateRef.current = next;
+        skipNextTabsPersistRef.current = true;
+        dispatch({ type: '__restore', state: next });
+      }
+      restoredRef.current = true;
+    });
+    return () => { alive = false; };
+  }, [initialTabs, allocateId]);
+
+  // Persist tab state on a 500ms debounce after startup restore completes.
+  useEffect(() => {
+    if (!restoredRef.current || initialTabs !== undefined) return;
+    if (skipNextTabsPersistRef.current) {
+      skipNextTabsPersistRef.current = false;
+      return;
+    }
+    tabsDirtyRef.current = true;
+    schedulePersist();
+  }, [state, initialTabs, schedulePersist]);
+
+  // Persist closed tabs when modified by user actions.
+  useEffect(() => {
+    if (!restoredRef.current || initialTabs !== undefined || !userMutatedRef.current) return;
+    closedDirtyRef.current = true;
+    schedulePersist();
+  }, [closedTabs, initialTabs, schedulePersist]);
+
+  // Flush pending tab/closed state on window unload or app close.
+  useEffect(() => {
+    if (initialTabs !== undefined) return;
+    const onBeforeUnload = () => {
+      void flushPersist();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', onBeforeUnload);
+    }
+    const removeCloseGuard = registerCloseGuard(async () => {
+      await flushPersist();
+      return true;
+    });
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', onBeforeUnload);
+      }
+      removeCloseGuard();
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [initialTabs, flushPersist]);
 
   const open = useCallback((location: TabLocation, options?: { afterId?: string; background?: boolean }) => {
+    userMutatedRef.current = true;
     const id = allocateId();
     dispatch({ type: 'open', id, location, now: Date.now(), afterId: options?.afterId, background: options?.background });
     return id;
   }, [allocateId]);
 
   const close = useCallback((id: string) => {
+    userMutatedRef.current = true;
     const closing = findTab(stateRef.current, id);
     if (closing) setClosedTabs(previous => pushClosed(previous, closing));
     const homeId = allocateId();
@@ -869,32 +1007,36 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
   }, [allocateId]);
 
   const activate = useCallback((id: string) => {
+    userMutatedRef.current = true;
     dispatch({ type: 'activate', id, now: Date.now() });
   }, []);
 
   const navigate = useCallback((id: string, location: TabLocation) => {
+    userMutatedRef.current = true;
     dispatch({ type: 'navigate', id, location, now: Date.now() });
   }, []);
 
   const move = useCallback((id: string, toIndex: number) => {
+    userMutatedRef.current = true;
     dispatch({ type: 'move', id, toIndex });
   }, []);
 
   const go = useCallback((id: string, index: number) => {
+    userMutatedRef.current = true;
     dispatch({ type: 'go', id, index, now: Date.now() });
   }, []);
 
   const duplicate = useCallback((id: string) => {
+    userMutatedRef.current = true;
     const newId = allocateId();
     dispatch({ type: 'duplicate', id, newId, now: Date.now() });
     return newId;
   }, [allocateId]);
 
-  const closedRef = useRef(closedTabs);
-  useEffect(() => { closedRef.current = closedTabs; }, [closedTabs]);
   const reopenClosed = useCallback(() => {
     const [last, ...rest] = closedRef.current;
     if (!last) return;
+    userMutatedRef.current = true;
     closedRef.current = rest;
     setClosedTabs(rest);
     dispatch({ type: 'reopen', tab: last, id: allocateId(), now: Date.now() });

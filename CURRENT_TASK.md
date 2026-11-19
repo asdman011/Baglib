@@ -1,3 +1,26 @@
+## KEY-423 (WS-7): restore tabs after restart, reopen closed tab, workspace settings, and background editor guard report - 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/context/WorkspaceContext.tsx` (`TabsProvider`):
+  - Restores `workspace.tabs.v1`, `workspace.prefs.v1`, and `workspace.closed.v1` after initial hydration using `parseTabs`, `parsePrefs`, `parseClosed`, and `startupTabs`. Starts with a single Home tab until settings resolve (no flash, clean hydration); skips startup restore/persist when `initialTabs` is passed.
+  - Persists `serializeTabs(state)` to `workspace.tabs.v1` and `closedTabs` to `workspace.closed.v1` on a 500 ms debounce via `window.electronAPI.settings.set`, and flushes immediately on `beforeunload` and `registerCloseGuard` (`src/renderer/utils/close-guard.ts`).
+- `src/renderer/components/layout/SettingsDirectory.tsx`, `src/renderer/components/layout/settings-directory-model.ts`, `src/renderer/translations.ts`, `tests/ui/settings-directory-coverage.test.ts`:
+  - Added **Workspace & tabs** (`settingWorkspace`) under General settings in Arabic and English, backed by `workspace.prefs.v1`:
+    - **On startup:** Restore previous tabs (default) / Start fresh
+    - **After restoring, show:** A new Home tab (default) / The tab I was on last (disabled unless `restoreFocusEnabled(prefs)` is true)
+  - Moved `workspace.prefs.v1` from `operational` into `SETTINGS_DIRECTORY` in `tests/ui/settings-directory-coverage.test.ts`.
+- `tests/ui/workspace-tabs-restore.test.ts` (new, 7 tests): covers delayed hydration restore, `restoreTabs: false`, `restoreFocus: 'last'`, corrupt/old values, `reopenClosed` after restart, 30-tab cap + `beforeunload`/`appClose` flush, and `SettingsDirectory` in `ar` and `en`.
+- `scripts/workspace-restore-live/{run.mjs,main.cjs}` (new): real Electron restart harness in `ar` and `en` with real text-layer PDFs from `tests/real-files/`, off-screen windows, hard timeouts, and throwaway profile cleanup. Evidence in `.baglib-data/key423-evidence/` (14 PNGs, 0 renderer errors).
+- **Step 4 finding (reported in `docs/agent-ops/reports/KEY-423.md`, not edited because `WorkspaceTabs.tsx` is Claude Code's):** closing a *background* `notes-editor` tab via `×` skips `editorLeaveGuard()` (`WorkspaceTabs.tsx:36` checks `id === state.activeId`), and `editor-leave.ts` uses a single module-level `let leave` overwritten by multiple mounted editors. Proposed fix: `Map<tabId, Guard>` in `editor-leave.ts` + `activate(id)` before `guard()` in `useGuardedClose`.
+
+**Tests:**
+- Focused: 66/66 (`workspace-tabs-restore`, `workspace-tab-scope`, `workspace-tabs-wiring`, `settings-directory-coverage`, `translation-keys`, `workspace-tabs`) and 13/13 (`quran-reference-search` + `workspace-tabs-restore`).
+- Full suite (`npm test -- --test-concurrency=2`): 2,800/2,800 pass (395 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `eslint` on touched files: 0 errors, 0 warnings.
+- Live restart run (`node scripts/workspace-restore-live/run.mjs`): PASS in `ar` and `en`.
+
+**Files:** `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/SettingsDirectory.tsx`, `src/renderer/components/layout/settings-directory-model.ts`, `src/renderer/translations.ts`, `tests/ui/settings-directory-coverage.test.ts`, `tests/ui/workspace-tabs-restore.test.ts`, `scripts/workspace-restore-live/run.mjs`, `scripts/workspace-restore-live/main.cjs`, `docs/agent-ops/reports/KEY-423.md`, `CURRENT_TASK.md`.
+
 ## KEY-427 groundwork: window registry and the inventory of single-window code (WS-12, not wired) - 2026-11-19 - Agent: Claude Code
 
 **Request.** Nonstop parallel work while Antigravity holds KEY-423. This avoids its files and the shared dev server.
