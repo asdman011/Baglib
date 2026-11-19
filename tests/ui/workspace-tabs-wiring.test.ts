@@ -8,6 +8,7 @@ import {
   WorkspaceHistoryStrip, WorkspaceTabPanels, WorkspaceTabRow, tabCommandEffect, useWorkspaceTabShortcuts,
 } from '../../src/renderer/components/layout/WorkspaceTabs';
 import { newTab, tabsReducer, type TabsState, type WorkspaceView } from '../../src/shared/workspace-tabs';
+import { editorLeaveGuard, registerEditorLeave } from '../../src/renderer/components/research/editor-leave';
 
 function setup() {
   const { window } = parseHTML('<!doctype html><html><body><div id="root"></div></body></html>');
@@ -140,6 +141,39 @@ describe('workspace tabs wired to the providers', () => {
       assert.equal(count('t2'), '1', 'the focused tab handled the key');
       assert.equal(count('t1'), '0', 'the hidden tab did not');
     } finally { restore(); }
+  });
+
+  it('each manuscript tab keeps its own leave guard', () => {
+    const first = async () => true, second = async () => false;
+    const offFirst = registerEditorLeave(first, 'm1');
+    const offSecond = registerEditorLeave(second, 'm2');
+    assert.equal(editorLeaveGuard('m1'), first);
+    assert.equal(editorLeaveGuard('m2'), second);
+    offSecond();
+    assert.equal(editorLeaveGuard('m1'), first, 'removing one tab\'s guard keeps the other');
+    offFirst();
+    assert.equal(editorLeaveGuard('m1'), undefined);
+  });
+
+  it('closing a background manuscript tab with unsaved work asks its editor first', async () => {
+    const { window, root, restore } = setup();
+    let initial = threeTabs();
+    initial = tabsReducer(initial, { type: 'open', id: 'm1', location: { view: 'notes-editor', title: 'مسودة' }, now: 4, background: true });
+    let answer = false;
+    let asked = 0;
+    const off = registerEditorLeave(async () => { asked += 1; return answer; }, 'm1');
+    try {
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: initial }, createElement(Shell))));
+      await act(async () => fire(window.document.querySelector('[data-tab-close="m1"]')!, 'onClick'));
+      await act(async () => {});
+      assert.equal(asked, 1, 'the editor was asked');
+      assert.ok(tabIds(window).includes('m1'), 'kept open when the user keeps editing');
+      assert.equal(window.document.querySelector('[data-workspace-tab-row] [aria-selected="true"]')!.getAttribute('data-tab-id'), 'm1', 'brought forward so the question is visible');
+      answer = true;
+      await act(async () => fire(window.document.querySelector('[data-tab-close="m1"]')!, 'onClick'));
+      await act(async () => {});
+      assert.ok(!tabIds(window).includes('m1'));
+    } finally { off(); restore(); }
   });
 
   it('Ctrl+T opens Home, Ctrl+W closes, Ctrl+Shift+T brings it back with its place', async () => {

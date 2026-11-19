@@ -1,3 +1,29 @@
+## KEY-423 review and fixes; KEY-422 live-verified - 2026-11-19 - Agent: Claude Code
+
+**KEY-423 review (Antigravity, e16f350e): pass.**
+- Persistence only starts after restore, an unchanged startup writes nothing, and saves flush on close.
+- Two settings in Settings → General → Workspace & tabs, in ar and en.
+- The agent ran the full suite (2800/2800) and the restart live run in ar and en.
+- Follow-up, not a blocker: if the user changes tabs before the saved tabs finish loading (for example a deep link at launch), the restore is skipped and the saved tabs are overwritten by the next change.
+
+**Fixed (the data-loss risk the agent reported):**
+- `src/renderer/components/research/editor-leave.ts`: leave guards are kept per tab, in a map keyed by tab id. A second manuscript tab no longer overwrites the first one's guard, and removing one keeps the other.
+- `src/renderer/components/research/ResearchEditorView.tsx`: registers its guard under its own tab id.
+- `src/renderer/components/layout/WorkspaceTabs.tsx`: closing *any* manuscript tab asks its editor first. A background tab is brought forward so the question is visible.
+- `src/renderer/components/context/WorkspaceContext.tsx`: changing a tab's view uses that tab's guard (a one-line change).
+- `src/renderer/components/layout/TabBar.tsx`: the + panel is anchored to the button's end side, so it opens inward. It ran off the left edge in Arabic.
+- `tests/ui/workspace-tabs-wiring.test.ts`: per-tab guards, and a background manuscript tab kept open when the user keeps editing.
+- `scripts/workspace-tabs-live/main.cjs`:
+  - the + panel step: Most used, Recent with the opened book, on top, inside the window, and the pick opens a new tab on the book;
+  - each language clears the saved tabs first (restore now carries them across reloads).
+
+**Tests:**
+- Full suite: 2802/2802.
+- Focused wiring tests: 9/9.
+- workspace-tabs-live passes in ar and en with the + panel step.
+- workspace-restore-live (Antigravity's) passes in ar and en.
+
+**Jira:** KEY-422 → Done, KEY-423 → Done.
 ## KEY-423 (WS-7): restore tabs after restart, reopen closed tab, workspace settings, and background editor guard report - 2026-11-19 - Agent: Antigravity
 
 **Done:**

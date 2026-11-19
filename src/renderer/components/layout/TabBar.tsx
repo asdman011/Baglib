@@ -233,7 +233,7 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
           <Plus className="h-4 w-4" aria-hidden="true" />
         </button>
         {quickOpen && renderQuickOpen && (
-          <div className="absolute top-full z-50 pt-1 [inset-inline-start:0]">
+          <div className="absolute top-full z-50 pt-1 [inset-inline-end:0]">
             {renderQuickOpen({ close: closeQuickOpen, autoFocus: quickOpen === 'keyboard' })}
           </div>
         )}

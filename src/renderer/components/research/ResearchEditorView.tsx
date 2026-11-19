@@ -9,7 +9,7 @@ import { researchSettings } from '../../../shared/research-editor-apparatus';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { translations } from '../../translations';
 import { collectionKeys } from '../../utils/sunnah-collections';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { createResearchEditorHost, shouldForwardEditorShortcut } from './editor-host';
 import { registerEditorLeave } from './editor-leave';
 import { registerCloseGuard } from '../../utils/close-guard';
@@ -54,6 +54,8 @@ function saveFavourites(ids: string[]): void {
 
 export function ResearchEditorView() {
   const { lang, dir, theme, t, books, openBookForReading } = useWorkspace();
+  // KEY-423 review: each manuscript tab registers its own leave guard, so closing a background tab can ask it.
+  const tabId = useOptionalTab()?.id;
   const current = useRef({ books, lang, openBookForReading });
   useLayoutEffect(() => {
     current.current = { books, lang, openBookForReading };
@@ -212,7 +214,7 @@ export function ResearchEditorView() {
       }
     };
 
-    const removeLeave = registerEditorLeave(leave);
+    const removeLeave = registerEditorLeave(leave, tabId);
     const removeClose = registerCloseGuard(async () => {
       window.electronAPI.appClose.hold();
       return leave();
@@ -224,7 +226,7 @@ export function ResearchEditorView() {
       delete window.__baglibResearchEditorBridge;
       void host.close().then(() => host.dispose()).catch(() => setError(true));
     };
-  }, [host]);
+  }, [host, tabId]);
 
   useEffect(() => {
     const child = frame.current?.contentWindow;

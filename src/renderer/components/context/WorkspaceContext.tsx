@@ -1161,7 +1161,7 @@ function useTabScopeState(tabId: string): TabScopeContextType {
       const book = mode === 'reader' ? activeBookRef.current : null;
       navigateTab?.(tabId, book ? { view: mode, target: `book:${book.id}`, title: book.title ?? '' } : { view: mode, title: '' });
     };
-    const guard = mode === 'notes-editor' ? undefined : editorLeaveGuard();
+    const guard = mode === 'notes-editor' ? undefined : editorLeaveGuard(tabId);
     if (guard) {
       void guard().then(allowed => {
         if (allowed) apply();

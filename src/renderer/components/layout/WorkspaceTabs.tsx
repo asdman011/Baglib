@@ -30,13 +30,16 @@ const lastTabId = (state: TabsState): string | undefined => state.tabs[state.tab
  * close at once. Only the focused tab's editor is mounted with a guard, so other tabs need no question.
  */
 function useGuardedClose() {
-  const { state, close } = useTabs();
+  const { state, close, activate } = useTabs();
   return React.useCallback((id: string) => {
     const tab = state.tabs.find(item => item.id === id);
-    const guard = tab && id === state.activeId && currentLocation(tab).view === 'notes-editor' ? editorLeaveGuard() : undefined;
+    // KEY-423 review: every manuscript tab, focused or in the background, has its own guard.
+    const guard = tab && currentLocation(tab).view === 'notes-editor' ? editorLeaveGuard(id) : undefined;
     if (!guard) { close(id); return; }
+    // A background tab is brought forward first, so its "unsaved changes" question is on screen.
+    if (id !== state.activeId) activate(id);
     void guard().then(allowed => { if (allowed) close(id); });
-  }, [state, close]);
+  }, [state, close, activate]);
 }
 
 export const WorkspaceTabRow: React.FC = () => {

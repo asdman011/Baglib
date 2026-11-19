@@ -57,6 +57,8 @@ app.on('browser-window-created', (_, win) => {
       const lecture = lectures.find(item => item.path === real(videos[language]));
       assert.ok(book && lecture, 'imported items found');
       errors.length = 0;
+      // KEY-423 restores tabs across reloads; each language starts from a clean workspace.
+      await evaluate("Promise.all(['workspace.tabs.v1', 'workspace.closed.v1'].map(key => window.electronAPI.settings.set(key, null)))");
       await evaluate('localStorage.setItem("baglib-lang",' + JSON.stringify(language) + ')');
       win.setContentSize(1280, 900);
       await win.loadURL('http://localhost:3000');
@@ -169,6 +171,21 @@ app.on('browser-window-created', (_, win) => {
       // The screen follows the focus: the visible panel is the focused tab's, and no other panel shows.
       await until("document.querySelector('[data-tab-panel]:not([hidden])')?.dataset.tabPanel === document.querySelector('[data-workspace-tab-row] [aria-selected=true]')?.dataset.tabId && document.querySelectorAll('[data-tab-panel]:not([hidden])').length === 1");
 
+      // KEY-422: the + panel. Focus + and press Down: Most used has entries, Recent lists the opened book, and
+      // picking it opens a new tab on that book.
+      const bookKey = JSON.stringify(book.title.slice(0, 20));
+      await evaluate("document.querySelector('[data-tab-new]').focus()");
+      key('Down');
+      await until("!!document.querySelector('[data-quick-open]')");
+      assert.ok(await evaluate("document.querySelectorAll('[data-quick-open-item=destination]').length >= 3"), 'Most used lists destinations');
+      await until(`[...document.querySelectorAll('[data-quick-open-item=recent]')].some(item => item.textContent.includes(${bookKey}))`);
+      assert.equal(await evaluate("(() => { const r = document.querySelector('[data-quick-open]').getBoundingClientRect(); return !!document.elementFromPoint(r.left + r.width / 2, r.top + 20)?.closest('[data-quick-open]'); })()"), true, 'the + panel shows on top');
+      assert.equal(await evaluate("(() => { const r = document.querySelector('[data-quick-open]').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; })()"), true, 'the + panel stays inside the window');
+      await shot(`${language}-6b-quick-open`);
+      const tabsBefore = (await tabIds()).length;
+      await evaluate(`[...document.querySelectorAll('[data-quick-open-item=recent]')].find(item => item.textContent.includes(${bookKey})).click()`);
+      await until(`document.querySelectorAll('[data-workspace-tab-row] [data-tab-id]').length===${tabsBefore + 1} && !!${visiblePanel}?.querySelector('[data-reader-go-to]')`);
+      assert.equal(await evaluate(`document.querySelector('[data-workspace-tab-row] [aria-selected="true"]').getAttribute('title')`), book.title, 'the new tab is on the book');
       // Narrow window: the bar scrolls sideways and the page never does.
       win.setContentSize(480, 900);
       await until('innerWidth <= 500');
