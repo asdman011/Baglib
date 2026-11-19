@@ -119,6 +119,13 @@ app.on('browser-window-created', (_, win) => {
       // Back and forward in this tab: Alt+Left in English, Alt+Right in Arabic, goes back to the library.
       const backKey = rtl ? 'Right' : 'Left';
       const forwardKey = rtl ? 'Left' : 'Right';
+      // KEY-420: Library -> book -> Quran, back twice, forward.
+      await click('[data-nav-item=quran]');
+      await until(`!!${visiblePanel}?.querySelector('[data-quran-reader],[data-quran-view],[data-quran-home]') || ${visiblePanel}?.textContent.includes(${JSON.stringify(rtl ? 'القرآن' : 'Quran')})`);
+      await until(`!${visiblePanel}?.querySelector('[data-reader-go-to]')`);
+      await shot(`${language}-4b-quran`);
+      key(backKey, ['alt']);
+      await until(`${visiblePanel}?.querySelector('[data-reader-go-to]')?.value===${JSON.stringify(five)}`);
       key(backKey, ['alt']);
       await until(`!!${visiblePanel}?.querySelector('[data-view-mode-toggle]')`);
       assert.equal(await evaluate("document.querySelector('[data-history=\"forward\"]').disabled"), false);
@@ -159,9 +166,12 @@ app.on('browser-window-created', (_, win) => {
       const beforeCycle = await activeId();
       key('Tab', ['control']);
       await until(`document.querySelector('[data-workspace-tab-row] [aria-selected="true"]')?.dataset.tabId !== ${JSON.stringify(beforeCycle)}`);
+      // The screen follows the focus: the visible panel is the focused tab's, and no other panel shows.
+      await until("document.querySelector('[data-tab-panel]:not([hidden])')?.dataset.tabPanel === document.querySelector('[data-workspace-tab-row] [aria-selected=true]')?.dataset.tabId && document.querySelectorAll('[data-tab-panel]:not([hidden])').length === 1");
 
       // Narrow window: the bar scrolls sideways and the page never does.
       win.setContentSize(480, 900);
+      await until('innerWidth <= 500');
       await pause(600);
       assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, 'no sideways page scroll at 480px');
       assert.equal(await evaluate("(() => { const list = document.querySelector('[role=tablist]'); return list.scrollWidth > list.clientWidth; })()"), true, 'tab bar overflows into a scroll');
@@ -178,6 +188,7 @@ app.on('browser-window-created', (_, win) => {
   })().catch(async error => {
     console.error(error);
     console.error('Renderer errors:', JSON.stringify(errors.slice(-10)));
+    try { console.error('PANELS ' + await evaluate("JSON.stringify({ active: document.querySelector('[data-workspace-tab-row] [aria-selected=true]')?.dataset.tabId, panels: [...document.querySelectorAll('[data-tab-panel]')].map(p => ({ id: p.dataset.tabPanel, hidden: p.hidden, display: getComputedStyle(p).display, reader: !!p.querySelector('[data-reader-go-to]'), quran: !!p.querySelector('[data-quran-reader]') })), readers: document.querySelectorAll('[data-reader-go-to]').length, width: innerWidth })")); } catch (e) { console.error('panel dump failed', e); }
     fs.writeFileSync(path.join(evidence, 'failure.txt'), String(error.stack || error) + '\n' + errors.join('\n'));
     try { await shot('failure'); } finally { app.exit(1); }
   });

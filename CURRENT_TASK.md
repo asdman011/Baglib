@@ -1,3 +1,20 @@
+## KEY-420 done; Jira updates for KEY-418, 419, 420 - 2026-11-19 - Agent: Claude Code
+
+**Done:**
+- `scripts/workspace-tabs-live/run.mjs`: uses a throwaway copy of the Quran pack (`setupThrowawayCorpus`) and cleans it up afterwards.
+- `scripts/workspace-tabs-live/main.cjs`:
+  - adds KEY-420's exact sequence (Library → book → Quran, back twice, forward), mirrored keys in Arabic;
+  - checks that after Ctrl+Tab the only visible panel is the focused tab's;
+  - waits for the 480 px resize to apply before checking the layout. An earlier run failed intermittently at this step because the resize hadn't landed;
+  - dumps the panel state on failure.
+
+**Tests:** workspace-tabs-live passed twice in a row in ar and en, with no renderer errors.
+
+**Jira (2026-11-19):**
+- KEY-418 → Done (Antigravity 3eabcc2f, reviewed; verified on top).
+- KEY-419 → Done (d83c96e7, c7c5af76, bd00d267).
+- KEY-420 → In Review, then Done with this run.
+- KEY-422, KEY-425, KEY-426 and KEY-428 got progress comments. KEY-422 is In Progress.
 ## KEY-419 follow-up: speaker icon on playing tabs; history list above the reader - 2026-11-19 - Agent: Claude Code
 
 **Done:**

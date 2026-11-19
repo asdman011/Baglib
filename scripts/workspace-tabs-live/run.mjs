@@ -5,10 +5,14 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import electron from 'electron';
 import { rendererAnswers } from '../lib/renderer.mjs';
+import { setupThrowawayCorpus } from '../lib/corpus-copy.mjs';
 
 const evidence = path.resolve('.baglib-data/key419-evidence');
 fs.mkdirSync(evidence, { recursive: true });
 const profile = fs.mkdtempSync(path.resolve('.baglib-data/tabs-live-'));
+// KEY-420: the Quran step needs the installed Quran pack, copied into the throwaway profile.
+const corpus = setupThrowawayCorpus({ targetDir: profile, copyPoetry: false, linkSunnah: false, includeMushafLayout: true });
+assert.equal(corpus.quran.available, true, 'Installed Quran copy required');
 let server;
 try {
   if (!await rendererAnswers()) {
@@ -33,6 +37,7 @@ try {
     if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(server.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
     else server.kill('SIGTERM');
   }
+  corpus.cleanup();
   // The profile was created above, directly inside the project's throwaway data directory.
   assert.equal(path.dirname(profile), path.resolve('.baglib-data'));
   fs.rmSync(profile, { recursive: true, force: true });
