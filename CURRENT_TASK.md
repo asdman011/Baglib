@@ -1,3 +1,24 @@
+﻿## Review of Antigravity's tab commits, and the next queue - 2026-11-19 - Agent: Claude Code
+
+**Review of KEY-421 20b9dd33, KEY-425 56ccec45, KEY-428 2dc61b1a, KEY-426 a2990805 and KEY-424 bb79d2a6.**
+- Checks: tsc is clean. workspace-tabs-wiring, workspace-links and workspace-tabs pass 64/64.
+- KEY-421, 425, 428 and 426 pass.
+- KEY-424 has changes requested:
+  - a 3-second timer runs the editors' explicit save;
+  - restoreState runs again after each periodic save, which reopens the manuscript chapter every 3 s;
+  - every 3 s an update is dispatched even when nothing changed.
+  - The full list is in the Jira comment.
+
+**Jira changes:**
+- KEY-421: moved to Done, with a comment.
+- KEY-424: moved back to In Progress, with the fix list.
+
+**Next queue.** Handed to Antigravity, with the prompt in `docs/agent-ops/reports/QUEUE2.antigravity.prompt.txt`:
+1. the KEY-424 fix;
+2. the KEY-427 "Move to new window" spike;
+3. KEY-381, only if it needs no schema change.
+
+**Files.** CURRENT_TASK.md only. The prompt file is local.
 ## Test runs can no longer hang - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user asked why two test runs hung today, and to fix it.
