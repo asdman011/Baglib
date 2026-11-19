@@ -177,6 +177,7 @@ import { registerCloseGuard } from '../../utils/close-guard';
 import { ExportPdfDialog, SaveCloseDialog } from './FileSaveUi';
 import { Modal } from '../ui/Modal';
 import { createBookQuotePayload, requestSendToManuscript, writeSourceDrag } from '../../../shared/manuscript-transfer';
+import { formatPassageWithAnnotations } from '../../utils/share-with-annotations';
 
 const PDF_TEXT_DELAY_MS = 2500;
 
@@ -3231,7 +3232,11 @@ const SourceBookReader: React.FC = () => {
     explain: () => studySelection('explain'), practice: () => studySelection('practice'), review: () => studySelection('review'),
     note: () => setSelectionEditor(current => ({ key: current.key + 1, tab: 'note' })),
     colors: { children: HIGHLIGHT_COLORS.map(color => ({id:color.id,label:t(colorKeys[color.id]),icon:<span className="inline-block size-3 rounded-full" style={{backgroundColor:color.hex}} />,onClick:()=>handleSaveKnowledge('highlight',color.id)})) },
-    copy: () => navigator.clipboard.writeText(selectedText+'\n['+(activeBook?.title || '')+' · '+t('page')+' '+readingPage+']'),
+    copy: () => {
+      const plain = selectedText + '\n[' + (activeBook?.title || '') + ' · ' + t('page') + ' ' + readingPage + ']';
+      const target = activeBook ? `book:${activeBook.id}#p=${readingPage}` : '';
+      void formatPassageWithAnnotations(plain, { target, workId: activeBook?.id, page: Number(readingPage) || undefined }, workspaceLang, t).then(out => navigator.clipboard.writeText(out));
+    },
     search: () => { window.dispatchEvent(new CustomEvent('baglib:search-selection',{detail:selectedText})); },
     dictionary: () => { closeAllPanelsExcept();setDictionaryLookupWord(selectedText);setIsDictionaryModalOpen(true); },
     manuscript: activeBook ? () => { const page = pendingSelection?.pageNumber ?? pdfSelectionInfo?.pageNumber ?? readingPage; const epub = isReflowable && activeRange ? selectionStudyLocation(paginatedPages, activeRange, readingPage) : null; requestSendToManuscript(createBookQuotePayload({ book: { id: activeBook.id, title: activeBook.title }, text: selectedText, page: epub ? undefined : Number(page) || undefined, cfi: epub?.cfi, chapter: epub?.chapter })); } : undefined,

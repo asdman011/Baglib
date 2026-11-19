@@ -29,7 +29,7 @@ export interface SelectionChange {
   focus: string | null;
 }
 
-const inBarOrder = (state: TabsState, ids: Iterable<string>): string[] => {
+export const inBarOrder = (state: TabsState, ids: Iterable<string>): string[] => {
   const wanted = new Set(ids);
   return state.tabs.filter(tab => wanted.has(tab.id)).map(tab => tab.id);
 };

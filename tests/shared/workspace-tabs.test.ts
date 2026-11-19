@@ -301,8 +301,8 @@ describe('parseTabs and serializeTabs', () => {
 describe('preferences and startup', () => {
   it('defaults to restore, a new Home tab in front and links in a new tab', () => {
     assert.deepEqual(parsePrefs(undefined), DEFAULT_WORKSPACE_PREFS);
-    assert.deepEqual(DEFAULT_WORKSPACE_PREFS, { restoreTabs: true, restoreFocus: 'new', linkTarget: 'new' });
-    assert.deepEqual(parsePrefs('{"restoreTabs":false,"restoreFocus":"bogus","linkTarget":"same"}'), { restoreTabs: false, restoreFocus: 'new', linkTarget: 'same' });
+    assert.deepEqual(DEFAULT_WORKSPACE_PREFS, { restoreTabs: true, restoreFocus: 'new', linkTarget: 'new', shareSourceOnly: false });
+    assert.deepEqual(parsePrefs('{"restoreTabs":false,"restoreFocus":"bogus","linkTarget":"same"}'), { restoreTabs: false, restoreFocus: 'new', linkTarget: 'same', shareSourceOnly: false });
   });
 
   it('the "after restoring" option is disabled unless restoring is on', () => {

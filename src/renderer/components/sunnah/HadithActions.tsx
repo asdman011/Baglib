@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Copy, Share2, SlidersHorizontal } from 'lucide-react';
 import type { SunnahChapter, SunnahHadith } from '../../../shared/types/sunnah';
 import type { SunnahTranslate } from './SunnahChapterView';
@@ -9,6 +9,7 @@ import { translations, type TranslationKey } from '../../translations';
 import { collectionKeys as names } from '../../utils/sunnah-collections';
 import { passageNote } from '../actions/passage-actions';
 import { getSunnahIsnadScope, setSunnahIsnadScope } from '../../utils/corpus-lookup';
+import { formatPassageWithAnnotations, getShareSourceOnlyPref } from '../../utils/share-with-annotations';
 
 export function formatHadith(
   chapter: SunnahChapter,
@@ -47,7 +48,13 @@ export function HadithActions({ chapter, hadith, showEnglish, t }: { chapter: Su
     return getSunnahIsnadScope() !== 'matn_only';
   });
   const [reference, setReference] = useState(true);
+  const [sourceOnly, setSourceOnly] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void getShareSourceOnlyPref().then(val => { if (alive) setSourceOnly(val); });
+    return () => { alive = false; };
+  }, []);
   const [sharing, setSharing] = useState(false);
   const key = `baglib:sunnah:reflection:${hadith.id}`;
   const [initial] = useState(() => {
@@ -66,12 +73,20 @@ export function HadithActions({ chapter, hadith, showEnglish, t }: { chapter: Su
     setStatus(null);
     if (share) setSharing(true);
     try {
+      const target = `sunnah:${chapter.collection}:${chapter.number}:${hadith.id}`;
+      const formatted = await formatPassageWithAnnotations(
+        output,
+        { target, hadithId: hadith.id, hadithResearchId: hadith.researchId },
+        english ? 'en' : 'ar',
+        t,
+        sourceOnly,
+      );
       if (share) {
-        const result = await window.electronAPI.sunnah.share(output);
+        const result = await window.electronAPI.sunnah.share(formatted);
         if (!result.ok) throw new Error(result.error);
         setStatus('sunnahShared');
       } else {
-        await navigator.clipboard.writeText(output);
+        await navigator.clipboard.writeText(formatted);
         setStatus('sunnahCopied');
       }
     } catch (error) { if ((error as Error).name !== 'AbortError') setStatus('sunnahActionFailed'); }
@@ -93,11 +108,13 @@ export function HadithActions({ chapter, hadith, showEnglish, t }: { chapter: Su
           setSunnahIsnadScope(checked ? 'all' : 'matn_only');
         }} /> {t('sunnahIncludeIsnad')}</label>
         <label><input type="checkbox" checked={reference} onChange={event => setReference(event.target.checked)} /> {t('sunnahIncludeReference')}</label>
+        <label><input type="checkbox" data-hadith-source-only checked={sourceOnly} onChange={event => setSourceOnly(event.target.checked)} /> {t('shareSourceOnly')}</label>
         <button className="sunnah-button" onClick={() => {
           setEnglishOverride(null);
           setIncludeIsnad(true);
           setReference(true);
           setSunnahIsnadScope('all');
+          void getShareSourceOnlyPref().then(setSourceOnly);
         }}>{t('sunnahResetOptions')}</button>
       </div>}
     <div>

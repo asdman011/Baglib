@@ -2,6 +2,7 @@
 
 import { parseQuranTarget } from '../../../shared/study-notes';
 import { quranCopyText, quranReferenceLabel } from '../../utils/quran-reference-label';
+import { formatPassageWithAnnotations } from '../../utils/share-with-annotations';
 import { useQuranBookmarks } from '../../hooks/useQuranBookmarks';
 import { QuranBookmarks } from './QuranBookmarks';
 import { IslamicReaderHeader } from '../islamic/IslamicReaderChrome';
@@ -143,7 +144,11 @@ export function QuranPassageView({
             </span>
             <div className="flex flex-wrap gap-2">
               {onPlayAyah && <button type="button" onClick={() => onPlayAyah(ayah.number)} title={isAyahPlaying ? t('quranAudioPause') : t('quranAudioPlay')} aria-label={isAyahPlaying ? t('quranAudioPause') : t('quranAudioPlay')} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors ${isAyahPlaying ? 'bg-emerald-600 text-white border-emerald-600' : 'border-subtle hover:bg-pale-sky-500/10'}`}>{isAyahPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}{t(isAyahPlaying ? 'quranAudioPause' : 'quranAudioPlay')}</button>}
-              <button type="button" onClick={() => onCopy(quranCopyText(ayah.words.map(word => word.text).join(' ') + (ayah.translation ? `\n\n${ayah.translation.text}` : ''), { surah: passage.surah, ayah: ayah.number }, lang))} className="rounded-lg border border-subtle p-2" title={t('quranCopyAyah')} aria-label={t('quranCopyAyah')}><Copy className="size-4" /></button>
+              <button type="button" onClick={() => {
+                const plain = quranCopyText(ayah.words.map(word => word.text).join(' ') + (ayah.translation ? `\n\n${ayah.translation.text}` : ''), { surah: passage.surah, ayah: ayah.number }, lang);
+                const target = `quran:${passage.profile}:${passage.surah}:${ayah.number}`;
+                void formatPassageWithAnnotations(plain, { target }, lang, t).then(onCopy);
+              }} className="rounded-lg border border-subtle p-2" title={t('quranCopyAyah')} aria-label={t('quranCopyAyah')}><Copy className="size-4" /></button>
               {onViewInMushaf && <button type="button" onClick={() => onViewInMushaf(ayah.number)} title={t('quranViewInMushaf')} aria-label={t('quranViewInMushaf')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs"><BookOpen className="size-4" />{t('quranViewInMushaf')}</button>}
               {onOpenTopics && <button type="button" onClick={() => onOpenTopics(ayah.number)} title={t('quranTopics')} aria-label={t('quranTopics')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs hover:bg-pale-sky-500/10 transition-colors"><Layers className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranTopics')}</button>}
               {onOpenSimilar && <button type="button" onClick={() => onOpenSimilar(ayah.number)} title={t('quranSimilarAyahs')} aria-label={t('quranSimilarAyahs')} className="inline-flex items-center gap-1.5 rounded-lg border border-subtle px-3 py-2 text-xs hover:bg-pale-sky-500/10 transition-colors"><CopyCheck className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranSimilarAyahs')}</button>}

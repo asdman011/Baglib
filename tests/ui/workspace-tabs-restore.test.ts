@@ -345,6 +345,7 @@ describe('workspace tabs persistence and restore (KEY-423)', () => {
           restoreTabs: false,
           restoreFocus: 'new',
           linkTarget: 'same',
+          shareSourceOnly: false,
         });
 
         // Switch back to "restore" -> re-enables and allows choosing "last"
@@ -363,6 +364,20 @@ describe('workspace tabs persistence and restore (KEY-423)', () => {
           restoreTabs: true,
           restoreFocus: 'last',
           linkTarget: 'same',
+          shareSourceOnly: false,
+        });
+
+        const sourceOnlyBtn = window.document.querySelector('[data-workspace-share-mode="source-only"]') as HTMLButtonElement;
+        assert.ok(sourceOnlyBtn);
+        await act(async () => {
+          sourceOnlyBtn.click();
+        });
+        await flushMicrotasks();
+        assert.deepEqual(settings.data.get(WORKSPACE_PREFS_SETTING), {
+          restoreTabs: true,
+          restoreFocus: 'last',
+          linkTarget: 'same',
+          shareSourceOnly: true,
         });
       } finally {
         restore();

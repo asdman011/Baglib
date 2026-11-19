@@ -12,6 +12,7 @@
 import React from 'react';
 import { AppWindow, FolderPlus, Columns2, Copy, ListPlus, Plus, RotateCcw, X } from 'lucide-react';
 import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
+import { formatTabsLinksWithAnnotations } from '../../utils/share-with-annotations';
 import { editorLeaveGuard } from '../research/editor-leave';
 import { activeTab, currentLocation, homeLocation, SINGLE_INSTANCE_VIEWS, TAB_GROUP_COLORS, type TabGroupColor, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
 import {
@@ -86,8 +87,8 @@ function useGuardedClose() {
 }
 
 export const WorkspaceTabRow: React.FC = () => {
-  const { dir, t, books } = useWorkspace();
-  const { state, open, activate, move, duplicate, reopenClosed, closedTabs, dispatchTabs } = useTabs();
+  const { dir, lang, t, books } = useWorkspace();
+  const { state, open, activate, move, duplicate, reopenClosed, closedTabs, dispatchTabs, prefs } = useTabs();
   const toast = useToastOptional();
   const { closeTab, closeMany, moveOut } = useGuardedClose();
   const playing = usePlayingTabs();
@@ -363,15 +364,39 @@ export const WorkspaceTabRow: React.FC = () => {
         },
       });
     }
+    const shareSourceOnly = prefs?.shareSourceOnly ?? false;
     items.push({
       id: 'copy-links',
       label: t('workspaceTabCopyLinks'),
       icon: <Copy className="h-3.5 w-3.5" aria-hidden="true" />,
       onClick: () => {
-        const text = copyLinksText(state, targets, tab => tabLabel(tab, t));
-        void navigator.clipboard?.writeText(text).catch(() => {});
+        void formatTabsLinksWithAnnotations(state, targets, tab => tabLabel(tab, t), lang, t, shareSourceOnly)
+          .then(text => navigator.clipboard?.writeText(text))
+          .catch(() => {});
         toast?.showToast({ message: t('workspaceTabLinksCopied', { count: targets.length }), type: 'success' });
       },
+      children: [
+        {
+          id: 'copy-links-default',
+          label: shareSourceOnly ? t('workspaceTabCopyLinksSourceOnly') : t('workspaceTabCopyLinksWithAnnotations'),
+          onClick: () => {
+            void formatTabsLinksWithAnnotations(state, targets, tab => tabLabel(tab, t), lang, t, shareSourceOnly)
+              .then(text => navigator.clipboard?.writeText(text))
+              .catch(() => {});
+            toast?.showToast({ message: t('workspaceTabLinksCopied', { count: targets.length }), type: 'success' });
+          },
+        },
+        {
+          id: 'copy-links-alternate',
+          label: shareSourceOnly ? t('workspaceTabCopyLinksWithAnnotations') : t('workspaceTabCopyLinksSourceOnly'),
+          onClick: () => {
+            void formatTabsLinksWithAnnotations(state, targets, tab => tabLabel(tab, t), lang, t, !shareSourceOnly)
+              .then(text => navigator.clipboard?.writeText(text))
+              .catch(() => {});
+            toast?.showToast({ message: t('workspaceTabLinksCopied', { count: targets.length }), type: 'success' });
+          },
+        },
+      ],
     });
     if (window.electronAPI?.personalLists) {
       const listChildren: MenuItemProps[] = [

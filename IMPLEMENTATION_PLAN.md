@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-19T22:36:00+02:00, Agent: Antigravity KEY-429] VERIFIED annotation-aware sharing and copying across Quran, Sunnah, Book reader, multi-tab Copy links, and Personal Lists hub, with "Source only" setting in Settings → Workspace (`workspace.prefs.v1`, no DB schema change) and one-off toggles. Full suite 2,835/2,835 pass (400 suites, 0 fail), focused 58/58 pass, `tsc --noEmit` 0 errors, `git diff --check` clean, live Electron `ar`/`en` PASS (`scripts/share-annotations-live/run.mjs`). Report in `docs/agent-ops/reports/KEY-429.md`.
+
 - [2026-11-15T09:22:00+02:00, Agent: Antigravity KEY-369] VERIFIED RE-8 (Research Editor RE-8: export Markdown, HTML, PDF, DOCX and import quick notes / Markdown, epic KEY-361).
   Standing commit and push authorization confirmed per task instructions.
   Gate R5 status: docx (9.15.2) installed and verified in root project. pagedjs is not installed; recorded Gate R5 in waiting-for-user.md (~1.5 MB, MIT licence) and implemented chapter-end footnotes fallback for PDF via Chromium webContents.printToPDF with page styling, margins, headers/footers, and page numbers.

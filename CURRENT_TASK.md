@@ -1,4 +1,32 @@
-﻿## KEY-430: multi-tab follow-ups (keydown gating, restore race fix, getAllNotes deduplication) — 2026-11-19 - Agent: Antigravity
+﻿## KEY-429: sharing and copying with user annotations + "Source only" option in Settings — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/shared/workspace-tabs.ts`: added `shareSourceOnly: boolean` (default `false`) to `WorkspacePrefs` and `parsePrefs`.
+- `src/shared/share-annotations.ts`: added pure formatter (`formatWithAnnotations`), readable target formatter (`formatReadableTarget`), and `StudyNote` link/relation collector (`collectNotesAndConnections`).
+- `src/shared/workspace-tab-selection.ts`: exported `inBarOrder`.
+- `src/renderer/utils/share-with-annotations.ts`: added collector (`collectAnnotationsForTarget`, `formatPassageWithAnnotations`, `formatTabsLinksWithAnnotations`, `formatListShareText`) gathering the user's highlights, highlight comments, personal commentary, local hadith reflections, study notes, and connections.
+- `src/renderer/components/layout/SettingsDirectory.tsx`: added "Share and copy" ("With my annotations" / "Source only") toggle group in Settings → Workspace.
+- `src/renderer/components/actions/quran-actions.ts`, `src/renderer/components/quran/{QuranReaderView,QuranAyahInspector,QuranMushafView,QuranMushafWorkspace}.tsx`: wired copy/share paths through `formatPassageWithAnnotations`.
+- `src/renderer/components/sunnah/{HadithActions,SunnahChapterView}.tsx`: wired copy/share paths through `formatPassageWithAnnotations`, plus one-off "Source only" checkbox in `HadithActions`.
+- `src/renderer/components/reader/FullPageBookReader.tsx`: wired selection copy through `formatPassageWithAnnotations`.
+- `src/renderer/components/layout/WorkspaceTabs.tsx`: wired "Copy links" through `formatTabsLinksWithAnnotations` with default and alternate-mode submenu items.
+- `src/renderer/components/lists/PersonalListsHub.tsx`: added "Copy list", "Share list", and one-off "Source only" checkbox.
+- `src/renderer/translations.ts`: added 14 bilingual (`ar` + `en`) keys.
+- `tests/services/share-annotations.test.ts`, `tests/shared/workspace-tabs.test.ts`, `tests/ui/{workspace-tabs-restore,workspace-links}.test.ts`, `scripts/share-annotations-live/{run.mjs,main.cjs}`: unit/UI tests and live Electron verification.
+
+**Tests:**
+- Focused (`share-annotations`, `workspace-tabs`, `workspace-links`, `quran-personal`): 58/58 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,835/2,835 pass (400 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `git diff --check`: clean.
+- Live Electron run (`node scripts/share-annotations-live/run.mjs`): PASS in `ar` and `en` with real PDFs from `tests/real-files/` (0 renderer errors, throwaway profile removed).
+
+**Jira:**
+- Moved `KEY-429` to In Progress (`21`), and moved to Done (`41`) after commit+push.
+
+**Files:**
+`CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/agent-ops/reports/KEY-429.md`, `scripts/share-annotations-live/main.cjs`, `scripts/share-annotations-live/run.mjs`, `src/renderer/components/actions/quran-actions.ts`, `src/renderer/components/layout/SettingsDirectory.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/components/lists/PersonalListsHub.tsx`, `src/renderer/components/quran/QuranAyahInspector.tsx`, `src/renderer/components/quran/QuranMushafView.tsx`, `src/renderer/components/quran/QuranMushafWorkspace.tsx`, `src/renderer/components/quran/QuranReaderView.tsx`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/sunnah/HadithActions.tsx`, `src/renderer/components/sunnah/SunnahChapterView.tsx`, `src/renderer/translations.ts`, `src/renderer/utils/share-with-annotations.ts`, `src/shared/share-annotations.ts`, `src/shared/workspace-tab-selection.ts`, `src/shared/workspace-tabs.ts`, `tests/services/share-annotations.test.ts`, `tests/shared/workspace-tabs.test.ts`, `tests/ui/workspace-links.test.ts`, `tests/ui/workspace-tabs-restore.test.ts`.
+
+## KEY-430: multi-tab follow-ups (keydown gating, restore race fix, getAllNotes deduplication) — 2026-11-19 - Agent: Antigravity
 
 **Done:**
 - `src/renderer/components/notes/BoardsWorkspace.tsx`, `src/renderer/components/knowledge/SrsReviewScreen.tsx`, `src/renderer/components/quran/QuranMushafWorkspace.tsx`, `src/renderer/components/reader/ParagraphOverlay.tsx`: gated window-level `keydown` listeners with `useTabKeysActive()` so hidden tabs ignore keyboard shortcuts.

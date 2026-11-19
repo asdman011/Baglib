@@ -1,6 +1,7 @@
 'use client';
 
 import { quranCopyText } from '../../utils/quran-reference-label';
+import { formatPassageWithAnnotations } from '../../utils/share-with-annotations';
 import type { QuranBookmark } from '../../utils/quran-bookmarks';
 import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
 import type { PassageHighlight } from '../../hooks/usePassageHighlights';
@@ -177,7 +178,11 @@ export function QuranMushafView({ controlsHost, page, t, lang, dir, selectedAyah
       <button type="button" disabled={zoom <= 60} onClick={() => setZoom(value => Math.max(60, value - 10))} aria-label={t('quranZoomOut')} title={t('quranZoomOut')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomOut className="size-4" /></button>
       <button type="button" disabled={zoom >= 200} onClick={() => setZoom(value => Math.min(200, value + 10))} aria-label={t('quranZoomIn')} title={t('quranZoomIn')} className="p-2 rounded-lg border border-subtle disabled:opacity-30"><ZoomIn className="size-4" /></button>
       <button type="button" onClick={() => setZoom(100)} title={t('quranResetZoom')} className="p-2 text-xs rounded-lg border border-subtle" aria-label={t('quranResetZoom')}>{number(zoom)}%</button>
-      <button type="button" onClick={() => onCopyText(quranCopyText(page.words.filter(word => word.type !== 'aya-mark').map(word => word.canonicalText || word.textHafs || '').join(' '), { surah: page.surahStart, ayah: page.ayahStart }, lang, { surah: page.surahEnd, ayah: page.ayahEnd }))} aria-label={t('quranCopyPage')} title={t('quranCopyPage')} className="p-2 rounded-lg border border-subtle"><Copy className="size-4" /></button>
+      <button type="button" onClick={() => {
+        const plain = quranCopyText(page.words.filter(word => word.type !== 'aya-mark').map(word => word.canonicalText || word.textHafs || '').join(' '), { surah: page.surahStart, ayah: page.ayahStart }, lang, { surah: page.surahEnd, ayah: page.ayahEnd });
+        const target = `quran:${page.profile}:${page.surahStart}:${page.ayahStart}-${page.ayahEnd}`;
+        void formatPassageWithAnnotations(plain, { target }, lang, t).then(onCopyText);
+      }} aria-label={t('quranCopyPage')} title={t('quranCopyPage')} className="p-2 rounded-lg border border-subtle"><Copy className="size-4" /></button>
   </>;
   return <div ref={mushafRoot} dir={dir} data-quran-mushaf data-card-script={cardSource?.script} data-card-tafsir={cardSource?.tafsir} className="flex flex-col min-h-0 h-full" style={{ containerType: 'size' }}>
     <style>{`

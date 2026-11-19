@@ -7,7 +7,8 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Layers, Pencil, Plus, Search, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Layers, Pencil, Plus, Search, Share2, Star, Trash2, X } from 'lucide-react';
+import { formatListShareText, getShareSourceOnlyPref } from '../../utils/share-with-annotations';
 import { ContextMenu } from '../ui/ContextMenu';
 import { ListDeckDialog } from './ListDeckDialog';
 import type { PersonalList } from '../../../shared/personal-lists';
@@ -20,7 +21,7 @@ import { KIND_ICON, KIND_LABEL, createListWith, listName } from './PersonalListC
 const total = (counts: Record<PersonalListItemKind, number>) => PERSONAL_LIST_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
 
 export function PersonalListsHub() {
-  const { t, dir } = useWorkspace();
+  const { t, dir, lang } = useWorkspace();
   const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const { lists } = usePersonalLists();
   const [selected, setSelected] = useState<string>(STARRED_LIST_ID);
@@ -31,6 +32,13 @@ export function PersonalListsHub() {
   const [draft, setDraft] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [copiedNotice, setCopiedNotice] = useState(false);
+  const [sourceOnly, setSourceOnly] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void getShareSourceOnlyPref().then(val => { if (alive) setSourceOnly(val); });
+    return () => { alive = false; };
+  }, []);
   // KEY-399: "Revise this list".
   const [revising, setRevising] = useState<PersonalList | null>(null);
 
@@ -140,6 +148,35 @@ export function PersonalListsHub() {
               <button type="button" data-lists-revise={current.id} onClick={() => setRevising(current)} className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas">
                 <Layers className="size-3.5" />{t('listDeckRevise')}
               </button>
+              <button
+                type="button"
+                data-lists-copy={current.id}
+                onClick={() => {
+                  void formatListShareText(listName(current, t), visible, lang, t, sourceOnly)
+                    .then(text => navigator.clipboard?.writeText(text))
+                    .then(() => { setCopiedNotice(true); setTimeout(() => setCopiedNotice(false), 2000); })
+                    .catch(() => setFailed(true));
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas"
+              >
+                <Copy className="size-3.5" />{copiedNotice ? t('listsCopied') : t('listsCopy')}
+              </button>
+              <button
+                type="button"
+                data-lists-share={current.id}
+                onClick={() => {
+                  void formatListShareText(listName(current, t), visible, lang, t, sourceOnly)
+                    .then(text => window.electronAPI.sunnah.share(text))
+                    .catch(() => setFailed(true));
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2 py-1 text-xs font-semibold text-main hover:bg-canvas"
+              >
+                <Share2 className="size-3.5" />{t('listsShare')}
+              </button>
+              <label className="inline-flex items-center gap-1 text-xs text-muted cursor-pointer">
+                <input type="checkbox" data-lists-source-only checked={sourceOnly} onChange={e => setSourceOnly(e.target.checked)} />
+                <span>{t('shareSourceOnly')}</span>
+              </label>
               <div className="ms-auto flex flex-wrap gap-1 text-xs" role="tablist" aria-label={t('listsKindFilter')}>
                 {(['all', ...PERSONAL_LIST_KINDS] as const).map(k => {
                   const count = k === 'all' ? total(current.counts) : current.counts[k];

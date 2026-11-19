@@ -3,6 +3,7 @@ import type { TranslationKey } from '../../translations';
 import { contextActions } from './context-actions';
 import { addPassageToSrs, openPassageComment, passageNote, linkPassageToNote, sharePassage } from './passage-actions';
 import { studyLinkText } from '../../../shared/study-notes';
+import { formatPassageWithAnnotations } from '../../utils/share-with-annotations';
 export function quranActions(input: {
     reference: {
         surah: number;
@@ -29,10 +30,10 @@ export function quranActions(input: {
         return result.data.canonical;
     };
     return contextActions('quran', {
-        copy: async () => navigator.clipboard.writeText(quranCopyText(await text(), reference, input.language)),
-        copyPlain: async () => navigator.clipboard.writeText(quranCopyText((await text()).replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/gu, ''), reference, input.language)),
-        copyReference: async () => navigator.clipboard.writeText(quranCopyText(await text(), reference, input.language)),
-        share: async () => sharePassage(quranCopyText(await text(), reference, input.language)),
+        copy: async () => navigator.clipboard.writeText(await formatPassageWithAnnotations(quranCopyText(await text(), reference, input.language), { target }, input.language, t)),
+        copyPlain: async () => navigator.clipboard.writeText(await formatPassageWithAnnotations(quranCopyText((await text()).replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/gu, ''), reference, input.language), { target }, input.language, t)),
+        copyReference: async () => navigator.clipboard.writeText(await formatPassageWithAnnotations(quranCopyText(await text(), reference, input.language), { target }, input.language, t)),
+        share: async () => sharePassage(await formatPassageWithAnnotations(quranCopyText(await text(), reference, input.language), { target }, input.language, t)),
         tafsir: input.tafsir, translation: input.translation,
         note: async () => passageNote(target, label, await text()),
         comment: () => openPassageComment('quran:' + reference.surah + ':' + reference.ayah),

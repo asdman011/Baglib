@@ -643,9 +643,11 @@ export interface WorkspacePrefs {
   restoreFocus: 'new' | 'last';
   /** "Open links in": a new tab (default) or the same tab. */
   linkTarget: 'new' | 'same';
+  /** "Share and copy": false (default, include user's annotations) or true ("source only"). */
+  shareSourceOnly: boolean;
 }
 
-export const DEFAULT_WORKSPACE_PREFS: WorkspacePrefs = { restoreTabs: true, restoreFocus: 'new', linkTarget: 'new' };
+export const DEFAULT_WORKSPACE_PREFS: WorkspacePrefs = { restoreTabs: true, restoreFocus: 'new', linkTarget: 'new', shareSourceOnly: false };
 
 export function parsePrefs(raw: unknown): WorkspacePrefs {
   let value = raw;
@@ -657,6 +659,7 @@ export function parsePrefs(raw: unknown): WorkspacePrefs {
     restoreTabs: typeof value.restoreTabs === 'boolean' ? value.restoreTabs : DEFAULT_WORKSPACE_PREFS.restoreTabs,
     restoreFocus: value.restoreFocus === 'last' || value.restoreFocus === 'new' ? value.restoreFocus : DEFAULT_WORKSPACE_PREFS.restoreFocus,
     linkTarget: value.linkTarget === 'same' || value.linkTarget === 'new' ? value.linkTarget : DEFAULT_WORKSPACE_PREFS.linkTarget,
+    shareSourceOnly: typeof value.shareSourceOnly === 'boolean' ? value.shareSourceOnly : DEFAULT_WORKSPACE_PREFS.shareSourceOnly,
   };
 }
 

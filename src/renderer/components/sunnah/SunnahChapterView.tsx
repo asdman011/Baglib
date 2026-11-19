@@ -12,6 +12,7 @@ import type { ReaderTab } from '../islamic/reader-chrome';
 import { MoreHorizontal } from 'lucide-react';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { HadithActions, formatHadith } from './HadithActions';
+import { formatPassageWithAnnotations } from '../../utils/share-with-annotations';
 import { SunnahResearchPanel } from './SunnahResearchPanel';
 import { NoteMarker } from '../notes/NoteMarker';
 import { usePassageHighlightActions, usePassageHighlights } from '../../hooks/usePassageHighlights';
@@ -124,10 +125,12 @@ export function SunnahChapterView({ lists = [], onListFilter, calm = false, onSt
       const label = chapter.title.ar + ' · ' + hadith.number;
       const reference = formatHadith(chapter, hadith, showEnglish, false, true);
       const hadithPayload = () => createHadithPayload({ collection: chapter.collection, collectionLabel: collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection, chapterNumber: chapter.number, hadithId: hadith.id, hadithNumber: hadith.number || '', text: formatHadith(chapter, hadith, false, getSunnahIsnadScope() !== 'matn_only', false) });
+      const hadithCtx = { target, hadithId: hadith.id, hadithResearchId: hadith.researchId };
+      const hadithLang = showEnglish ? 'en' : 'ar';
       const items = contextActions('hadith', {
-        copy: () => navigator.clipboard.writeText(reference),
-        copyFull: () => navigator.clipboard.writeText(formatHadith(chapter, hadith, showEnglish, true, true)),
-        share: () => sharePassage(reference),
+        copy: () => void formatPassageWithAnnotations(reference, hadithCtx, hadithLang, t).then(out => navigator.clipboard.writeText(out)),
+        copyFull: () => void formatPassageWithAnnotations(formatHadith(chapter, hadith, showEnglish, true, true), hadithCtx, hadithLang, t).then(out => navigator.clipboard.writeText(out)),
+        share: () => void formatPassageWithAnnotations(reference, hadithCtx, hadithLang, t).then(out => sharePassage(out)),
         comment: () => hadith.researchId ? openPassageComment('hadith:'+hadith.researchId) : passageNote(target,label,reference),
         srs: () => addPassageToSrs({ text: reference, sourceKind: 'hadith', sourceRef: target, sourceLabel: label, language: showEnglish ? 'en' : 'ar' }),
         commentary: hadith.comment || hadith.researchId ? () => {

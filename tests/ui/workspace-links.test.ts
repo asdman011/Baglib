@@ -198,8 +198,9 @@ describe('workspace-links (KEY-421 WS-5)', () => {
           restoreTabs: false,
           restoreFocus: 'last',
           linkTarget: 'same',
+          shareSourceOnly: false,
         });
-        assert.deepEqual(livePrefs, { restoreTabs: false, restoreFocus: 'last', linkTarget: 'same' });
+        assert.deepEqual(livePrefs, { restoreTabs: false, restoreFocus: 'last', linkTarget: 'same', shareSourceOnly: false });
       } finally {
         restore();
       }

@@ -278,6 +278,38 @@ function WorkspaceRestoreSettings() {
         </div>
       </div>
 
+      <div className="space-y-2" role="group" aria-labelledby="workspace-share-mode-label">
+        <span id="workspace-share-mode-label" className="block text-sm font-semibold leading-loose">
+          {t('settingWorkspaceShareMode')}
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-workspace-share-mode="annotations"
+            aria-pressed={!prefs.shareSourceOnly}
+            disabled={busy}
+            onClick={() => void updatePrefs({ shareSourceOnly: false })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+              !prefs.shareSourceOnly ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceShareWithAnnotations')}
+          </button>
+          <button
+            type="button"
+            data-workspace-share-mode="source-only"
+            aria-pressed={prefs.shareSourceOnly}
+            disabled={busy}
+            onClick={() => void updatePrefs({ shareSourceOnly: true })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+              prefs.shareSourceOnly ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceShareSourceOnly')}
+          </button>
+        </div>
+      </div>
+
       {failed && <p role="alert">{t('studyActionFailed')}</p>}
     </div>
   );
