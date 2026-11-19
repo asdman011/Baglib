@@ -288,16 +288,50 @@ describe('workspace tabs wired to the providers', () => {
       const oneTab: TabsState = { tabs: [newTab('t1', { view: 'library', title: '' }, 1)], activeId: 't1' };
       await act(async () => root.render(createElement(WorkspaceProvider, { key: 'one', initialTabs: oneTab }, createElement(Shell))));
       await act(async () => fire(window.document.querySelector('[data-tab-id="t1"]')!, 'onContextMenu', { clientX: 20, clientY: 10, target: window.document.querySelector('[data-tab-id="t1"]')! }));
-      assert.equal(window.document.querySelectorAll('[role="menuitem"]').length, 0, 'no Open beside when only one tab exists');
+      assert.equal(window.document.querySelector('[data-menu-action="open-beside"]'), null, 'no Open beside when only one tab exists');
 
       await act(async () => root.render(createElement(WorkspaceProvider, { key: 'three', initialTabs: threeTabs() }, createElement(Shell))));
       const t2 = window.document.querySelector('[data-tab-id="t2"]')!;
       await act(async () => fire(t2, 'onContextMenu', { clientX: 80, clientY: 10, target: t2 }));
-      const items = [...window.document.querySelectorAll('[role="menuitem"]')];
-      assert.equal(items.length, 1);
-      await act(async () => fire(items[0], 'onClick'));
+      const beside = window.document.querySelector('[data-menu-action="open-beside"]');
+      assert.ok(beside, 'Open beside appears when a second tab exists');
+      await act(async () => fire(beside, 'onClick'));
       assert.equal(window.document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels'), 'split');
       assert.deepEqual(visibleScreens(window).sort(), ['library', 'quran']);
+    } finally { restore(); }
+  });
+
+  it('supports Ctrl+click, Shift+click, Esc, Ctrl+Shift+Arrow multi-select and full tab context menu actions', async () => {
+    const { window, root, restore } = setup();
+    try {
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: threeTabs() }, createElement(Shell))));
+      const selected = () => [...window.document.querySelectorAll('[data-tab-id][data-selected]')].map(el => el.getAttribute('data-tab-id'));
+      assert.deepEqual(selected(), ['t1']);
+
+      // Ctrl+click t3 adds it and focuses it.
+      await act(async () => fire(window.document.querySelector('[data-tab-id="t3"]')!, 'onClick', { ctrlKey: true, shiftKey: false }));
+      assert.deepEqual(selected(), ['t1', 't3']);
+
+      // Esc clears selection back to focused tab (t3).
+      await act(async () => fire(window.document.querySelector('[data-tab-id="t3"]')!, 'onKeyDown', { key: 'Escape' }));
+      assert.deepEqual(selected(), ['t3']);
+
+      // Shift+click t1 selects range t1..t3.
+      await act(async () => fire(window.document.querySelector('[data-tab-id="t1"]')!, 'onClick', { ctrlKey: false, shiftKey: true }));
+      assert.deepEqual(selected(), ['t1', 't2', 't3']);
+
+      // Ctrl+click t2 removes t2, leaving t1 and t3 (2 tabs) -> "Open side by side" appears in menu.
+      await act(async () => fire(window.document.querySelector('[data-tab-id="t2"]')!, 'onClick', { ctrlKey: true, shiftKey: false }));
+      assert.deepEqual(selected(), ['t1', 't3']);
+      const t3 = window.document.querySelector('[data-tab-id="t3"]')!;
+      await act(async () => fire(t3, 'onContextMenu', { clientX: 80, clientY: 10, target: t3 }));
+      assert.ok(window.document.querySelector('[data-menu-action="selection-count"]'));
+      assert.ok(window.document.querySelector('[data-menu-action="open-side-by-side"]'));
+      assert.ok(window.document.querySelector('[data-menu-action="copy-links"]'));
+      assert.ok(window.document.querySelector('[data-menu-action="close-others"]'));
+      assert.ok(window.document.querySelector('[data-menu-action="close"]'));
+      await act(async () => fire(window.document.querySelector('[data-menu-action="open-side-by-side"]')!, 'onClick'));
+      assert.equal(window.document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels'), 'split');
     } finally { restore(); }
   });
 });

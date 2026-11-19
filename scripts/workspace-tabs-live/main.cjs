@@ -195,8 +195,8 @@ app.on('browser-window-created', (_, win) => {
       await click('[data-nav-item="notes-editor"]');
       await until(`!!${visiblePanel}?.querySelector('iframe')`);
       await evaluate(`(() => { const t = document.querySelector('[data-tab-id="${readerSplitTab}"]'); const r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); })()`);
-      await until("document.querySelectorAll('[role=\"menuitem\"]').length >= 1");
-      await click('[role="menuitem"]');
+      await until("!!document.querySelector('[data-menu-action=\"open-beside\"]')");
+      await click('[data-menu-action="open-beside"]');
       await until("document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels') === 'split'");
       await until(`!!document.querySelector('[data-tab-panel="${readerSplitTab}"][data-split-pane]') && !!document.querySelector('[data-tab-panel="${editorSplitTab}"][data-split-pane]')`);
       await shot(`${language}-6c-split`);
@@ -224,6 +224,21 @@ app.on('browser-window-created', (_, win) => {
       await click('[data-split-close]');
       await until("document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels') === 'single' && document.querySelectorAll('[data-tab-panel]:not([hidden])').length === 1");
 
+      // KEY-428: multi-select (Ctrl+click, Esc) and full tab right-click menu.
+      const selBox = await evaluate(`(() => { const r = document.querySelector('[data-tab-id="${readerSplitTab}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      win.webContents.sendInputEvent({ type: 'mouseDown', x: selBox.x, y: selBox.y, button: 'left', clickCount: 1, modifiers: ['control'] });
+      await pause(50);
+      win.webContents.sendInputEvent({ type: 'mouseUp', x: selBox.x, y: selBox.y, button: 'left', clickCount: 1, modifiers: ['control'] });
+      await until("document.querySelectorAll('[data-tab-id][data-selected]').length === 2");
+      await shot(`${language}-6e-multiselect`);
+      await evaluate(`(() => { const t = document.querySelector('[data-tab-id="${readerSplitTab}"]'); const r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); })()`);
+      await until("!!document.querySelector('[data-menu-action=\"selection-count\"]') && !!document.querySelector('[data-menu-action=\"open-side-by-side\"]') && !!document.querySelector('[data-menu-action=\"copy-links\"]') && !!document.querySelector('[data-menu-action=\"add-to-list\"]')");
+      await shot(`${language}-6f-tab-menu`);
+      await click('[data-menu-action="copy-links"]');
+      await until("!document.querySelector('[data-baglib-menu]')");
+      key('Escape');
+      await until("document.querySelectorAll('[data-tab-id][data-selected]').length === 1");
+
       // Narrow window: the bar scrolls sideways and the page never does.
       win.setContentSize(480, 900);
       await until('innerWidth <= 500');
@@ -243,7 +258,7 @@ app.on('browser-window-created', (_, win) => {
   })().catch(async error => {
     console.error(error);
     console.error('Renderer errors:', JSON.stringify(errors.slice(-10)));
-    try { console.error('PANELS ' + await evaluate("JSON.stringify({ active: document.querySelector('[data-workspace-tab-row] [aria-selected=true]')?.dataset.tabId, panels: [...document.querySelectorAll('[data-tab-panel]')].map(p => ({ id: p.dataset.tabPanel, hidden: p.hidden, display: getComputedStyle(p).display, reader: !!p.querySelector('[data-reader-go-to]'), quran: !!p.querySelector('[data-quran-reader]') })), readers: document.querySelectorAll('[data-reader-go-to]').length, width: innerWidth })")); } catch (e) { console.error('panel dump failed', e); }
+    try { console.error('PANELS ' + await evaluate("JSON.stringify({ active: document.querySelector('[data-workspace-tab-row] [aria-selected=true]')?.dataset.tabId, tabs: [...document.querySelectorAll('[data-tab-id]')].map(t => ({ id: t.dataset.tabId, sel: t.hasAttribute('data-selected'), act: t.getAttribute('aria-selected') })), panels: [...document.querySelectorAll('[data-tab-panel]')].map(p => ({ id: p.dataset.tabPanel, hidden: p.hidden, display: getComputedStyle(p).display, reader: !!p.querySelector('[data-reader-go-to]'), quran: !!p.querySelector('[data-quran-reader]') })), readers: document.querySelectorAll('[data-reader-go-to]').length, width: innerWidth })")); } catch (e) { console.error('panel dump failed', e); }
     fs.writeFileSync(path.join(evidence, 'failure.txt'), String(error.stack || error) + '\n' + errors.join('\n'));
     try { await shot('failure'); } finally { app.exit(1); }
   });

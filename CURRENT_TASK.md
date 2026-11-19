@@ -1,3 +1,23 @@
+## KEY-428 (WS-10): multi-select and the tab right-click menu — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/layout/WorkspaceTabs.tsx` (`WorkspaceTabRow`) & `src/renderer/components/layout/TabBar.tsx`:
+  - Wired `TabSelection` state (`singleSelection`, `normalizeSelection`, `clickTab`, `toggleTab`, `rangeTo`, `extendSelection`) from `src/shared/workspace-tab-selection.ts`: plain click, `Ctrl/Cmd+click`, `Shift+click`, `Esc` (global & tab bar), `Ctrl+Shift+ArrowLeft/Right` (following reading direction), and moving selected tabs together (`onMoveSelection`).
+  - Added `data-selected` highlight styling in `TabBar.tsx` and reset stale `suppressClick` on `onPointerDown` so dragging a tab never swallows the next click.
+  - Wired the full tab right-click menu (`getTabMenuItems`, skipping window and group items for WS-11/WS-12): selection count header (`"{count} tabs"`), New tab to the right/left, Duplicate, Open side by side / Open beside, Copy links (`baglib:` deep links), Add to list ▸ (existing lists + "Save as a new list…" dialog), Close / Close N tabs (with `useGuardedClose` for unsaved editors), Close other tabs, Close tabs to the right/left, and Reopen closed tab (`Ctrl+Shift+T`).
+- `src/shared/workspace-tab-selection.ts`: added `tabTargetToListItem` mapping study targets (`book:`, `quran:`, `sunnah:`, `poetry:`, `media:`, `note:`) to `PersonalListItemKind` items.
+- `src/renderer/components/ui/Toast.tsx`: exported `useToastOptional`.
+- `src/renderer/translations.ts`: added 16 bilingual keys in `ar` and `en`.
+- `tests/ui/workspace-tabs-wiring.test.ts` & `scripts/workspace-tabs-live/main.cjs`: added unit tests and live Electron verification in `ar` and `en`.
+
+**Tests:**
+- Focused (`workspace-tabs-wiring`, `tab-bar`, `workspace-tabs`, `workspace-tab-selection`, `translation-keys`): 84/84 pass.
+- Full suite (`npm test -- --test-concurrency=2`): 2,810/2,810 pass (396 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `eslint` on touched files: 0 errors. `git diff --check`: clean.
+- Live Electron run (`node scripts/workspace-tabs-live/run.mjs`): PASS in `ar` and `en` (screenshots `ar-6e-multiselect.png`, `ar-6f-tab-menu.png`, `en-6e-multiselect.png`, `en-6f-tab-menu.png`, 0 renderer errors, throwaway profile removed).
+
+**Files:** `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-428.md`, `scripts/workspace-tabs-live/main.cjs`, `src/renderer/components/layout/TabBar.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/components/ui/Toast.tsx`, `src/renderer/translations.ts`, `src/shared/workspace-tab-selection.ts`, `tests/ui/workspace-tabs-wiring.test.ts`.
+
 ## KEY-425 (WS-9): side-by-side split view finished — 2026-11-19 - Agent: Antigravity
 
 **Done:**

@@ -29,6 +29,8 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+export const useToastOptional = (): ToastContextValue | null => useContext(ToastContext) ?? null;
+
 export const useToast = (): ToastContextValue => {
   const context = useContext(ToastContext);
   if (!context) {

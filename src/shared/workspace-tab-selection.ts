@@ -13,6 +13,7 @@
  * The focused tab is always part of the selection. Ids are kept in the bar's order.
  */
 import { formatDeepLink } from './deep-link';
+import { canonicalItemRef, cleanItemLabel, type PersonalListItemKind } from './personal-lists';
 import { currentLocation, type TabsState, type WorkspaceTab } from './workspace-tabs';
 
 export interface TabSelection {
@@ -143,4 +144,36 @@ export function listableTargets(state: TabsState, targets: readonly string[]): {
     if (target) { if (!out.includes(target)) out.push(target); } else skipped += 1;
   }
   return { targets: out, skipped };
+}
+
+/** Maps a tab's study target to a PersonalList item input, or null if unsupported. */
+export function tabTargetToListItem(target: string, label: string): { itemKind: PersonalListItemKind; itemRef: string; label: string } | null {
+  const cleaned = cleanItemLabel(label) || target;
+  if (target.startsWith('book:')) {
+    const page = canonicalItemRef('page', target);
+    if (page) return { itemKind: 'page', itemRef: page, label: cleaned };
+    const book = canonicalItemRef('book', target);
+    return book ? { itemKind: 'book', itemRef: book, label: cleaned } : null;
+  }
+  if (target.startsWith('quran:')) {
+    const ref = canonicalItemRef('ayah', target);
+    return ref ? { itemKind: 'ayah', itemRef: ref, label: cleaned } : null;
+  }
+  if (target.startsWith('sunnah:')) {
+    const ref = canonicalItemRef('hadith', target);
+    return ref ? { itemKind: 'hadith', itemRef: ref, label: cleaned } : null;
+  }
+  if (target.startsWith('poetry:')) {
+    const ref = canonicalItemRef('poem', target);
+    return ref ? { itemKind: 'poem', itemRef: ref, label: cleaned } : null;
+  }
+  if (target.startsWith('media:')) {
+    const ref = canonicalItemRef('lecture', target);
+    return ref ? { itemKind: 'lecture', itemRef: ref, label: cleaned } : null;
+  }
+  if (target.startsWith('note:')) {
+    const ref = canonicalItemRef('note', target);
+    return ref ? { itemKind: 'note', itemRef: ref, label: cleaned } : null;
+  }
+  return null;
 }

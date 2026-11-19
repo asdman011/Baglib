@@ -10,17 +10,26 @@
  * - `useWorkspaceTabShortcuts`: Ctrl+T/W/Tab/1…9, Ctrl+Shift+T, Alt+Left/Right and the mouse back/forward buttons.
  */
 import React from 'react';
+import { Columns2, Copy, ListPlus, Plus, RotateCcw, X } from 'lucide-react';
 import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
 import { editorLeaveGuard } from '../research/editor-leave';
-import { activeTab, currentLocation, homeLocation, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
+import { activeTab, currentLocation, homeLocation, SINGLE_INSTANCE_VIEWS, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
+import {
+  canOpenSideBySide, clickTab, copyLinksText, extendSelection, listableTargets, menuTargets,
+  normalizeSelection, otherTabIds, rangeTo, singleSelection, tabIdsAfter, tabTargetToListItem, toggleTab,
+  type TabSelection,
+} from '../../../shared/workspace-tab-selection';
+import { personalLists, usePersonalLists } from '../../libs/personal-lists';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import type { MenuItemProps } from '../ui/Menu';
+import { useToastOptional } from '../ui/Toast';
 import { QuickOpenPanel } from './QuickOpenPanel';
 import { useQuickOpenData } from './workspace-usage';
 import { TabBar } from './TabBar';
 import { TabKeepAlive } from './TabKeepAlive';
 import { TabHistoryStrip } from './TabHistoryStrip';
 import { useTabKeepAlive } from './use-tab-keep-alive';
-import { historyShortcut, mouseHistoryButton, shortcutTarget, tabShortcut, type HistoryCommand, type TabCommand } from './tab-bar-model';
+import { historyShortcut, mouseHistoryButton, shortcutTarget, tabLabel, tabShortcut, type HistoryCommand, type TabCommand } from './tab-bar-model';
 
 /** New tabs (+ and Ctrl+T) open at the end of the bar, like a browser. */
 const lastTabId = (state: TabsState): string | undefined => state.tabs[state.tabs.length - 1]?.id;
@@ -31,23 +40,111 @@ const lastTabId = (state: TabsState): string | undefined => state.tabs[state.tab
  */
 function useGuardedClose() {
   const { state, close, activate } = useTabs();
-  return React.useCallback((id: string) => {
+  const closeOne = React.useCallback(async (id: string): Promise<boolean> => {
     const tab = state.tabs.find(item => item.id === id);
     // KEY-423 review: every manuscript tab, focused or in the background, has its own guard.
     const guard = tab && currentLocation(tab).view === 'notes-editor' ? editorLeaveGuard(id) : undefined;
-    if (!guard) { close(id); return; }
+    if (!guard) { close(id); return true; }
     // A background tab is brought forward first, so its "unsaved changes" question is on screen.
     if (id !== state.activeId) activate(id);
-    void guard().then(allowed => { if (allowed) close(id); });
+    const allowed = await guard();
+    if (allowed) close(id);
+    return allowed;
   }, [state, close, activate]);
+  const closeTab = React.useCallback((id: string) => { void closeOne(id); }, [closeOne]);
+  const closeMany = React.useCallback(async (ids: readonly string[]) => {
+    for (const id of ids) {
+      const closed = await closeOne(id);
+      if (!closed) break;
+    }
+  }, [closeOne]);
+  return { closeTab, closeMany };
 }
 
 export const WorkspaceTabRow: React.FC = () => {
   const { dir, t, books } = useWorkspace();
-  const { state, open, activate, move, dispatchTabs } = useTabs();
-  const closeTab = useGuardedClose();
+  const { state, open, activate, move, duplicate, reopenClosed, closedTabs, dispatchTabs } = useTabs();
+  const toast = useToastOptional();
+  const { closeTab, closeMany } = useGuardedClose();
   const playing = usePlayingTabs();
   const quick = useQuickOpenData(state);
+
+  // KEY-428 (WS-10): multi-select state (UI only, never saved).
+  const [rawSelection, setRawSelection] = React.useState<TabSelection>(() => singleSelection(state.activeId));
+  const selection = React.useMemo(() => normalizeSelection(state, rawSelection), [state, rawSelection]);
+  const selectedIds = React.useMemo(() => new Set(selection.ids), [selection.ids]);
+
+  // Clear multi-selection on Escape anywhere in the window.
+  React.useEffect(() => {
+    if (selection.ids.length <= 1) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRawSelection(singleSelection(state.activeId));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selection.ids.length, state.activeId]);
+
+  const onTabClick = React.useCallback((id: string, modifiers: { ctrl: boolean; shift: boolean }) => {
+    const change = modifiers.ctrl
+      ? toggleTab(state, selection, id)
+      : modifiers.shift
+        ? rangeTo(state, selection, id)
+        : clickTab(id);
+    setRawSelection(change.selection);
+    if (change.focus && change.focus !== state.activeId) activate(change.focus);
+  }, [state, selection, activate]);
+
+  const onClearSelection = React.useCallback(() => setRawSelection(singleSelection(state.activeId)), [state.activeId]);
+
+  const onExtendSelection = React.useCallback((step: 1 | -1) => {
+    const change = extendSelection(state, selection, step);
+    setRawSelection(change.selection);
+    if (change.focus && change.focus !== state.activeId) activate(change.focus);
+  }, [state, selection, activate]);
+
+  const onMoveSelection = React.useCallback((ids: string[], toIndex: number) => {
+    const moving = new Set(ids);
+    const rest = state.tabs.filter(tab => !moving.has(tab.id));
+    const clamped = Math.max(0, Math.min(rest.length, toIndex));
+    // Move each selected tab in order so the block lands at clamped.
+    ids.forEach((id, offset) => move(id, clamped + offset));
+  }, [state.tabs, move]);
+
+  // Personal lists for "Add to list" in the tab right-click menu.
+  const { lists } = usePersonalLists();
+  const [newListTargets, setNewListTargets] = React.useState<string[] | null>(null);
+  const [newListName, setNewListName] = React.useState('');
+
+  const addTabsToList = React.useCallback(async (listId: string, targets: readonly string[]) => {
+    const { targets: rawTargets, skipped } = listableTargets(state, targets);
+    const items = rawTargets
+      .map(ref => {
+        const tab = state.tabs.find(item => currentLocation(item).target === ref);
+        return tabTargetToListItem(ref, tab ? tabLabel(tab, t) : ref);
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+    if (items.length === 0) {
+      toast?.showToast({ message: t('workspaceTabListNoItems'), type: 'default' });
+      return;
+    }
+    for (const item of items) await personalLists.add(listId, item);
+    toast?.showToast({
+      message: skipped > 0
+        ? t('workspaceTabListAddedSkipped', { added: items.length, skipped })
+        : t('workspaceTabListAdded', { added: items.length }),
+      type: 'success',
+    });
+  }, [state, t, toast]);
+
+  const submitNewList = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newListName.trim() || !newListTargets) return;
+    const created = await personalLists.create(newListName.trim());
+    const targets = newListTargets;
+    setNewListTargets(null);
+    setNewListName('');
+    await addTabsToList(created.id, targets);
+  };
 
   // KEY-422: a pick from the + panel opens in a new tab at the end. A book opens from the tab's own entry; other
   // items (note, ayah, hadith, poem, lecture moment) go through the study navigation, aimed at the new tab.
@@ -84,6 +181,110 @@ export const WorkspaceTabRow: React.FC = () => {
     if (target) dispatchTabs({ type: 'openBeside', id: target });
   }, [state.activeId, state.tabs, dispatchTabs]);
 
+  // KEY-428 (WS-10): full tab right-click menu (plan 7.4; window & group items arrive in WS-11/WS-12).
+  const getTabMenuItems = React.useCallback((pointerId: string): MenuItemProps[] => {
+    const targets = menuTargets(state, selection, pointerId);
+    if (targets.length === 0) return [];
+    const items: MenuItemProps[] = [];
+    if (targets.length > 1) {
+      items.push({ id: 'selection-count', label: t('workspaceTabSelectionCount', { count: targets.length }), disabled: true });
+    }
+    const lastTarget = targets[targets.length - 1];
+    items.push({
+      id: 'new-after',
+      label: t('workspaceTabNewAfter'),
+      icon: <Plus className="h-3.5 w-3.5" aria-hidden="true" />,
+      onClick: () => open(homeLocation(), { afterId: lastTarget }),
+    });
+    const canDup = targets.some(id => {
+      const tab = state.tabs.find(item => item.id === id);
+      return tab ? !SINGLE_INSTANCE_VIEWS.includes(currentLocation(tab).view) : false;
+    });
+    items.push({
+      id: 'duplicate',
+      label: t('workspaceTabDuplicate'),
+      disabled: !canDup,
+      onClick: () => { targets.forEach(id => duplicate(id)); },
+    });
+    if (canOpenSideBySide(targets)) {
+      items.push({
+        id: 'open-side-by-side',
+        label: t('workspaceTabOpenSideBySide'),
+        icon: <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />,
+        onClick: () => { activate(targets[0]); dispatchTabs({ type: 'openBeside', id: targets[1] }); },
+      });
+    } else if (targets.length === 1 && state.tabs.length >= 2) {
+      items.push({
+        id: 'open-beside',
+        label: t('workspaceTabOpenBeside'),
+        icon: <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />,
+        onClick: () => openBeside(targets[0]),
+      });
+    }
+    items.push({
+      id: 'copy-links',
+      label: t('workspaceTabCopyLinks'),
+      icon: <Copy className="h-3.5 w-3.5" aria-hidden="true" />,
+      onClick: () => {
+        const text = copyLinksText(state, targets, tab => tabLabel(tab, t));
+        void navigator.clipboard?.writeText(text).catch(() => {});
+        toast?.showToast({ message: t('workspaceTabLinksCopied', { count: targets.length }), type: 'success' });
+      },
+    });
+    if (window.electronAPI?.personalLists) {
+      const listChildren: MenuItemProps[] = [
+        ...lists.map(list => ({
+          id: `add-to-list-${list.id}`,
+          label: list.name,
+          onClick: () => addTabsToList(list.id, targets),
+        })),
+        {
+          id: 'add-to-new-list',
+          label: t('workspaceTabNewList'),
+          onClick: () => { setNewListTargets(targets); setNewListName(''); },
+        },
+      ];
+      items.push({
+        id: 'add-to-list',
+        label: t('workspaceTabAddToList'),
+        icon: <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />,
+        children: listChildren,
+      });
+    }
+    items.push({
+      id: 'close',
+      label: targets.length > 1 ? t('workspaceTabCloseMany', { count: targets.length }) : t('workspaceTabCloseOne'),
+      icon: <X className="h-3.5 w-3.5" aria-hidden="true" />,
+      shortcut: targets.length === 1 ? 'Ctrl+W' : undefined,
+      onClick: () => closeMany(targets),
+    });
+    const others = otherTabIds(state, targets);
+    if (others.length > 0) {
+      items.push({
+        id: 'close-others',
+        label: t('workspaceTabCloseOthers'),
+        onClick: () => closeMany(others),
+      });
+    }
+    const after = tabIdsAfter(state, targets);
+    if (after.length > 0) {
+      items.push({
+        id: 'close-after',
+        label: t('workspaceTabCloseAfter'),
+        onClick: () => closeMany(after),
+      });
+    }
+    items.push({
+      id: 'reopen-closed',
+      label: t('workspaceTabReopenClosed'),
+      icon: <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />,
+      shortcut: 'Ctrl+Shift+T',
+      disabled: closedTabs.length === 0,
+      onClick: () => reopenClosed(),
+    });
+    return items;
+  }, [state, selection, t, open, duplicate, activate, dispatchTabs, openBeside, toast, lists, addTabsToList, closeMany, closedTabs.length, reopenClosed]);
+
   return (
     <div className="relative z-[61] flex h-10 shrink-0 items-center border-b border-subtle bg-surface/80 px-2 sm:px-3" data-workspace-tab-row>
       <TabBar
@@ -97,11 +298,36 @@ export const WorkspaceTabRow: React.FC = () => {
         playing={playing}
         onDropToEdge={dropToEdge}
         onOpenBeside={openBeside}
+        selectedIds={selectedIds}
+        onTabClick={onTabClick}
+        onClearSelection={onClearSelection}
+        onExtendSelection={onExtendSelection}
+        onMoveSelection={onMoveSelection}
+        getTabMenuItems={getTabMenuItems}
         onNew={() => { open(homeLocation(), { afterId: lastTabId(state) }); }}
         renderQuickOpen={({ close, autoFocus }) => (
           <QuickOpenPanel destinations={quick.destinations} recent={quick.recent} t={t} onOpen={openQuick} onClose={close} autoFocus={autoFocus} />
         )}
       />
+      {newListTargets && (
+        <div role="dialog" aria-modal="true" aria-label={t('workspaceTabNewList')} className="fixed inset-0 z-[210] flex items-center justify-center bg-black/50 p-4" onClick={() => setNewListTargets(null)}>
+          <form onSubmit={submitNewList} onClick={event => event.stopPropagation()} className="w-full max-w-sm rounded-xl border border-border bg-surface p-4 shadow-2xl">
+            <h2 className="mb-3 text-sm font-semibold text-main">{t('workspaceTabNewList')}</h2>
+            <input
+              autoFocus
+              type="text"
+              value={newListName}
+              onChange={event => setNewListName(event.target.value)}
+              placeholder={t('listsNewPrompt')}
+              className="mb-3 w-full rounded-lg border border-border bg-canvas px-3 py-2 text-sm text-main outline-none focus:border-primary"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setNewListTargets(null)} className="rounded-lg px-3 py-1.5 text-xs text-muted hover:bg-canvas">{t('cancel')}</button>
+              <button type="submit" disabled={!newListName.trim()} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-text disabled:opacity-50">{t('listsCreate')}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
@@ -191,7 +417,7 @@ export function tabCommandEffect(state: TabsState, command: TabCommand): { kind:
 export function useWorkspaceTabShortcuts(): void {
   const { dir } = useWorkspace();
   const { state, open, activate, go, reopenClosed } = useTabs();
-  const closeTab = useGuardedClose();
+  const { closeTab } = useGuardedClose();
   const latest = React.useRef({ state, dir, open, activate, go, reopenClosed, closeTab });
   React.useEffect(() => { latest.current = { state, dir, open, activate, go, reopenClosed, closeTab }; });
 

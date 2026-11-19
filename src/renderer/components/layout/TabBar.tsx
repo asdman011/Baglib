@@ -47,6 +47,13 @@ export interface TabBarProps {
   onDropToEdge?: (id: string, side: 'start' | 'end') => void;
   /** KEY-425 (WS-9): opens a tab side by side from its right-click menu. */
   onOpenBeside?: (id: string) => void;
+  /** KEY-428 (WS-10): multi-select and full tab right-click menu. */
+  selectedIds?: ReadonlySet<string>;
+  onTabClick?: (id: string, modifiers: { ctrl: boolean; shift: boolean }) => void;
+  onClearSelection?: () => void;
+  onExtendSelection?: (step: 1 | -1) => void;
+  getTabMenuItems?: (id: string) => MenuItemProps[];
+  onMoveSelection?: (ids: string[], toIndex: number) => void;
 }
 
 /** How far below the bar the pointer must go before a dragged tab counts as pulled out of it. */
@@ -67,7 +74,11 @@ function previewOrder(tabs: WorkspaceTab[], drag: DragState | null): WorkspaceTa
   return [...rest.slice(0, drag.target), dragged, ...rest.slice(drag.target)];
 }
 
-export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot, renderQuickOpen, onDropToEdge, onOpenBeside }) => {
+export const TabBar: React.FC<TabBarProps> = ({
+  tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot,
+  renderQuickOpen, onDropToEdge, onOpenBeside, selectedIds, onTabClick, onClearSelection,
+  onExtendSelection, getTabMenuItems, onMoveSelection,
+}) => {
   const listRef = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
@@ -99,12 +110,18 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
   const finishMove = (id: string, toIndex: number) => {
     const from = tabs.findIndex(tab => tab.id === id);
     if (from < 0 || from === toIndex) return;
-    onMove(id, toIndex);
+    if (onMoveSelection && selectedIds && selectedIds.size > 1 && selectedIds.has(id)) {
+      const group = tabs.filter(tab => selectedIds.has(tab.id)).map(tab => tab.id);
+      onMoveSelection(group, toIndex);
+    } else {
+      onMove(id, toIndex);
+    }
     setAnnouncement(t('workspaceTabMoved', { position: toIndex + 1, count: tabs.length }));
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>, id: string) => {
     if (event.button !== 0) return;
+    suppressClick.current = false;
     const index = tabs.findIndex(tab => tab.id === id);
     setDragState({ id, startX: event.clientX, spans: spansNow(), target: Math.max(0, index), moved: false });
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -156,6 +173,16 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
       finishMove(id, to);
       return;
     }
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight') && onExtendSelection) {
+      event.preventDefault();
+      onExtendSelection(event.key === forward ? 1 : -1);
+      return;
+    }
+    if (event.key === 'Escape' && onClearSelection && (selectedIds?.size ?? 0) > 1) {
+      event.preventDefault();
+      onClearSelection();
+      return;
+    }
     if (event.ctrlKey || event.altKey || event.metaKey) return;
     let next: number | null = null;
     if (event.key === forward) next = (at + 1) % tabs.length;
@@ -191,8 +218,10 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
           const Icon = tabIcon(location.view);
           const label = tabLabel(tab, t);
           const active = tab.id === activeId;
+          const selected = selectedIds ? selectedIds.has(tab.id) : active;
           const dragging = drag?.moved && drag.id === tab.id;
           const tabMenuItems = (): MenuItemProps[] => {
+            if (getTabMenuItems) return getTabMenuItems(tab.id);
             if (!onOpenBeside || tabs.length < 2) return [];
             return [{
               id: 'open-beside',
@@ -209,6 +238,7 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
               role="tab"
               data-tab-id={tab.id}
               data-tab-view={location.view}
+              data-selected={selected ? '' : undefined}
               data-asleep={asleep?.has(tab.id) ? '' : undefined}
               data-dragging={dragging ? '' : undefined}
               aria-selected={active}
@@ -218,14 +248,18 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={() => setDragState(null)}
-              onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } onActivate(tab.id); }}
+              onClick={event => {
+                if (suppressClick.current) { suppressClick.current = false; return; }
+                if (onTabClick) onTabClick(tab.id, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey });
+                else onActivate(tab.id);
+              }}
               onMouseDown={event => { if (event.button === 1) event.preventDefault(); }}
               onAuxClick={event => { if (event.button === 1) { event.preventDefault(); onClose(tab.id); } }}
               onKeyDown={event => onKeyDown(event, tab.id)}
               className={[
                 'group flex h-8 min-w-[7.5rem] max-w-[13.75rem] shrink-0 cursor-default items-center gap-1.5 rounded-lg border ps-2.5 pe-1 text-xs leading-normal transition-colors',
                 'focus-visible:outline-2 focus-visible:outline-focus touch-none',
-                active ? 'border-primary/40 bg-primary/10 text-main' : 'border-transparent text-muted hover:bg-canvas hover:text-main',
+                active ? 'border-primary/40 bg-primary/10 text-main' : selected ? 'border-primary/35 bg-primary/5 text-main' : 'border-transparent text-muted hover:bg-canvas hover:text-main',
                 asleep?.has(tab.id) ? 'opacity-75' : '',
                 dragging ? 'z-10 shadow-md ring-1 ring-primary/40' : '',
               ].join(' ')}
