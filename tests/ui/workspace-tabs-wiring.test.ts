@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import React, { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { parseHTML } from 'linkedom';
-import { WorkspaceProvider, useTabKeysActive, useTabs, useWorkspace } from '../../src/renderer/components/context';
+import { WorkspaceProvider, useTab, useTabKeysActive, useTabs, useWorkspace } from '../../src/renderer/components/context';
 import {
   WorkspaceHistoryStrip, WorkspaceTabPanels, WorkspaceTabRow, tabCommandEffect, useWorkspaceTabShortcuts,
 } from '../../src/renderer/components/layout/WorkspaceTabs';
@@ -370,6 +370,74 @@ describe('workspace tabs wired to the providers', () => {
       await act(async () => fire(ungroup, 'onClick'));
       assert.equal(window.document.querySelector('[data-group-id]'), null);
       assert.ok(window.document.querySelector('[data-tab-id="t2"]'));
+    } finally { restore(); }
+  });
+
+  it('saves and restores per-view snapshots on sleep/wake, keeps failed-save tabs awake, and exempts open dialogs', async () => {
+    const { window, root, restore } = setup();
+    try {
+      let shouldFail = false;
+      const savedLog: string[] = [];
+      const SnapshotScreen: React.FC<{ view: WorkspaceView }> = ({ view }) => {
+        const tab = useTab();
+        const [draft, setDraft] = React.useState(`init-${tab.id}`);
+        const [dialogOpen, setDialogOpen] = React.useState(false);
+        const draftRef = React.useRef(draft);
+        React.useEffect(() => { draftRef.current = draft; });
+        React.useEffect(() => tab.registerSnapshot({
+          saveState: async () => {
+            if (shouldFail && tab.id === 't1') throw new Error('disk full');
+            savedLog.push(`${tab.id}:${draftRef.current}`);
+            return { version: 1, data: { draft: draftRef.current } };
+          },
+          restoreState: snap => {
+            if (typeof snap.data.draft === 'string') setDraft(snap.data.draft);
+          },
+        }), [tab]);
+        return createElement('div', { 'data-screen': view },
+          createElement('span', { 'data-draft': draft }, draft),
+          createElement('button', { 'data-edit-draft': '', onClick: () => setDraft('edited-t1') }),
+          createElement('button', { 'data-open-dialog': '', onClick: () => setDialogOpen(true) }),
+          dialogOpen ? createElement('div', { role: 'dialog', 'aria-modal': 'true' }, 'dialog') : null);
+      };
+      const snapRender = (view: WorkspaceView) => createElement(SnapshotScreen, { view });
+      const SnapShell: React.FC = () => {
+        useWorkspaceTabShortcuts();
+        return createElement(React.Fragment, null,
+          createElement(WorkspaceTabRow),
+          createElement('main', null, createElement(WorkspaceTabPanels, { render: snapRender })));
+      };
+
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: threeTabs() }, createElement(SnapShell))));
+      // Edit t1's state, then open 6 more tabs so t1 sleeps and saves its snapshot.
+      await act(async () => fire(window.document.querySelector('[data-tab-panel="t1"] [data-edit-draft]')!, 'onClick'));
+      for (let n = 0; n < 6; n += 1) {
+        press(window, { key: 't', code: 'KeyT', ctrlKey: true });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+      }
+      assert.equal(window.document.querySelector('[data-tab-panel="t1"]'), null, 't1 slept after saving');
+      assert.ok(savedLog.includes('t1:edited-t1'), 't1 saved its snapshot before sleeping');
+
+      // Wake t1: its restored snapshot brings back 'edited-t1'.
+      await act(async () => fire(window.document.querySelector('[data-tab-id="t1"]')!, 'onClick'));
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+      assert.equal(window.document.querySelector('[data-tab-panel="t1"] [data-draft]')?.textContent, 'edited-t1');
+
+      // Now make t1's save fail and open another tab to push t1 out: t1 must stay awake.
+      shouldFail = true;
+      press(window, { key: 't', code: 'KeyT', ctrlKey: true });
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 15)); });
+      assert.ok(window.document.querySelector('[data-tab-panel="t1"]'), 'failed save keeps t1 awake');
+
+      // Open a dialog in the currently active tab, then open 6 more tabs: the dialog tab stays awake.
+      const dialogTabId = window.document.querySelector('[data-tab-panel]:not([hidden])')!.getAttribute('data-tab-panel')!;
+      await act(async () => fire(window.document.querySelector(`[data-tab-panel="${dialogTabId}"] [data-open-dialog]`)!, 'onClick'));
+      await act(async () => { window.document.dispatchEvent(new window.Event('click', { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 10)); });
+      for (let n = 0; n < 6; n += 1) {
+        press(window, { key: 't', code: 'KeyT', ctrlKey: true });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+      }
+      assert.ok(window.document.querySelector(`[data-tab-panel="${dialogTabId}"]`), 'tab with open dialog never sleeps');
     } finally { restore(); }
   });
 });

@@ -10,6 +10,7 @@ import { useOpenStudyLink } from '../../utils/use-study-link';
 import { translations } from '../../translations';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
+import { readSnapshot } from '../../../shared/workspace-tabs';
 import { createResearchEditorHost, shouldForwardEditorShortcut } from './editor-host';
 import { registerEditorLeave } from './editor-leave';
 import { registerCloseGuard } from '../../utils/close-guard';
@@ -60,7 +61,8 @@ export function ResearchEditorView() {
     openLinkRef.current = openLink;
   }, [openLink]);
   // KEY-423 review: each manuscript tab registers its own leave guard, so closing a background tab can ask it.
-  const tabId = useOptionalTab()?.id;
+  const tab = useOptionalTab();
+  const tabId = tab?.id;
   const current = useRef({ books, lang, openBookForReading });
   useLayoutEffect(() => {
     current.current = { books, lang, openBookForReading };
@@ -250,6 +252,57 @@ export function ResearchEditorView() {
     return () => child.removeEventListener('keydown', forward);
   }, [ready]);
 
+  const handleOpenDocumentRef = useRef<(value: ManuscriptDocument) => Promise<void>>(async () => {});
+  const snapshotStateRef = useRef({ opened, activeDoc, activeManuscript, docMode, isSidebarCollapsed, isRightPanelOpen, zoomLevel });
+  useLayoutEffect(() => {
+    snapshotStateRef.current = { opened, activeDoc, activeManuscript, docMode, isSidebarCollapsed, isRightPanelOpen, zoomLevel };
+  }, [opened, activeDoc, activeManuscript, docMode, isSidebarCollapsed, isRightPanelOpen, zoomLevel]);
+
+  useEffect(() => {
+    if (!tab) return;
+    return tab.registerSnapshot({
+      saveState: async () => {
+        const s = snapshotStateRef.current;
+        if (s.opened && s.activeDoc?.id) {
+          await host.bridge.explicitSave();
+        }
+        return {
+          version: 1,
+          data: {
+            manuscriptId: s.activeDoc?.manuscript_id ?? s.activeManuscript?.id,
+            chapterId: s.activeDoc?.id,
+            docMode: s.docMode,
+            isSidebarCollapsed: s.isSidebarCollapsed,
+            isRightPanelOpen: s.isRightPanelOpen,
+            zoomLevel: s.zoomLevel,
+          },
+        };
+      },
+      restoreState: snapshot => {
+        const data = readSnapshot<{
+          chapterId?: string;
+          docMode?: ManuscriptMode;
+          isSidebarCollapsed?: boolean;
+          isRightPanelOpen?: boolean;
+          zoomLevel?: number;
+        }>(snapshot, 1, {
+          chapterId: v => typeof v === 'string',
+          docMode: v => v === 'page' || v === 'edgeless',
+          isSidebarCollapsed: v => typeof v === 'boolean',
+          isRightPanelOpen: v => typeof v === 'boolean',
+          zoomLevel: v => typeof v === 'number' && Number.isFinite(v),
+        });
+        if (data.isSidebarCollapsed !== undefined) setIsSidebarCollapsed(data.isSidebarCollapsed);
+        if (data.isRightPanelOpen !== undefined) setIsRightPanelOpen(data.isRightPanelOpen);
+        if (data.zoomLevel !== undefined) setZoomLevel(data.zoomLevel);
+        if (data.docMode !== undefined) setDocMode(data.docMode);
+        if (data.chapterId) {
+          void window.electronAPI.manuscripts.document(data.chapterId).then(doc => handleOpenDocumentRef.current(doc)).catch(() => {});
+        }
+      },
+    });
+  }, [tab, host]);
+
   const handleOpenDocument = async (value: ManuscriptDocument) => {
     setError(false);
     setActiveDoc(value);
@@ -261,6 +314,7 @@ export function ResearchEditorView() {
     await host.open(value);
     setOpened(true);
   };
+  useEffect(() => { handleOpenDocumentRef.current = handleOpenDocument; });
 
   // KEY-372: a chapter requested from elsewhere (a note's "Used in manuscripts") opens once the editor is ready.
   useEffect(() => {

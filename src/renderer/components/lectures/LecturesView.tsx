@@ -13,6 +13,7 @@ import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/l
 import { studyLinks, studyLinkText, studyNoteHeading } from '../../../shared/study-notes';
 import { passageNote } from '../actions/passage-actions';
 import { clockTime, type Lecture } from '../../../shared/lectures';
+import { readSnapshot } from '../../../shared/workspace-tabs';
 import { splitLectureDrop } from '../../utils/book-drop';
 import { resolveDroppedFilePath } from '../../utils/file-path-helper';
 import { localAssetUrl } from '../../utils/file-path-helper';
@@ -204,6 +205,30 @@ export function LecturesView() {
   const tab = useOptionalTab();
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
+  const selectedRef = useRef(selected);
+  useEffect(() => { selectedRef.current = selected; });
+  useEffect(() => {
+    if (!tab) return;
+    return tab.registerSnapshot({
+      saveState: () => {
+        const media = tab.id ? document.querySelector<HTMLMediaElement>(`[data-tab-panel="${CSS.escape(tab.id)}"] [data-lecture-player]`) : null;
+        return {
+          version: 1,
+          data: {
+            lectureId: selectedRef.current?.id,
+            seek: media && Number.isFinite(media.currentTime) ? media.currentTime : selectedRef.current?.seek ?? 0,
+          },
+        };
+      },
+      restoreState: snapshot => {
+        const data = readSnapshot<{ lectureId?: string; seek?: number }>(snapshot, 1, {
+          lectureId: v => typeof v === 'string',
+          seek: v => typeof v === 'number' && Number.isFinite(v),
+        });
+        if (data.lectureId) setSelected({ id: data.lectureId, seek: data.seek ?? null, autoplay: false });
+      },
+    });
+  }, [tab]);
   useEffect(() => {
     const open = (event?: Event) => {
       if (event && !isTabEventTarget(tabRef.current, event)) return;

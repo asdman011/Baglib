@@ -20,7 +20,7 @@ import {
   Download,
   FileType,
 } from 'lucide-react';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useTabOptional, useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { Button, IconButton } from '../ui/Button';
 import { Chip } from '../ui/Chip';
@@ -178,10 +178,10 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
     };
   }, [note, isDirty, title, tagsInput, aliasesInput, workId, draftKey]);
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     const trimmedTitle = title.trim();
     const currentContent = contentRef.current;
-    if (!trimmedTitle && !currentContent.trim()) return;
+    if (!trimmedTitle && !currentContent.trim()) return true;
 
     setSaving(true);
     const tags = tagsInput
@@ -215,12 +215,32 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
       refreshTags();
       window.dispatchEvent(new CustomEvent('baglib:notes-changed'));
       onSaved?.(savedNote);
+      return true;
     } catch (e) {
       console.error('Failed to save study note:', e);
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // KEY-424 (WS-8): save dirty note before sleeping; a failed save keeps the tab awake.
+  const tab = useTabOptional();
+  const noteSnapshotRef = useRef({ isDirty, handleSave, noteId: note?.id });
+  useEffect(() => { noteSnapshotRef.current = { isDirty, handleSave, noteId: note?.id }; });
+  useEffect(() => {
+    if (!tab) return;
+    return tab.registerSnapshot({
+      saveState: async () => {
+        const s = noteSnapshotRef.current;
+        if (s.isDirty) {
+          const ok = await s.handleSave();
+          if (!ok) throw new Error('Note save failed');
+        }
+        return { version: 1, data: { noteId: s.noteId } };
+      },
+    });
+  }, [tab]);
 
   const handleAddTag = () => {
     const trimmed = newTagVal.trim().replace(/^#/u, '');

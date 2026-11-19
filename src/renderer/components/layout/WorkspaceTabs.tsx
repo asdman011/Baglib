@@ -512,23 +512,49 @@ export function usePlayingTabs(): ReadonlySet<string> {
   return playing;
 }
 
+/** KEY-424 (WS-8): tabs with an open dialog or modal never sleep (Tab State spec rule 3). */
+export function useOpenDialogTabs(): ReadonlySet<string> {
+  const [dialogs, setDialogs] = React.useState<ReadonlySet<string>>(() => new Set());
+  React.useEffect(() => {
+    const scan = () => {
+      const ids = new Set<string>();
+      for (const dlg of document.querySelectorAll<HTMLElement>('[data-tab-panel] [role="dialog"], [data-tab-panel] [aria-modal="true"]')) {
+        const id = dlg.closest<HTMLElement>('[data-tab-panel]')?.dataset.tabPanel;
+        if (id) ids.add(id);
+      }
+      setDialogs(previous => (previous.size === ids.size && [...ids].every(id => previous.has(id)) ? previous : ids));
+    };
+    scan();
+    if (typeof MutationObserver !== 'undefined') {
+      const observer = new MutationObserver(scan);
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role', 'aria-modal', 'hidden'] });
+      return () => observer.disconnect();
+    }
+    const deferredScan = () => { setTimeout(scan, 0); };
+    document.addEventListener('click', deferredScan, true);
+    return () => document.removeEventListener('click', deferredScan, true);
+  }, []);
+  return dialogs;
+}
+
 /** Each tab's screen: the view its own scope is on. */
 const TabScreen: React.FC<{ render: (view: WorkspaceView) => React.ReactNode }> = ({ render }) => {
   const { viewMode } = useWorkspace();
   return <>{render(viewMode)}</>;
 };
 
-/**
- * Sleeping saves the generic snapshot, which already lives in the tab's history entry (view, target, title);
- * WS-8 adds each view's own part through `useTab().registerSnapshot` and may make this fail.
- */
-const saveGenericSnapshot = async () => true;
-
 export const WorkspaceTabPanels: React.FC<{ render: (view: WorkspaceView) => React.ReactNode }> = ({ render }) => {
   const { dir, t } = useWorkspace();
-  const { state, activate, dispatchTabs } = useTabs();
+  const { state, activate, dispatchTabs, saveTabSnapshot } = useTabs();
   const playing = usePlayingTabs();
-  const awake = useTabKeepAlive(state, playing, saveGenericSnapshot);
+  const dialogs = useOpenDialogTabs();
+  const exempt = React.useMemo(() => {
+    if (dialogs.size === 0) return playing;
+    const next = new Set(playing);
+    for (const id of dialogs) next.add(id);
+    return next;
+  }, [playing, dialogs]);
+  const awake = useTabKeepAlive(state, exempt, saveTabSnapshot);
   const renderTab = React.useCallback((tab: WorkspaceTab) => (
     <TabScope tabId={tab.id}>
       <TabScreen render={render} />

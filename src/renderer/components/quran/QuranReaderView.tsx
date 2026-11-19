@@ -19,6 +19,7 @@ import { BookOpen, Copy, CopyCheck, Layers, Play, Pause, X, Maximize2, Minimize2
 import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranStructure, QuranSurahIntro } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { useOptionalTab, useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
+import { readSnapshot } from '../../../shared/workspace-tabs';
 import { QuranMushafWorkspace } from './QuranMushafWorkspace';
 import { QuranAudioPlayer, type QuranAudioState } from './QuranAudioPlayer';
 import { QuranSurahIntroCard } from './QuranSurahIntroCard';
@@ -338,6 +339,30 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
   const tab = useOptionalTab();
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
+  const quranSnapshotRef = useRef({ panelOpen, inspected, pageNumber });
+  useEffect(() => { quranSnapshotRef.current = { panelOpen, inspected, pageNumber }; });
+  useEffect(() => {
+    if (!tab) return;
+    return tab.registerSnapshot({
+      saveState: () => ({
+        version: 1,
+        data: {
+          panelOpen: quranSnapshotRef.current.panelOpen,
+          inspected: quranSnapshotRef.current.inspected,
+          pageNumber: quranSnapshotRef.current.pageNumber,
+        },
+      }),
+      restoreState: snapshot => {
+        const data = readSnapshot<{ panelOpen?: boolean; inspected?: { surah: number; ayah: number } | null; pageNumber?: number }>(snapshot, 1, {
+          panelOpen: v => typeof v === 'boolean',
+          inspected: v => v === null || (typeof v === 'object' && v !== null && typeof (v as { surah?: unknown }).surah === 'number' && typeof (v as { ayah?: unknown }).ayah === 'number'),
+          pageNumber: v => typeof v === 'number' && Number.isFinite(v) && v >= 1,
+        });
+        if (data.panelOpen !== undefined) setPanelOpen(data.panelOpen);
+        if (data.inspected !== undefined) setInspected(data.inspected);
+      },
+    });
+  }, [tab]);
   const restoringTarget = useRef(false);
   useEffect(() => {
     const open = (event?: Event) => {

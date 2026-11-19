@@ -24,6 +24,7 @@ import {
   parsePrefs,
   parseTabs,
   pushClosed,
+  sanitizeSnapshot,
   serializeTabs,
   startupTabs,
   tabsReducer,
@@ -186,6 +187,8 @@ export interface UseTabsResult {
   closedTabs: WorkspaceTab[];
   /** KEY-425: any other tab action (side by side: openBeside, closeSplit, setSplitRatio). */
   dispatchTabs: (action: TabsAction) => void;
+  /** KEY-424 (WS-8): saves a tab's snapshot (and runs any view save); returns false if save failed. */
+  saveTabSnapshot: (id: string) => Promise<boolean>;
 }
 
 interface BookSyncSubscriber {
@@ -199,6 +202,7 @@ interface TabsInternalApi {
   notifyBookDelete: (bookId: string) => void;
   publishFocusedScope: (tabId: string, scope: TabScopeContextType) => void;
   unpublishFocusedScope: (tabId: string) => void;
+  registerTabSnapshot: (tabId: string, handlers: TabSnapshotHandlers | null) => void;
 }
 
 const WorkspaceGlobalContext = createContext<WorkspaceGlobalContextType | undefined>(undefined);
@@ -1060,6 +1064,54 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     dispatch({ type: 'reopen', tab: last, id: allocateId(), now: Date.now() });
   }, [allocateId]);
 
+  const snapshotHandlersMapRef = useRef<Map<string, TabSnapshotHandlers>>(new Map());
+  const registerTabSnapshot = useCallback((tabId: string, handlers: TabSnapshotHandlers | null) => {
+    if (handlers) snapshotHandlersMapRef.current.set(tabId, handlers);
+    else snapshotHandlersMapRef.current.delete(tabId);
+  }, []);
+
+  const saveTabSnapshot = useCallback(async (id: string): Promise<boolean> => {
+    const handlers = snapshotHandlersMapRef.current.get(id);
+    let scroll: number | undefined;
+    if (typeof document !== 'undefined' && typeof CSS !== 'undefined') {
+      const panel = document.querySelector<HTMLElement>(`[data-tab-panel="${CSS.escape(id)}"]`);
+      if (panel) {
+        const scroller = panel.querySelector<HTMLElement>('[data-tab-scroll]') ?? panel;
+        if (typeof scroller.scrollTop === 'number' && scroller.scrollTop > 0) {
+          scroll = Math.round(scroller.scrollTop);
+        }
+      }
+    }
+    try {
+      const raw = handlers?.saveState ? await handlers.saveState() : undefined;
+      const snapshot = raw ? sanitizeSnapshot(raw) : undefined;
+      if (snapshot || scroll !== undefined) {
+        dispatch({
+          type: 'update',
+          id,
+          patch: {
+            ...(snapshot ? { snapshot } : {}),
+            ...(scroll !== undefined ? { scroll } : {}),
+          },
+        });
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // KEY-424 (WS-8): periodic snapshot debounce while a tab is active so crashes lose at most a few seconds.
+  useEffect(() => {
+    if (initialTabs || !state.activeId) return;
+    const activeId = state.activeId;
+    const timer = setInterval(() => {
+      void saveTabSnapshot(activeId);
+    }, 3000);
+    (timer as unknown as { unref?: () => void }).unref?.();
+    return () => clearInterval(timer);
+  }, [initialTabs, state.activeId, saveTabSnapshot]);
+
   const tabsValue = useMemo<UseTabsResult>(() => ({
     state,
     prefs,
@@ -1073,7 +1125,8 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     reopenClosed,
     closedTabs,
     dispatchTabs: dispatch,
-  }), [state, prefs, open, close, activate, navigate, move, go, duplicate, reopenClosed, closedTabs]);
+    saveTabSnapshot,
+  }), [state, prefs, open, close, activate, navigate, move, go, duplicate, reopenClosed, closedTabs, saveTabSnapshot]);
 
   // Focused scope registry so `useWorkspace()` outside any `<TabScope>` reads the focused tab's scope.
   const [publishedFocus, setPublishedFocus] = useState<{ tabId: string; scope: TabScopeContextType } | null>(null);
@@ -1090,7 +1143,8 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     notifyBookDelete,
     publishFocusedScope,
     unpublishFocusedScope,
-  }), [subscribeBookSync, notifyBookUpdate, notifyBookDelete, publishFocusedScope, unpublishFocusedScope]);
+    registerTabSnapshot,
+  }), [subscribeBookSync, notifyBookUpdate, notifyBookDelete, publishFocusedScope, unpublishFocusedScope, registerTabSnapshot]);
 
   const focusedTabId = state.activeId ?? state.tabs[0]?.id ?? 'tab-1';
 
@@ -1307,20 +1361,28 @@ export const TabScope: React.FC<{ tabId: string; children: React.ReactNode }> = 
   const internal = useContext(TabsInternalContext);
   const scopeValue = useTabScopeState(tabId);
   const snapshotHandlersRef = useRef<TabSnapshotHandlers | null>(null);
-
-  const registerSnapshot = useCallback((handlers: TabSnapshotHandlers) => {
-    snapshotHandlersRef.current = handlers;
-    return () => {
-      if (snapshotHandlersRef.current === handlers) {
-        snapshotHandlersRef.current = null;
-      }
-    };
-  }, []);
+  const restoredSnapshotRef = useRef<ViewSnapshot | undefined>(undefined);
 
   const tab = tabsCtx ? findTab(tabsCtx.state, tabId) : undefined;
   const activeTab = tabsCtx ? getActiveTab(tabsCtx.state) : undefined;
   const isFocused = tabsCtx ? (activeTab ? activeTab.id === tabId : tabsCtx.state.tabs[0]?.id === tabId) : true;
   const location = tab ? currentLocation(tab) : homeLocation();
+  const registerTabSnapshot = internal?.registerTabSnapshot;
+
+  const registerSnapshot = useCallback((handlers: TabSnapshotHandlers) => {
+    snapshotHandlersRef.current = handlers;
+    registerTabSnapshot?.(tabId, handlers);
+    if (location.snapshot && restoredSnapshotRef.current !== location.snapshot) {
+      restoredSnapshotRef.current = location.snapshot;
+      handlers.restoreState?.(location.snapshot);
+    }
+    return () => {
+      if (snapshotHandlersRef.current === handlers) {
+        snapshotHandlersRef.current = null;
+        registerTabSnapshot?.(tabId, null);
+      }
+    };
+  }, [tabId, registerTabSnapshot, location.snapshot]);
 
   const tabResult = useMemo<UseTabResult>(() => ({
     id: tabId,
@@ -1365,6 +1427,8 @@ export const useWorkspace = (): WorkspaceContextType => {
   }
   return useMemo(() => ({ ...global, ...tab }), [global, tab]);
 };
+
+export const useTabOptional = (): UseTabResult | null => useContext(TabContext) ?? null;
 
 export const useTab = (): UseTabResult => {
   const tab = useContext(TabContext);

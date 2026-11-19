@@ -1,7 +1,8 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useTabOptional, useWorkspace } from '../context/WorkspaceContext';
+import { readSnapshot } from '../../../shared/workspace-tabs';
 import { Button, Modal } from '../ui';
 import { SearchProviderSettings } from './SearchProviderSettings';
 import { AdvancedSettings } from './AdvancedSettings';
@@ -286,6 +287,23 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
   const { t, lang, dir, theme, toggleTheme, toggleLanguage, toggleNavPinned, setViewMode, setIsSupportSheetOpen, activeBook, books } = useWorkspace();
   const [query, setQuery] = useState('');
   const [panel, setPanel] = useState<string | null>(null);
+  const tab = useTabOptional();
+  const snapshotRef = useRef({ query, panel });
+  useEffect(() => { snapshotRef.current = { query, panel }; });
+  useEffect(() => {
+    if (!tab) return;
+    return tab.registerSnapshot({
+      saveState: () => ({ version: 1, data: { query: snapshotRef.current.query, panel: snapshotRef.current.panel } }),
+      restoreState: snapshot => {
+        const data = readSnapshot<{ query?: string; panel?: string | null }>(snapshot, 1, {
+          query: v => typeof v === 'string',
+          panel: v => v === null || typeof v === 'string',
+        });
+        if (data.query !== undefined) setQuery(data.query);
+        if (data.panel !== undefined) setPanel(data.panel);
+      },
+    });
+  }, [tab]);
   const [failed, setFailed] = useState(false);
   const [folder, setFolder] = useState('');
   const entries = searchSettings(query);

@@ -54,6 +54,7 @@ import {
   Puzzle,
 } from 'lucide-react';
 import { useOptionalTab, useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
+import { readSnapshot } from '../../../shared/workspace-tabs';
 import { DocumentLoader, detectFormat } from '../../libs/reader/document-loader';
 import { paginateBookSections, type FormattedPage } from '../../libs/reader/epub-paginator';
 import { chaptersFromPages, inlineBlobImages } from '../../libs/reader/book-pdf-export';
@@ -191,6 +192,7 @@ const readerTopOffset = (): number => (typeof document === 'undefined' ? 0 : Mat
 const SourceBookReader: React.FC = () => {
   // KEY-419: a hidden tab (kept alive) ignores keys; its window-level key handlers check this first.
   const keysActive = useTabKeysActive();
+  const readerTab = useOptionalTab();
   const {
     activeBook,
     books,
@@ -208,6 +210,30 @@ const SourceBookReader: React.FC = () => {
 
   const panels = useReaderPanels();
   const chrome = useReaderChrome(activeBook?.id, panels.activePanel, panels.setters);
+  const readerSnapshotRef = useRef({ workId: activeBook?.id, sourceId: activeBook?.sourceId, readingPage, splitOrientation });
+  useEffect(() => { readerSnapshotRef.current = { workId: activeBook?.id, sourceId: activeBook?.sourceId, readingPage, splitOrientation }; });
+  useEffect(() => {
+    if (!readerTab) return;
+    return readerTab.registerSnapshot({
+      saveState: () => ({
+        version: 1,
+        data: {
+          workId: readerSnapshotRef.current.workId,
+          sourceId: readerSnapshotRef.current.sourceId,
+          readingPage: readerSnapshotRef.current.readingPage,
+          splitOrientation: readerSnapshotRef.current.splitOrientation,
+        },
+      }),
+      restoreState: snapshot => {
+        const data = readSnapshot<{ readingPage?: number; splitOrientation?: 'vertical' | 'horizontal' | 'none' | 'full_notes' }>(snapshot, 1, {
+          readingPage: v => typeof v === 'number' && Number.isFinite(v) && v >= 1,
+          splitOrientation: v => v === 'vertical' || v === 'horizontal' || v === 'none' || v === 'full_notes',
+        });
+        if (data.readingPage !== undefined) setReadingPage(data.readingPage);
+        if (data.splitOrientation !== undefined) setSplitOrientation(data.splitOrientation);
+      },
+    });
+  }, [readerTab, setReadingPage, setSplitOrientation]);
   const [focusMode, setFocusMode] = useState(false);
   const [pdfReviews, setPdfReviews] = useState<PdfReview[]>([]);
   const isDocumentPanelOpen = panels.activePanel === 'document';
