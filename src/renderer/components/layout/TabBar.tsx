@@ -14,7 +14,7 @@
 import React from 'react';
 import { Columns2, Plus, Volume2, X } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
-import { currentLocation, type WorkspaceTab } from '../../../shared/workspace-tabs';
+import { currentLocation, type TabGroup, type TabGroupColor, type WorkspaceTab } from '../../../shared/workspace-tabs';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { MenuItemProps } from '../ui/Menu';
 import { DRAG_THRESHOLD_PX, dropIndex, tabIcon, tabLabel, type TabSpan } from './tab-bar-model';
@@ -54,7 +54,23 @@ export interface TabBarProps {
   onExtendSelection?: (step: 1 | -1) => void;
   getTabMenuItems?: (id: string) => MenuItemProps[];
   onMoveSelection?: (ids: string[], toIndex: number) => void;
+  /** KEY-426 (WS-11): tab groups UI. */
+  groups?: TabGroup[];
+  onToggleGroupCollapse?: (groupId: string) => void;
+  getGroupMenuItems?: (groupId: string) => MenuItemProps[];
+  onMoveGroup?: (groupId: string, toIndex: number) => void;
 }
+
+export const GROUP_COLOR_STYLES: Record<TabGroupColor, { chip: string; line: string; swatch: string }> = {
+  grey:   { chip: 'border-zinc-500/50 bg-zinc-500/15 text-main',       line: 'border-b-2 border-b-zinc-400',    swatch: 'bg-zinc-400' },
+  blue:   { chip: 'border-blue-500/50 bg-blue-500/15 text-main',       line: 'border-b-2 border-b-blue-400',    swatch: 'bg-blue-400' },
+  red:    { chip: 'border-red-500/50 bg-red-500/15 text-main',         line: 'border-b-2 border-b-red-400',     swatch: 'bg-red-400' },
+  yellow: { chip: 'border-amber-500/50 bg-amber-500/15 text-main',     line: 'border-b-2 border-b-amber-400',   swatch: 'bg-amber-400' },
+  green:  { chip: 'border-emerald-500/50 bg-emerald-500/15 text-main', line: 'border-b-2 border-b-emerald-400', swatch: 'bg-emerald-400' },
+  pink:   { chip: 'border-pink-500/50 bg-pink-500/15 text-main',       line: 'border-b-2 border-b-pink-400',    swatch: 'bg-pink-400' },
+  purple: { chip: 'border-purple-500/50 bg-purple-500/15 text-main',   line: 'border-b-2 border-b-purple-400',  swatch: 'bg-purple-400' },
+  cyan:   { chip: 'border-cyan-500/50 bg-cyan-500/15 text-main',       line: 'border-b-2 border-b-cyan-400',    swatch: 'bg-cyan-400' },
+};
 
 /** How far below the bar the pointer must go before a dragged tab counts as pulled out of it. */
 const PULL_OUT_PX = 30;
@@ -63,7 +79,7 @@ const PULL_OUT_PX = 30;
 const QUICK_OPEN_DELAY_MS = 250;
 const QUICK_OPEN_CLOSE_MS = 200;
 
-interface DragState { id: string; startX: number; spans: TabSpan[]; target: number; moved: boolean; out?: boolean; edge?: 'start' | 'end' | null }
+interface DragState { id: string; groupId?: string; startX: number; spans: TabSpan[]; target: number; moved: boolean; out?: boolean; edge?: 'start' | 'end' | null }
 
 /** The order shown while a tab is dragged: the dragged tab already at its landing index. */
 function previewOrder(tabs: WorkspaceTab[], drag: DragState | null): WorkspaceTab[] {
@@ -77,7 +93,8 @@ function previewOrder(tabs: WorkspaceTab[], drag: DragState | null): WorkspaceTa
 export const TabBar: React.FC<TabBarProps> = ({
   tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot,
   renderQuickOpen, onDropToEdge, onOpenBeside, selectedIds, onTabClick, onClearSelection,
-  onExtendSelection, getTabMenuItems, onMoveSelection,
+  onExtendSelection, getTabMenuItems, onMoveSelection, groups, onToggleGroupCollapse,
+  getGroupMenuItems, onMoveGroup,
 }) => {
   const listRef = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<DragState | null>(null);
@@ -127,12 +144,21 @@ export const TabBar: React.FC<TabBarProps> = ({
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
+  const onGroupPointerDown = (event: React.PointerEvent<HTMLElement>, groupId: string) => {
+    if (event.button !== 0 || !onMoveGroup) return;
+    suppressClick.current = false;
+    const index = tabs.findIndex(tab => tab.groupId === groupId);
+    if (index < 0) return;
+    setDragState({ id: tabs[index].id, groupId, startX: event.clientX, spans: spansNow(), target: index, moved: false });
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     const current = dragRef.current;
     if (!current) return;
     // Pulled down out of the bar: a drop near a side edge opens the tab side by side.
     const barBottom = listRef.current?.getBoundingClientRect().bottom ?? 0;
-    if (onDropToEdge && barBottom > 0 && event.clientY > barBottom + PULL_OUT_PX) {
+    if (!current.groupId && onDropToEdge && barBottom > 0 && event.clientY > barBottom + PULL_OUT_PX) {
       const edge = edgeZone(event.clientX, { left: 0, width: window.innerWidth }, dir);
       if (!current.out || edge !== current.edge) setDragState({ ...current, moved: true, out: true, edge });
       return;
@@ -154,7 +180,8 @@ export const TabBar: React.FC<TabBarProps> = ({
     }
     if (current?.moved) {
       suppressClick.current = true;
-      finishMove(current.id, current.target);
+      if (current.groupId) onMoveGroup?.(current.groupId, current.target);
+      else finishMove(current.id, current.target);
     }
   };
 
@@ -202,6 +229,7 @@ export const TabBar: React.FC<TabBarProps> = ({
   };
 
   const shown = previewOrder(tabs, drag);
+  const groupById = new Map((groups ?? []).map(group => [group.id, group]));
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-1" dir={dir} data-workspace-tabbar>
@@ -213,7 +241,37 @@ export const TabBar: React.FC<TabBarProps> = ({
         onWheel={onWheel}
         className="flex min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
       >
-        {shown.map(tab => {
+        {shown.map((tab, index) => {
+          const group = tab.groupId ? groupById.get(tab.groupId) : undefined;
+          const groupStart = !!group && (index === 0 || shown[index - 1]?.groupId !== group.id);
+          const style = group ? GROUP_COLOR_STYLES[group.color] : undefined;
+          const groupChip = groupStart && group && style ? (
+            <ContextMenu
+              as="button"
+              key={`group-${group.id}`}
+              type="button"
+              onOpenMenu={() => (getGroupMenuItems ? getGroupMenuItems(group.id) : [])}
+              data-group-id={group.id}
+              data-group-color={group.color}
+              data-group-collapsed={group.collapsed ? '' : undefined}
+              aria-expanded={!group.collapsed}
+              title={group.name || t('workspaceGroupUntitled')}
+              onPointerDown={event => onGroupPointerDown(event, group.id)}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={() => setDragState(null)}
+              onClick={() => {
+                if (suppressClick.current) { suppressClick.current = false; return; }
+                onToggleGroupCollapse?.(group.id);
+              }}
+              className={`flex h-7 max-w-[10rem] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-focus ${style.chip}`}
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${style.swatch}`} aria-hidden="true" />
+              <span className="truncate" dir="auto">{group.name || t('workspaceGroupUntitled')}</span>
+            </ContextMenu>
+          ) : null;
+          if (group?.collapsed) return groupChip;
+
           const location = currentLocation(tab);
           const Icon = tabIcon(location.view);
           const label = tabLabel(tab, t);
@@ -231,10 +289,11 @@ export const TabBar: React.FC<TabBarProps> = ({
             }];
           };
           return (
-            <ContextMenu
-              as="div"
-              key={tab.id}
-              onOpenMenu={tabMenuItems}
+            <React.Fragment key={tab.id}>
+              {groupChip}
+              <ContextMenu
+                as="div"
+                onOpenMenu={tabMenuItems}
               role="tab"
               data-tab-id={tab.id}
               data-tab-view={location.view}
@@ -260,6 +319,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                 'group flex h-8 min-w-[7.5rem] max-w-[13.75rem] shrink-0 cursor-default items-center gap-1.5 rounded-lg border ps-2.5 pe-1 text-xs leading-normal transition-colors',
                 'focus-visible:outline-2 focus-visible:outline-focus touch-none',
                 active ? 'border-primary/40 bg-primary/10 text-main' : selected ? 'border-primary/35 bg-primary/5 text-main' : 'border-transparent text-muted hover:bg-canvas hover:text-main',
+                style ? style.line : '',
                 asleep?.has(tab.id) ? 'opacity-75' : '',
                 dragging ? 'z-10 shadow-md ring-1 ring-primary/40' : '',
               ].join(' ')}
@@ -279,7 +339,8 @@ export const TabBar: React.FC<TabBarProps> = ({
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>
-            </ContextMenu>
+              </ContextMenu>
+            </React.Fragment>
           );
         })}
       </div>

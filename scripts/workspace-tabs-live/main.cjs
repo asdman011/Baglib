@@ -239,6 +239,29 @@ app.on('browser-window-created', (_, win) => {
       key('Escape');
       await until("document.querySelectorAll('[data-tab-id][data-selected]').length === 1");
 
+      // KEY-426: tab groups UI (create, collapse, expand, group context menu, ungroup).
+      await evaluate(`(() => { const t = document.querySelector('[data-tab-id="${readerSplitTab}"]'); const r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); })()`);
+      await until("!!document.querySelector('[data-menu-action=\"add-to-group\"]')");
+      await click('[data-menu-action="add-to-group"]');
+      await until("!!document.querySelector('[data-menu-action=\"new-group\"]')");
+      await click('[data-menu-action="new-group"]');
+      await until("!!document.querySelector('[data-group-dialog]')");
+      await evaluate("document.querySelector('[data-group-name-input]').focus()");
+      await win.webContents.insertText(rtl ? 'دراسة' : 'Study');
+      await click('[data-group-color-pick="green"]');
+      await click('[data-group-submit]');
+      await until("!!document.querySelector('[data-group-id][data-group-color=\"green\"]')");
+      await shot(`${language}-6g-tab-group`);
+      await click('[data-group-id]');
+      await until("!!document.querySelector('[data-group-id][data-group-collapsed]')");
+      await shot(`${language}-6h-group-collapsed`);
+      await click('[data-group-id]');
+      await until("!document.querySelector('[data-group-id][data-group-collapsed]')");
+      await evaluate("(() => { const g = document.querySelector('[data-group-id]'); const r = g.getBoundingClientRect(); g.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); })()");
+      await until("!!document.querySelector('[data-menu-action=\"group-ungroup\"]')");
+      await click('[data-menu-action="group-ungroup"]');
+      await until("!document.querySelector('[data-group-id]')");
+
       // Narrow window: the bar scrolls sideways and the page never does.
       win.setContentSize(480, 900);
       await until('innerWidth <= 500');

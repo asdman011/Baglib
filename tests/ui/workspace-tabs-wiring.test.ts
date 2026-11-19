@@ -334,4 +334,42 @@ describe('workspace tabs wired to the providers', () => {
       assert.equal(window.document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels'), 'split');
     } finally { restore(); }
   });
+
+  it('creates, collapses, expands, and ungroups tab groups from the tab bar UI', async () => {
+    const { window, root, restore } = setup();
+    try {
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: threeTabs() }, createElement(Shell))));
+      const t2 = window.document.querySelector('[data-tab-id="t2"]')!;
+      await act(async () => fire(t2, 'onContextMenu', { clientX: 80, clientY: 10, target: t2 }));
+      const addToGroup = window.document.querySelector('[data-menu-action="add-to-group"]')!;
+      assert.ok(addToGroup);
+      await act(async () => fire(addToGroup, 'onClick'));
+      const newGroup = window.document.querySelector('[data-menu-action="new-group"]')!;
+      assert.ok(newGroup);
+      await act(async () => fire(newGroup, 'onClick'));
+      assert.ok(window.document.querySelector('[data-group-dialog]'));
+      await act(async () => fire(window.document.querySelector('[data-group-color-pick="green"]')!, 'onClick'));
+      await act(async () => fire(window.document.querySelector('[data-group-dialog] form')!, 'onSubmit'));
+
+      const chip = () => window.document.querySelector('[data-group-id]')!;
+      assert.ok(chip(), 'group label chip rendered');
+      assert.equal(chip().getAttribute('data-group-color'), 'green');
+
+      // Collapse hides t2, expand brings t2 back.
+      await act(async () => fire(chip(), 'onClick'));
+      assert.equal(chip().hasAttribute('data-group-collapsed'), true);
+      assert.equal(window.document.querySelector('[data-tab-id="t2"]'), null);
+      await act(async () => fire(chip(), 'onClick'));
+      assert.equal(chip().hasAttribute('data-group-collapsed'), false);
+      assert.ok(window.document.querySelector('[data-tab-id="t2"]'));
+
+      // Group label context menu: ungroup keeps t2 and removes the group chip.
+      await act(async () => fire(chip(), 'onContextMenu', { clientX: 40, clientY: 10, target: chip() }));
+      const ungroup = window.document.querySelector('[data-menu-action="group-ungroup"]')!;
+      assert.ok(ungroup);
+      await act(async () => fire(ungroup, 'onClick'));
+      assert.equal(window.document.querySelector('[data-group-id]'), null);
+      assert.ok(window.document.querySelector('[data-tab-id="t2"]'));
+    } finally { restore(); }
+  });
 });

@@ -10,10 +10,10 @@
  * - `useWorkspaceTabShortcuts`: Ctrl+T/W/Tab/1…9, Ctrl+Shift+T, Alt+Left/Right and the mouse back/forward buttons.
  */
 import React from 'react';
-import { Columns2, Copy, ListPlus, Plus, RotateCcw, X } from 'lucide-react';
+import { FolderPlus, Columns2, Copy, ListPlus, Plus, RotateCcw, X } from 'lucide-react';
 import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
 import { editorLeaveGuard } from '../research/editor-leave';
-import { activeTab, currentLocation, homeLocation, SINGLE_INSTANCE_VIEWS, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
+import { activeTab, currentLocation, homeLocation, SINGLE_INSTANCE_VIEWS, TAB_GROUP_COLORS, type TabGroupColor, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
 import {
   canOpenSideBySide, clickTab, copyLinksText, extendSelection, listableTargets, menuTargets,
   normalizeSelection, otherTabIds, rangeTo, singleSelection, tabIdsAfter, tabTargetToListItem, toggleTab,
@@ -25,7 +25,7 @@ import type { MenuItemProps } from '../ui/Menu';
 import { useToastOptional } from '../ui/Toast';
 import { QuickOpenPanel } from './QuickOpenPanel';
 import { useQuickOpenData } from './workspace-usage';
-import { TabBar } from './TabBar';
+import { GROUP_COLOR_STYLES, TabBar } from './TabBar';
 import { TabKeepAlive } from './TabKeepAlive';
 import { TabHistoryStrip } from './TabHistoryStrip';
 import { useTabKeepAlive } from './use-tab-keep-alive';
@@ -181,7 +181,86 @@ export const WorkspaceTabRow: React.FC = () => {
     if (target) dispatchTabs({ type: 'openBeside', id: target });
   }, [state.activeId, state.tabs, dispatchTabs]);
 
-  // KEY-428 (WS-10): full tab right-click menu (plan 7.4; window & group items arrive in WS-11/WS-12).
+  // KEY-426 (WS-11): tab group create/edit dialog state.
+  const [groupDialog, setGroupDialog] = React.useState<{ mode: 'create'; ids: string[] } | { mode: 'edit'; groupId: string } | null>(null);
+  const [groupName, setGroupName] = React.useState('');
+  const [groupColor, setGroupColor] = React.useState<TabGroupColor>('blue');
+
+  const submitGroupDialog = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!groupDialog) return;
+    if (groupDialog.mode === 'create') {
+      const groupId = `grp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      dispatchTabs({ type: 'group', ids: groupDialog.ids, groupId, name: groupName.trim(), color: groupColor });
+    } else {
+      dispatchTabs({ type: 'updateGroup', groupId: groupDialog.groupId, patch: { name: groupName.trim(), color: groupColor } });
+    }
+    setGroupDialog(null);
+  };
+
+  const groupColorLabel = React.useCallback((color: TabGroupColor) => {
+    const map: Record<TabGroupColor, Parameters<typeof t>[0]> = {
+      grey: 'workspaceGroupColorGrey', blue: 'workspaceGroupColorBlue', red: 'workspaceGroupColorRed',
+      yellow: 'workspaceGroupColorYellow', green: 'workspaceGroupColorGreen', pink: 'workspaceGroupColorPink',
+      purple: 'workspaceGroupColorPurple', cyan: 'workspaceGroupColorCyan',
+    };
+    return t(map[color]);
+  }, [t]);
+
+  const getGroupMenuItems = React.useCallback((groupId: string): MenuItemProps[] => {
+    const group = (state.groups ?? []).find(item => item.id === groupId);
+    if (!group) return [];
+    const memberIds = state.tabs.filter(tab => tab.groupId === groupId).map(tab => tab.id);
+    const items: MenuItemProps[] = [
+      {
+        id: 'group-rename',
+        label: t('workspaceGroupRename'),
+        onClick: () => { setGroupName(group.name); setGroupColor(group.color); setGroupDialog({ mode: 'edit', groupId }); },
+      },
+      {
+        id: 'group-color',
+        label: t('workspaceGroupChangeColor'),
+        children: TAB_GROUP_COLORS.map(color => ({
+          id: `group-color-${color}`,
+          label: groupColorLabel(color),
+          icon: <span className={`inline-block h-2.5 w-2.5 rounded-full ${GROUP_COLOR_STYLES[color].swatch}`} aria-hidden="true" />,
+          onClick: () => dispatchTabs({ type: 'updateGroup', groupId, patch: { color } }),
+        })),
+      },
+      {
+        id: 'group-collapse',
+        label: t(group.collapsed ? 'workspaceGroupExpand' : 'workspaceGroupCollapse'),
+        onClick: () => dispatchTabs({ type: 'updateGroup', groupId, patch: { collapsed: !group.collapsed } }),
+      },
+      {
+        id: 'group-ungroup',
+        label: t('workspaceGroupUngroup'),
+        onClick: () => dispatchTabs({ type: 'ungroup', groupId }),
+      },
+      {
+        id: 'group-close',
+        label: t('workspaceGroupClose'),
+        danger: true,
+        onClick: () => closeMany(memberIds),
+      },
+    ];
+    if (window.electronAPI?.personalLists) {
+      items.push({
+        id: 'group-save-list',
+        label: t('workspaceGroupSaveAsList'),
+        icon: <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />,
+        onClick: () => { setNewListTargets(memberIds); setNewListName(group.name || ''); },
+      });
+    }
+    return items;
+  }, [state.groups, state.tabs, t, groupColorLabel, dispatchTabs, closeMany]);
+
+  const onToggleGroupCollapse = React.useCallback((groupId: string) => {
+    const group = (state.groups ?? []).find(item => item.id === groupId);
+    if (group) dispatchTabs({ type: 'updateGroup', groupId, patch: { collapsed: !group.collapsed } });
+  }, [state.groups, dispatchTabs]);
+
+  // KEY-428 (WS-10): full tab right-click menu (plan 7.4; window items arrive in WS-12).
   const getTabMenuItems = React.useCallback((pointerId: string): MenuItemProps[] => {
     const targets = menuTargets(state, selection, pointerId);
     if (targets.length === 0) return [];
@@ -206,6 +285,32 @@ export const WorkspaceTabRow: React.FC = () => {
       disabled: !canDup,
       onClick: () => { targets.forEach(id => duplicate(id)); },
     });
+    const groupChildren: MenuItemProps[] = [
+      {
+        id: 'new-group',
+        label: t('workspaceTabNewGroup'),
+        onClick: () => { setGroupName(''); setGroupColor('blue'); setGroupDialog({ mode: 'create', ids: targets }); },
+      },
+      ...(state.groups ?? []).map(group => ({
+        id: `add-to-group-${group.id}`,
+        label: group.name || t('workspaceGroupUntitled'),
+        icon: <span className={`inline-block h-2.5 w-2.5 rounded-full ${GROUP_COLOR_STYLES[group.color].swatch}`} aria-hidden="true" />,
+        onClick: () => dispatchTabs({ type: 'addToGroup', ids: targets, groupId: group.id }),
+      })),
+    ];
+    items.push({
+      id: 'add-to-group',
+      label: t('workspaceTabAddToGroup'),
+      icon: <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />,
+      children: groupChildren,
+    });
+    if (targets.some(id => !!state.tabs.find(tab => tab.id === id)?.groupId)) {
+      items.push({
+        id: 'remove-from-group',
+        label: t('workspaceTabRemoveFromGroup'),
+        onClick: () => dispatchTabs({ type: 'removeFromGroup', ids: targets }),
+      });
+    }
     if (canOpenSideBySide(targets)) {
       items.push({
         id: 'open-side-by-side',
@@ -304,11 +409,50 @@ export const WorkspaceTabRow: React.FC = () => {
         onExtendSelection={onExtendSelection}
         onMoveSelection={onMoveSelection}
         getTabMenuItems={getTabMenuItems}
+        groups={state.groups}
+        onToggleGroupCollapse={onToggleGroupCollapse}
+        getGroupMenuItems={getGroupMenuItems}
+        onMoveGroup={(groupId, toIndex) => dispatchTabs({ type: 'moveGroup', groupId, toIndex })}
         onNew={() => { open(homeLocation(), { afterId: lastTabId(state) }); }}
         renderQuickOpen={({ close, autoFocus }) => (
           <QuickOpenPanel destinations={quick.destinations} recent={quick.recent} t={t} onOpen={openQuick} onClose={close} autoFocus={autoFocus} />
         )}
       />
+      {groupDialog && (
+        <div role="dialog" aria-modal="true" aria-label={t(groupDialog.mode === 'create' ? 'workspaceGroupCreate' : 'workspaceGroupRename')} data-group-dialog className="fixed inset-0 z-[210] flex items-center justify-center bg-black/50 p-4" onClick={() => setGroupDialog(null)}>
+          <form onSubmit={submitGroupDialog} onClick={event => event.stopPropagation()} className="w-full max-w-sm rounded-xl border border-border bg-surface p-4 shadow-2xl">
+            <h2 className="mb-3 text-sm font-semibold text-main">{t(groupDialog.mode === 'create' ? 'workspaceGroupCreate' : 'workspaceGroupRename')}</h2>
+            <input
+              autoFocus
+              dir="auto"
+              type="text"
+              data-group-name-input
+              value={groupName}
+              onChange={event => setGroupName(event.target.value)}
+              placeholder={t('workspaceGroupNamePlaceholder')}
+              className="mb-3 w-full rounded-lg border border-border bg-canvas px-3 py-2 text-sm text-main outline-none focus:border-primary"
+            />
+            <div className="mb-4 flex flex-wrap items-center gap-2" role="radiogroup" aria-label={t('workspaceGroupColorLabel')}>
+              {TAB_GROUP_COLORS.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  role="radio"
+                  aria-checked={groupColor === color}
+                  aria-label={groupColorLabel(color)}
+                  data-group-color-pick={color}
+                  onClick={() => setGroupColor(color)}
+                  className={`h-6 w-6 rounded-full ${GROUP_COLOR_STYLES[color].swatch} ${groupColor === color ? 'ring-2 ring-main ring-offset-2 ring-offset-surface' : 'opacity-75 hover:opacity-100'}`}
+                />
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setGroupDialog(null)} className="rounded-lg px-3 py-1.5 text-xs text-muted hover:bg-canvas">{t('cancel')}</button>
+              <button type="submit" data-group-submit className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-text">{t(groupDialog.mode === 'create' ? 'workspaceGroupCreate' : 'workspaceGroupSave')}</button>
+            </div>
+          </form>
+        </div>
+      )}
       {newListTargets && (
         <div role="dialog" aria-modal="true" aria-label={t('workspaceTabNewList')} className="fixed inset-0 z-[210] flex items-center justify-center bg-black/50 p-4" onClick={() => setNewListTargets(null)}>
           <form onSubmit={submitNewList} onClick={event => event.stopPropagation()} className="w-full max-w-sm rounded-xl border border-border bg-surface p-4 shadow-2xl">

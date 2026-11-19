@@ -1,3 +1,24 @@
+## KEY-426 (WS-11): tab groups UI — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/layout/TabBar.tsx`, `src/renderer/components/ui/ContextMenu.tsx`:
+  - Rendered colored group label chips (`data-group-id`, `data-group-color`, `data-group-collapsed`) in front of each group's tabs using the 8 `TAB_GROUP_COLORS` (`GROUP_COLOR_STYLES`), with matching colored bottom borders under member tabs.
+  - Clicking a group label collapses/expands the group (hiding member tabs when collapsed); dragging a group label moves the whole group (`onMoveGroup`); added `'button'` and `type` support to `ContextMenu.tsx`.
+- `src/renderer/components/layout/WorkspaceTabs.tsx`:
+  - Added **Add to group ▸** (`New group…` + existing groups) and **Remove from group** to the tab right-click menu.
+  - Added the group label right-click menu (`getGroupMenuItems`): Rename, Change colour ▸ (8 colors), Collapse / Expand, Ungroup, Close group (guarded for unsaved editors), and Save group as a list.
+  - Added the create/rename group modal (`data-group-dialog`) with name input and 8-color radio swatches.
+- `src/renderer/translations.ts`: added 23 bilingual keys in `ar` and `en`.
+- `tests/ui/workspace-tabs-wiring.test.ts` & `scripts/workspace-tabs-live/main.cjs`: added unit tests and live Electron verification in `ar` and `en`.
+
+**Tests:**
+- Focused (`workspace-tabs-wiring`, `tab-bar`, `workspace-tabs`, `translation-keys`): 73/73 pass.
+- Full suite (`npm test -- --test-concurrency=2`): 2,811/2,811 pass (396 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `eslint` on touched files: 0 errors. `git diff --check`: clean.
+- Live Electron run (`node scripts/workspace-tabs-live/run.mjs`): PASS in `ar` and `en` (screenshots `ar-6g-tab-group.png`, `ar-6h-group-collapsed.png`, `en-6g-tab-group.png`, `en-6h-group-collapsed.png`, 0 renderer errors, throwaway profile removed).
+
+**Files:** `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-426.md`, `scripts/workspace-tabs-live/main.cjs`, `src/renderer/components/layout/TabBar.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/components/ui/ContextMenu.tsx`, `src/renderer/translations.ts`, `tests/ui/workspace-tabs-wiring.test.ts`.
+
 ## KEY-428 (WS-10): multi-select and the tab right-click menu — 2026-11-19 - Agent: Antigravity
 
 **Done:**
