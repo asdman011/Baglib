@@ -104,6 +104,7 @@ app.on('browser-window-created', (_, win) => {
       await until(`!document.querySelector('[data-tab-panel="${first}"]')`);
       const awake = await mounted();
       assert.ok(awake.includes(lectureTab), 'the playing lecture tab stays mounted');
+      assert.ok(await evaluate(`!!document.querySelector('[data-tab-id="${lectureTab}"] [data-tab-playing]')`), 'the playing tab shows a speaker icon');
       assert.ok(awake.length <= 7, `at most 6 tabs plus the playing one are mounted (${awake.length})`);
       assert.equal(await evaluate(`document.querySelector('[data-tab-panel="${lectureTab}"] [data-lecture-player]').paused`), false, 'the hidden lecture keeps playing');
       assert.equal(await evaluate(`document.querySelector('[data-tab-id="${first}"]').hasAttribute('data-tab-id')`), true, 'the sleeping tab is still in the bar');

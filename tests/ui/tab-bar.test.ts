@@ -81,6 +81,18 @@ for (const lang of ['ar', 'en'] as const) {
       } finally { restore(); }
     });
 
+    it('shows a speaker icon on a tab that is playing', async () => {
+      const { window, root, restore } = setup();
+      try {
+        const state = tabs(2);
+        const t: TabBarProps['t'] = key => translations[lang][key];
+        await act(async () => root.render(createElement(TabBar, { tabs: state.tabs, activeId: state.activeId, dir: lang === 'ar' ? 'rtl' : 'ltr', t, onActivate: () => {}, onClose: () => {}, onMove: () => {}, onNew: () => {}, playing: new Set(['t1']) })));
+        const icon = window.document.querySelector('[data-tab-id="t1"] [data-tab-playing]')!;
+        assert.equal(icon.getAttribute('aria-label'), translations[lang].workspaceTabPlaying);
+        assert.equal(window.document.querySelector('[data-tab-id="t2"] [data-tab-playing]'), null);
+      } finally { restore(); }
+    });
+
     it('click focuses, middle-click and × close, + opens a new tab', async () => {
       const { window, root, restore } = setup();
       const log: string[] = [];

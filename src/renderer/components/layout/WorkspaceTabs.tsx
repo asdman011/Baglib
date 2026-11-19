@@ -40,6 +40,7 @@ export const WorkspaceTabRow: React.FC = () => {
   const { dir, t } = useWorkspace();
   const { state, open, activate, move } = useTabs();
   const closeTab = useGuardedClose();
+  const playing = usePlayingTabs();
   return (
     <div className="relative z-[61] flex h-10 shrink-0 items-center border-b border-subtle bg-surface/80 px-2 sm:px-3" data-workspace-tab-row>
       <TabBar
@@ -50,6 +51,7 @@ export const WorkspaceTabRow: React.FC = () => {
         onActivate={activate}
         onClose={closeTab}
         onMove={move}
+        playing={playing}
         onNew={() => { open(homeLocation(), { afterId: lastTabId(state) }); }}
       />
     </div>
@@ -71,7 +73,7 @@ export const WorkspaceHistoryStrip: React.FC<{ children?: React.ReactNode }> = (
 };
 
 /** The tabs whose screen is playing audio or video right now; they never sleep (ADR-018, Tab State spec). */
-function usePlayingTabs(): ReadonlySet<string> {
+export function usePlayingTabs(): ReadonlySet<string> {
   const [playing, setPlaying] = React.useState<ReadonlySet<string>>(() => new Set());
   React.useEffect(() => {
     const scan = () => {

@@ -12,7 +12,7 @@
  * - Too many tabs scroll sideways; the mouse wheel scrolls the bar.
  */
 import React from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, Volume2, X } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import { currentLocation, type WorkspaceTab } from '../../../shared/workspace-tabs';
 import { DRAG_THRESHOLD_PX, dropIndex, tabIcon, tabLabel, type TabSpan } from './tab-bar-model';
@@ -28,6 +28,8 @@ export interface TabBarProps {
   onNew: () => void;
   /** Tabs that are asleep (unmounted after saving), shown slightly dimmed. */
   asleep?: ReadonlySet<string>;
+  /** Tabs playing audio or video, shown with a speaker icon (they never sleep). */
+  playing?: ReadonlySet<string>;
   /** Room after the + button. */
   endSlot?: React.ReactNode;
   /**
@@ -52,7 +54,7 @@ function previewOrder(tabs: WorkspaceTab[], drag: DragState | null): WorkspaceTa
   return [...rest.slice(0, drag.target), dragged, ...rest.slice(drag.target)];
 }
 
-export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, endSlot, renderQuickOpen }) => {
+export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot, renderQuickOpen }) => {
   const listRef = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
@@ -194,6 +196,7 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
             >
               <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate py-0.5 text-start" dir="auto">{label}</span>
+              {playing?.has(tab.id) && <Volume2 className="h-3 w-3 shrink-0 text-primary" role="img" aria-label={t('workspaceTabPlaying')} data-tab-playing />}
               <button
                 type="button"
                 tabIndex={-1}

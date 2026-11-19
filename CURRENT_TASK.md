@@ -1,3 +1,13 @@
+## KEY-419 follow-up: speaker icon on playing tabs; history list above the reader - 2026-11-19 - Agent: Claude Code
+
+**Done:**
+- `src/renderer/components/layout/TabBar.tsx`: a speaker icon (Volume2, labelled `workspaceTabPlaying`) on tabs playing audio or video. This was the last unmet KEY-419 criterion.
+- `src/renderer/components/layout/WorkspaceTabs.tsx`: the tab row passes the playing tabs. The tab row (z-61) and the history strip (z-60) sit above the full-page reader (z-50), so the back/forward history list drops down over the book instead of under it.
+- `src/renderer/translations.ts`: workspaceTabPlaying, in ar and en.
+- `tests/ui/tab-bar.test.ts`: an icon test in ar and en.
+- `scripts/workspace-tabs-live/main.cjs`: checks the speaker icon, and uses elementFromPoint to check that the history list is on top.
+
+**Tests:** focused tests 21/21, including translation-keys. workspace-tabs-live passes in ar and en.
 ## KEY-419 part B, KEY-420 wiring and the KEY-418 review: tabs are live in the app (WS-3, WS-4) - 2026-11-19 - Agent: Claude Code
 
 **Request.** Continue the multi-tab workspace nonstop while the user is away, in parallel with Antigravity. Review Antigravity's KEY-418 (WS-2) when it lands, then wire the tab bar on top of it.
