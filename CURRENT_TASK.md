@@ -1,3 +1,47 @@
+## KEY-380 plan approved with the user's decisions; WS-1…WS-9 created as KEY-417…KEY-425 - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user chose "Plan multi-tab workspace" and answered the 4 plan decisions. This updates the planning entry below; its "waiting for approval" status is superseded.
+
+**User decisions (2026-11-19):**
+- **Tab state:** the 6 most recently used tabs stay alive. Older tabs save a full snapshot, then sleep. Tabs that are playing, have an open dialog, or failed to save never sleep. The full spec, recorded as given, is `docs/features/feature - Multi-tab Workspace - Tab State.md`.
+- **Restart:**
+  - setting 1: restore previous tabs (default) / start fresh;
+  - setting 2, active only when restoring: show a new Home tab (default, focused) / the last tab.
+- **Links:** a setting, "open in a new tab" (default) / "the same tab". The user added per-tab back and forward: arrows under the tabs, Alt+Left/Right, and hold or right-click for the history list, as in Edge.
+- **Storage:** settings keys only, no schema change.
+
+**Done (planning only, no code):**
+- Updated the plan doc (sections 3.3, 3.3a, 3.4, 3.6, 3.8, 5 and 6) and wrote the tab-state spec.
+- **Jira under KEY-380, label Dashboard, Suggested agent: Claude Code:**
+  - KEY-417 WS-1 ADR-018 and the pure tab model;
+  - KEY-418 WS-2 WorkspaceContext split;
+  - KEY-419 WS-3 tab bar and keep-alive;
+  - KEY-420 WS-4 back and forward;
+  - KEY-421 WS-5 link setting;
+  - KEY-422 WS-6 + panel;
+  - KEY-423 WS-7 restore settings;
+  - KEY-424 WS-8 per-view snapshots;
+  - KEY-425 WS-9 side-by-side.
+- **Links:** KEY-417 blocks KEY-418; KEY-418 blocks KEY-419; KEY-425 blocks KEY-381.
+
+**Next:** KEY-417 (WS-1). No gate: no schema change and no dependency.
+
+**Files:** docs/features/feature - Multi-tab Workspace.md, docs/features/feature - Multi-tab Workspace - Tab State.md, CURRENT_TASK.md.
+
+---
+## KEY-380 planning: multi-tab workspace plan, plus KEY-415 and KEY-416 created - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user chose "Plan multi-tab workspace". While discussing storage, they asked for lists that can hold lecture timestamps, notes and book pages, and for a later decision on sharing.
+
+**Done (planning only, no code):**
+- Wrote `docs/features/feature - Multi-tab Workspace.md`: the current architecture, the design, risks, steps WS-1…WS-6, and the 4 user decisions. **Waiting for approval.**
+- Jira **KEY-415** (epic KEY-224, label Research): personal lists hold lecture timestamps, notes and exact book pages. It needs migration 039, which rebuilds the CHECK constraint. **This is a schema gate: ask the user before writing it.** The brief is at `docs/agent-ops/tasks/KEY-415.md`.
+- Jira **KEY-416** (epic KEY-380, label Dashboard): decide later how to share tabs or lists when the receiver lacks the book or resource.
+
+**Files:** docs/features/feature - Multi-tab Workspace.md, docs/agent-ops/tasks/KEY-415.md (local only), CURRENT_TASK.md. Nothing committed.
+
+---
+
 ## KEY-410 Live sync for dictionaries and lists from the deck's source picker (diwan stays blocked) - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user said "continue to the next task". KEY-410 was the next unblocked task. Its `list` part was built in KEY-399; the KEY-413 pack supplied lexicon data. `diwan` stays blocked, because the poetry corpus has no diwan entity and following a poet already covers a poet's diwan. No schema change: `lexicon` was already allowed by migration 031.
