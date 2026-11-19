@@ -1,4 +1,20 @@
-﻿## KEY-395: revision browser and deck manager — 2026-11-19 - Agent: Antigravity
+﻿## KEY-243 decision, KEY-431 created, KEY-244 verification handed off - 2026-11-19 - Agent: Claude Code
+
+**Decision.** The user chose option A for KEY-243:
+- the AFFiNE manuscript editor is the rich block editor;
+- study notes stay CodeMirror Markdown;
+- what's left of KEY-243 is small additions to the CodeMirror editor.
+
+Option B (opening notes in AFFiNE) is kept as a future reminder.
+
+**Jira changes:**
+- KEY-243: added a comment recording the decision.
+- KEY-431: created under KEY-223 with the label Notes-Taking, titled "[FUTURE - remind the user] Consider opening study notes in the AFFiNE block editor".
+
+**KEY-244.** Code reading suggests the AFFiNE canvas in the research editor already covers most of it: mind-map, connector, frame and shape tools, note embeds and source drag. Antigravity was asked to verify it against the issue's "Done when" (prompt in `docs/agent-ops/reports/KEY-244.verify.prompt.txt`).
+
+**Files.** CURRENT_TASK.md only.
+## KEY-395: revision browser and deck manager — 2026-11-19 - Agent: Antigravity
 
 **Done:**
 - `src/shared/revision-browser.ts`: shared types (`RevisionBrowseQuery`, `RevisionCardRow`, `RevisionBrowseResult`, `SavedRevisionSearch`, `RevisionBulkAction`), `computeRetrievability`, `parseSavedSearches`, `buildFilteredDeckSearch`, and `REVISION_SAVED_SEARCHES_SETTING` (`revision.savedSearches.v1`, stored in `settings` with no new DB table).
