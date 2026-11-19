@@ -56,7 +56,7 @@ function useGuardedClose() {
    * KEY-427 (WS-12 spike): moves a tab into a new window. A manuscript tab's unsaved-changes guard runs first. The
    * tab closes here only after main confirms the new window holds it, so a failure never loses the tab.
    */
-  const moveOut = React.useCallback(async (id: string): Promise<boolean> => {
+  const moveOut = React.useCallback(async (id: string, position?: { x: number; y: number }): Promise<boolean> => {
     const tab = state.tabs.find(item => item.id === id);
     const windows = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
     if (!tab || !windows) return false;
@@ -66,12 +66,13 @@ function useGuardedClose() {
       if (!(await guard())) return false;
     }
     try {
-      const result = await windows.moveTab(buildTabTransfer(tab));
+      const transfer = buildTabTransfer(tab);
+      const result = await windows.moveTab(position ? { ...transfer, position } : transfer);
       if (!result.ok) return false;
     } catch {
       return false;
     }
-    close(id);
+    close(id, { skipClosed: true });
     return true;
   }, [state, close, activate]);
   const closeTab = React.useCallback((id: string) => { void closeOne(id); }, [closeOne]);
@@ -449,6 +450,13 @@ export const WorkspaceTabRow: React.FC = () => {
         onToggleGroupCollapse={onToggleGroupCollapse}
         getGroupMenuItems={getGroupMenuItems}
         onMoveGroup={(groupId, toIndex) => dispatchTabs({ type: 'moveGroup', groupId, toIndex })}
+        onDetachTab={typeof window !== 'undefined' && window.electronAPI?.workspaceWindow
+          ? (id, position) => {
+              void moveOut(id, position).then(moved => {
+                if (!moved) toast?.showToast({ message: t('workspaceTabMoveToNewWindowFailed'), type: 'danger' });
+              });
+            }
+          : undefined}
         onNew={() => { open(homeLocation(), { afterId: lastTabId(state) }); }}
         renderQuickOpen={({ close, autoFocus }) => (
           <QuickOpenPanel destinations={quick.destinations} recent={quick.recent} t={t} onOpen={openQuick} onClose={close} autoFocus={autoFocus} />

@@ -62,12 +62,20 @@ import { stirlingProcessor } from './services/pdf-editor/processor';
 import { ocrService } from './services/ocr/ocr.service';
 import { startKhatmahReminders } from './services/quran/khatmah-reminders';
 import { initializeDatabase, closeDatabase } from "./database";
+import { settingsRepository } from './database/repositories/settings.repository';
 import { ContentShieldService } from "./services/shield/content-shield.service";
 import { installPdfDiagnosticFilter } from "./services/digital/pdf-diagnostics";
 import { streamAssetResponse } from './services/digital/asset-range';
 import { createWindowRegistry } from './window-registry';
 import { createTabTransferBroker } from './workspace-windows';
-import { WORKSPACE_WINDOW_CHANNELS } from '../shared/workspace-window-transfer';
+import {
+  parseClosed, parsePrefs, parseTabs, TAB_LIMITS, WORKSPACE_CLOSED_SETTING, WORKSPACE_PREFS_SETTING,
+  type TabsState,
+} from '../shared/workspace-tabs';
+import {
+  parseSavedSecondaryWindows, serializeSavedSecondaryWindows, WORKSPACE_WINDOW_CHANNELS, WORKSPACE_WINDOWS_SETTING,
+  type SavedSecondaryWindow, type ScreenPoint, type WindowBounds,
+} from '../shared/workspace-window-transfer';
 
 installPdfDiagnosticFilter();
 
@@ -129,10 +137,43 @@ queueMicrotask(() => protocol.registerSchemesAsPrivileged([
 ]));
 
 let mainWindow: BrowserWindow | null = null;
+let isAppQuitting = false;
 const windowRegistry = createWindowRegistry<BrowserWindow>();
-const tabTransfers = createTabTransferBroker<BrowserWindow>({ registry: windowRegistry, createWindow: () => createWindow({ secondary: true }) });
+const tabTransfers = createTabTransferBroker<BrowserWindow>({
+  registry: windowRegistry,
+  createWindow: opts => createWindow({ secondary: true, position: opts?.position }),
+});
+
+function readSavedSecondaryWindows(): SavedSecondaryWindow[] {
+  try {
+    return parseSavedSecondaryWindows(settingsRepository.get(WORKSPACE_WINDOWS_SETTING));
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedSecondaryWindows(windows: readonly SavedSecondaryWindow[]): void {
+  try {
+    settingsRepository.set(WORKSPACE_WINDOWS_SETTING, serializeSavedSecondaryWindows(windows));
+  } catch (err) {
+    console.warn('[baglib:tabs] Failed to persist secondary windows:', errorMessage(err));
+  }
+}
+
 ipcMain.handle(WORKSPACE_WINDOW_CHANNELS.moveTab, (event, payload: unknown) => tabTransfers.moveTabToNewWindow(event.sender.id, payload));
 ipcMain.handle(WORKSPACE_WINDOW_CHANNELS.windowReady, event => tabTransfers.windowReady(event.sender.id));
+ipcMain.handle(WORKSPACE_WINDOW_CHANNELS.saveWindowTabs, (event, rawState: unknown) => {
+  const win = windowRegistry.fromWebContents(event.sender.id);
+  const windowKey = tabTransfers.getWindowKey(event.sender.id);
+  if (!win || !windowKey) return false;
+  const parsed = parseTabs(rawState);
+  const existing = readSavedSecondaryWindows().filter(entry => entry.windowKey !== windowKey);
+  if (parsed.tabs.length > 0) {
+    existing.push({ windowKey, bounds: win.getBounds(), state: parsed });
+  }
+  writeSavedSecondaryWindows(existing);
+  return true;
+});
 let studyNavigationReady = false;
 const pendingStudyTargets: string[] = [];
 function flushStudyTargets() {
@@ -263,11 +304,20 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
   }
 }
 
-async function createWindow(options: { secondary?: boolean } = {}): Promise<BrowserWindow> {
+async function createWindow(options: {
+  secondary?: boolean;
+  position?: ScreenPoint;
+  bounds?: WindowBounds;
+  restored?: { windowKey: string; state: TabsState };
+} = {}): Promise<BrowserWindow> {
+  const initialBounds = options.bounds
+    ? { x: options.bounds.x, y: options.bounds.y, width: options.bounds.width, height: options.bounds.height }
+    : options.position
+      ? { x: Math.round(options.position.x - 120), y: Math.round(options.position.y - 24), width: 1200, height: 800 }
+      : { width: 1200, height: 800 };
   const win = new BrowserWindow({
     show: false,
-    width: 1200,
-    height: 800,
+    ...initialBounds,
     backgroundColor: '#0e161b',
     webPreferences: {
       autoplayPolicy: 'no-user-gesture-required',
@@ -279,12 +329,36 @@ async function createWindow(options: { secondary?: boolean } = {}): Promise<Brow
       additionalArguments: options.secondary ? ['--baglib-secondary-window'] : [],
     },
   });
+  const webContentsId = win.webContents.id;
+  if (options.restored) {
+    tabTransfers.registerRestoredWindow(webContentsId, options.restored.windowKey, options.restored.state);
+  }
   if (!options.secondary) mainWindow = win;
   windowRegistry.add(win);
   win.on('focus', () => windowRegistry.noteFocus(win));
   win.on('closed', () => {
     windowRegistry.remove(win);
     if (mainWindow === win) mainWindow = windowRegistry.primary() ?? null;
+    if (options.secondary) {
+      const windowKey = tabTransfers.getWindowKey(webContentsId);
+      tabTransfers.forgetWindow(webContentsId);
+      if (!isAppQuitting && windowKey) {
+        const allSaved = readSavedSecondaryWindows();
+        const closing = allSaved.find(entry => entry.windowKey === windowKey);
+        writeSavedSecondaryWindows(allSaved.filter(entry => entry.windowKey !== windowKey));
+        if (closing && closing.state.tabs.length > 0) {
+          try {
+            const existingClosed = parseClosed(settingsRepository.get(WORKSPACE_CLOSED_SETTING));
+            const nextClosed = [...closing.state.tabs, ...existingClosed].slice(0, TAB_LIMITS.maxClosed);
+            settingsRepository.set(WORKSPACE_CLOSED_SETTING, nextClosed);
+          } catch {}
+          const primary = windowRegistry.primary();
+          if (primary && !primary.isDestroyed()) {
+            primary.webContents.send(WORKSPACE_WINDOW_CHANNELS.appendClosedTabs, closing.state.tabs);
+          }
+        }
+      }
+    }
   });
 
   installEditorContextMenu(win);
@@ -519,6 +593,19 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  try {
+    const prefs = parsePrefs(settingsRepository.get(WORKSPACE_PREFS_SETTING));
+    if (prefs.restoreTabs) {
+      const savedWindows = readSavedSecondaryWindows();
+      for (const entry of savedWindows) {
+        void createWindow({ secondary: true, bounds: entry.bounds, restored: { windowKey: entry.windowKey, state: entry.state } });
+      }
+    } else {
+      writeSavedSecondaryWindows([]);
+    }
+  } catch (err) {
+    console.warn('[baglib:tabs] Failed to restore secondary windows:', errorMessage(err));
+  }
   setImmediate(() => {
     if (shutdownStarted || !mainWindow || mainWindow.isDestroyed()) return;
     try {
@@ -541,19 +628,32 @@ app.on('before-quit', event => {
   if (shutdownComplete) return;
   event.preventDefault();
   if (shutdownStarted || quitRequested) return;
-  const owner = mainWindow;
-  if (owner && !owner.isDestroyed()) {
+  const openWindows = windowRegistry.all().filter(w => !w.isDestroyed());
+  if (openWindows.length > 0) {
+    isAppQuitting = true;
     quitRequested = true;
-    const cleanup = () => { ipcMain.removeListener('app:close-answer', onAnswer); owner.removeListener('closed', onClosed); };
-    const onClosed = () => { cleanup(); quitRequested = false; app.quit(); };
+    let cancelled = false;
     const onAnswer = (answer: Electron.IpcMainEvent, close: boolean) => {
-      if (answer.sender !== owner.webContents || close !== false) return;
-      cleanup();
-      quitRequested = false;
+      if (close === false && openWindows.some(w => !w.isDestroyed() && answer.sender === w.webContents)) {
+        cancelled = true;
+        isAppQuitting = false;
+        quitRequested = false;
+        ipcMain.removeListener('app:close-answer', onAnswer);
+      }
     };
-    owner.once('closed', onClosed);
+    const onClosed = () => {
+      if (cancelled) return;
+      if (windowRegistry.all().every(w => w.isDestroyed())) {
+        ipcMain.removeListener('app:close-answer', onAnswer);
+        quitRequested = false;
+        app.quit();
+      }
+    };
     ipcMain.on('app:close-answer', onAnswer);
-    owner.close();
+    for (const w of openWindows) {
+      w.once('closed', onClosed);
+      w.close();
+    }
     return;
   }
   shutdownStarted = true;

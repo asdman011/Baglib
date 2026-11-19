@@ -39,7 +39,7 @@ import {
   type ViewSnapshot,
   type WorkspaceView,
 } from '../../../shared/workspace-tabs';
-import { transferToTab } from '../../../shared/workspace-window-transfer';
+import { parseTabTransfer, transferToTab } from '../../../shared/workspace-window-transfer';
 
 import type { CategoryNode } from '../../../shared/types/category';
 import type { TagWithCount } from '../../../shared/types/tag';
@@ -176,7 +176,7 @@ export interface UseTabsResult {
   state: TabsState;
   prefs: WorkspacePrefs;
   open: (location: TabLocation, options?: { afterId?: string; background?: boolean }) => string;
-  close: (id: string) => void;
+  close: (id: string, options?: { skipClosed?: boolean }) => void;
   activate: (id: string) => void;
   navigate: (id: string, location: TabLocation) => void;
   /** KEY-419: reorder a tab (drag or Ctrl+Shift+PageUp/PageDown). */
@@ -903,6 +903,18 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     }
     if (!restoredRef.current || initialTabs !== undefined) return;
     if (typeof window !== 'undefined' && (window as unknown as { __baglibDisableTabsPersist?: boolean }).__baglibDisableTabsPersist) return;
+    const windowApi = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
+    if (windowApi?.isSecondary) {
+      if (tabsDirtyRef.current && windowApi.saveTabs) {
+        tabsDirtyRef.current = false;
+        try {
+          await windowApi.saveTabs(serializeTabs(stateRef.current));
+        } catch {
+          // Ignore persistence errors so tab operations never break.
+        }
+      }
+      return;
+    }
     const api = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
     if (!api?.set) return;
     if (tabsDirtyRef.current) {
@@ -937,19 +949,37 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     if (initialTabs !== undefined) return;
     let alive = true;
     const windowApi = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
+    const api = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
     if (windowApi?.isSecondary) {
-      // KEY-427 (WS-12 spike): a torn-off window starts from the one tab it was opened for and never reads or writes
-      // the saved workspace (restoredRef stays false, which gates every write above).
-      void windowApi.ready().then(info => {
-        if (!alive || !info.transfer) return;
-        const tab = transferToTab(info.transfer, allocateId(), Date.now());
-        const next: TabsState = { tabs: [tab], activeId: tab.id };
-        stateRef.current = next;
-        dispatch({ type: '__restore', state: next });
+      // KEY-427 (WS-12): a secondary window starts from its transferred tab or its saved tabs on restart.
+      void Promise.all([
+        windowApi.ready(),
+        api?.get ? api.get(WORKSPACE_PREFS_SETTING).catch(() => undefined) : Promise.resolve(undefined),
+      ]).then(([info, rawPrefs]) => {
+        if (!alive) return;
+        setPrefs(parsePrefs(rawPrefs));
+        if (info.transfer) {
+          const tab = transferToTab(info.transfer, allocateId(), Date.now());
+          const next: TabsState = { tabs: [tab], activeId: tab.id };
+          stateRef.current = next;
+          skipNextTabsPersistRef.current = true;
+          dispatch({ type: '__restore', state: next });
+          restoredRef.current = true;
+          void windowApi.saveTabs?.(serializeTabs(next)).catch(() => {});
+        } else if (info.savedTabs) {
+          const next = parseTabs(info.savedTabs);
+          if (next.tabs.length > 0) {
+            stateRef.current = next;
+            skipNextTabsPersistRef.current = true;
+            dispatch({ type: '__restore', state: next });
+          }
+          restoredRef.current = true;
+        } else {
+          restoredRef.current = true;
+        }
       }).catch(() => {});
       return () => { alive = false; };
     }
-    const api = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
     if (!api?.get) {
       restoredRef.current = true;
       return;
@@ -976,6 +1006,36 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     });
     return () => { alive = false; };
   }, [initialTabs, allocateId]);
+
+  // KEY-427 (WS-12): receive a tab dragged in from another window (append and focus).
+  useEffect(() => {
+    if (initialTabs !== undefined) return;
+    const windowApi = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
+    if (!windowApi?.onReceiveTab) return;
+    return windowApi.onReceiveTab(raw => {
+      const payload = parseTabTransfer(raw);
+      if (!payload) return;
+      const now = Date.now();
+      const tab = transferToTab(payload, allocateId(), now);
+      userMutatedRef.current = true;
+      dispatch({ type: 'reopen', tab, id: tab.id, now, atEnd: true });
+    });
+  }, [initialTabs, allocateId]);
+
+  // KEY-427 (WS-12): when a secondary window is closed by X, its tabs enter the primary window's closed list.
+  useEffect(() => {
+    if (initialTabs !== undefined) return;
+    const windowApi = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
+    if (!windowApi?.onAppendClosedTabs || windowApi.isSecondary) return;
+    return windowApi.onAppendClosedTabs(tabs => {
+      if (!Array.isArray(tabs) || tabs.length === 0) return;
+      setClosedTabs(previous => {
+        const next = [...tabs, ...previous].slice(0, 10);
+        closedRef.current = next;
+        return next;
+      });
+    });
+  }, [initialTabs]);
 
   // Keep workspace preferences synchronized when updated in SettingsDirectory.
   useEffect(() => {
@@ -1039,10 +1099,17 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     return id;
   }, [allocateId]);
 
-  const close = useCallback((id: string) => {
+  const close = useCallback((id: string, options?: { skipClosed?: boolean }) => {
     userMutatedRef.current = true;
     const closing = findTab(stateRef.current, id);
-    if (closing) setClosedTabs(previous => pushClosed(previous, closing));
+    const windowApi = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
+    if (options?.skipClosed && windowApi?.isSecondary && stateRef.current.tabs.length <= 1) {
+      // Last tab moved out of a secondary window: clear its saved tabs and close the window.
+      void windowApi.saveTabs?.({ tabs: [], activeId: '' }).catch(() => {});
+      window.close();
+      return;
+    }
+    if (closing && !options?.skipClosed) setClosedTabs(previous => pushClosed(previous, closing));
     const homeId = allocateId();
     dispatch({ type: 'close', id, homeId, now: Date.now() });
   }, [allocateId]);

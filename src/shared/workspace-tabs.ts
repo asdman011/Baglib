@@ -229,8 +229,8 @@ export type TabsAction =
   | { type: 'forward'; id: string; now: number }
   /** Jump to a history entry from the arrow's history menu. */
   | { type: 'go'; id: string; index: number; now: number }
-  /** Bring back a closed tab (Ctrl+Shift+T) with its history, under a new id. */
-  | { type: 'reopen'; tab: WorkspaceTab; id: string; now: number }
+  /** Bring back a closed tab (Ctrl+Shift+T) or receive a tab from another window, under a new id. */
+  | { type: 'reopen'; tab: WorkspaceTab; id: string; now: number; atEnd?: boolean }
   | { type: 'openBeside'; id: string }
   | { type: 'closeSplit' }
   /** KEY-425: drag or keys on the divider between the two panes. */
@@ -430,7 +430,7 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       if (holder) return touch(state, holder.id, action.now);
       // Its old group may be gone; it joins a group only if it lands inside one.
       const tab: WorkspaceTab = withoutGroup({ ...action.tab, id: action.id, lastActiveAt: action.now });
-      const inserted = insertAfter(state.tabs, tab, state.activeId);
+      const inserted = action.atEnd ? [...state.tabs, tab] : insertAfter(state.tabs, tab, state.activeId);
       return withSplit(state, settleMembership(inserted, inserted.indexOf(tab)), tab.id, undefined);
     }
     case 'openBeside':

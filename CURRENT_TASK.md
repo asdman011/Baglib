@@ -1,4 +1,29 @@
-﻿## KEY-381: drag passages from readers into a manuscript side by side — 2026-11-19 - Agent: Antigravity
+﻿## KEY-427 (WS-12): secondary window persistence, drag-out, and drag-into-window routing — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/shared/workspace-window-transfer.ts`: added `WORKSPACE_WINDOWS_SETTING` (`workspace.tabs.v1.windows`), `WORKSPACE_WINDOW_CHANNELS` (`receiveTab`, `saveWindowTabs`, `appendClosedTabs`), `TabMoveRequest` (optional screen `position`), `SavedSecondaryWindow`, `parseTabMoveRequest`, `isPointInBounds`, `isOutsideWindowBounds`, `parseSavedSecondaryWindows`, and `serializeSavedSecondaryWindows`.
+- `src/shared/workspace-tabs.ts`: added `atEnd?: boolean` to `reopen` in `tabsReducer` so tabs dragged into another window append and focus.
+- `src/main/window-registry.ts` & `src/main/workspace-windows.ts`: added optional `getBounds()` on `RegistryWindow`; updated `createTabTransferBroker` to route `moveTabToNewWindow` to an existing window under `position` (`workspace:receive-tab`, focus) or open a new window at `position`; added `registerRestoredWindow`, `getWindowKey`, and `forgetWindow`.
+- `src/main/index.ts`: wired `workspace:save-window-tabs` IPC handler persisting secondary windows' bounds and tabs to `workspace.tabs.v1.windows`; reopened saved secondary windows on `app.whenReady()` when `restoreTabs` is enabled (cleared when disabled); updated `before-quit` to close all app windows while preserving `workspace.tabs.v1.windows`; closing a secondary window by its X discards its saved entry, prepends its tabs to `workspace.closed.v1`, and notifies the primary window (`workspace:append-closed-tabs`).
+- `src/preload/index.ts`: exposed `saveTabs`, `onReceiveTab`, and `onAppendClosedTabs` on `electronAPI.workspaceWindow`.
+- `src/renderer/components/context/WorkspaceContext.tsx`: secondary windows restore from `info.transfer` or `info.savedTabs` and persist via `saveTabs`; wired `onReceiveTab` and `onAppendClosedTabs`; added `close(id, { skipClosed })` (closing an empty secondary window when its last tab moves out).
+- `src/renderer/components/layout/TabBar.tsx` & `src/renderer/components/layout/WorkspaceTabs.tsx`: added `onDetachTab` on pointer release outside `window.screenX/Y + outerWidth/Height`, routing through `moveOut(id, position)` while keeping the menu item and closing the source tab only after main confirms.
+- `tests/main/workspace-windows.test.ts` & `tests/ui/settings-directory-coverage.test.ts`: added unit tests for move-request parsing, bounds hit-testing, secondary window persistence parsing, registry routing, and `workspace.tabs.v1.windows` coverage.
+- `scripts/tab-window-live/run.mjs` & `scripts/tab-window-live/main.cjs`: extended live Electron run in `ar` and `en` with real PDFs: drag tab out, drag back into first window, reopen secondary window, restart app and confirm secondary window + tabs return, close secondary window by X, and reopen via `Ctrl+Shift+T`.
+
+**Tests:**
+- Focused (`workspace-windows`, `window-registry`, `workspace-tabs-wiring`, `workspace-tabs`, `settings-directory-coverage`): 82/82 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,829/2,829 pass (400 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `npm run build:main`: pass. `git diff --check`: clean.
+- Live Electron run (`node scripts/tab-window-live/run.mjs`): PASS in `ar` and `en` with real PDFs from `tests/real-files/` (0 renderer errors, throwaway profile removed).
+
+**Jira:**
+- KEY-427 moved to Done (transition 41) with commit hash after commit+push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-427.md`, `scripts/tab-window-live/main.cjs`, `scripts/tab-window-live/run.mjs`, `src/main/index.ts`, `src/main/window-registry.ts`, `src/main/workspace-windows.ts`, `src/preload/index.ts`, `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/TabBar.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/shared/workspace-tabs.ts`, `src/shared/workspace-window-transfer.ts`, `tests/main/workspace-windows.test.ts`, `tests/ui/settings-directory-coverage.test.ts`.
+
+## KEY-381: drag passages from readers into a manuscript side by side — 2026-11-19 - Agent: Antigravity
 
 **Done:**
 - `src/renderer/components/sunnah/SunnahChapterView.tsx`: added `data-source-drag-handle="hadith"` drag handle (`<span role="button" tabIndex={0} draggable>`) in each hadith header row (preserving mouse text selection on `<article>`) writing `createHadithPayload(...)` via `writeSourceDrag`.

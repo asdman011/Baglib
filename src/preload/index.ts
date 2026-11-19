@@ -1004,14 +1004,26 @@ export const API = {
     invoke: <T = unknown>(action: 'all' | 'create' | 'rename' | 'remove' | 'reorder' | 'items' | 'add' | 'remove-item' | 'reorder-items' | 'toggle-star' | 'membership' | 'filter', ...args: unknown[]): Promise<{ ok: true; data: T } | { ok: false; error: string }> =>
       ipcRenderer.invoke(`personal-lists:${action}`, ...args),
   },
-  // KEY-427 (WS-12 spike): move a tab into a new app window; a new window pulls its tab once at startup.
+  // KEY-427 (WS-12): move tabs between app windows, persist secondary windows, and receive dragged/closed tabs.
   workspaceWindow: {
     isSecondary: process.argv.includes('--baglib-secondary-window'),
-    moveTab: (payload: import('../shared/workspace-window-transfer').TabTransferPayload): Promise<import('../shared/workspace-window-transfer').MoveTabResult> =>
+    moveTab: (payload: import('../shared/workspace-window-transfer').TabMoveRequest): Promise<import('../shared/workspace-window-transfer').MoveTabResult> =>
       ipcRenderer.invoke('workspace:move-tab-to-new-window', payload),
     // Memoized: main hands the waiting tab over once, and React may run the effect that asks twice in development.
     ready: (): Promise<import('../shared/workspace-window-transfer').WorkspaceWindowInfo> =>
       (windowReadyPromise ??= ipcRenderer.invoke('workspace:window-ready')),
+    saveTabs: (state: import('../shared/workspace-tabs').TabsState): Promise<boolean> =>
+      ipcRenderer.invoke('workspace:save-window-tabs', state),
+    onReceiveTab: (callback: (payload: import('../shared/workspace-window-transfer').TabTransferPayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: import('../shared/workspace-window-transfer').TabTransferPayload) => callback(payload);
+      ipcRenderer.on('workspace:receive-tab', listener);
+      return () => ipcRenderer.removeListener('workspace:receive-tab', listener);
+    },
+    onAppendClosedTabs: (callback: (tabs: import('../shared/workspace-tabs').WorkspaceTab[]) => void): (() => void) => {
+      const listener = (_event: unknown, tabs: import('../shared/workspace-tabs').WorkspaceTab[]) => callback(tabs);
+      ipcRenderer.on('workspace:append-closed-tabs', listener);
+      return () => ipcRenderer.removeListener('workspace:append-closed-tabs', listener);
+    },
   },
   revisionRecommendations: {
     list: (): Promise<{ ok: true; data: import('../shared/revision-recommendations').Recommendation[] } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:list'),

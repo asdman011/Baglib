@@ -34,7 +34,7 @@ const operational = new Set([
   'dictionary.history.v1', // The last 100 lookups, shown in the lookup window when its search is empty (KEY-414).
   'dictionary.readingPad.v1', // The Reading pad's current text and highlighted words, edited inside the pad (KEY-414).
   'revision.quickAdd.lastDeckId', // Last deck chosen in the lookup "Add to revision" quick-add action (KEY-400).
-  'workspace.tabs.v1', 'workspace.usage.v1', 'workspace.recent.v1', 'workspace.closed.v1', // Open tabs with history and snapshots, "most used" counts, recents and closed tabs (KEY-417, ADR-018).
+  'workspace.tabs.v1', 'workspace.tabs.v1.windows', 'workspace.usage.v1', 'workspace.recent.v1', 'workspace.closed.v1', // Open tabs with history and snapshots, secondary windows, "most used" counts, recents and closed tabs (KEY-417, KEY-427, ADR-018).
   'baglib.poetry.size', // Verse size, changed inside the poem's reading options or with Ctrl+wheel, like the Sunnah text size kept with its reading position (KEY-339).
 ]);
 

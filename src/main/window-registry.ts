@@ -18,6 +18,7 @@ export interface RegistryWindow {
   readonly webContents: { readonly id: number; send(channel: string, ...args: unknown[]): void };
   isDestroyed(): boolean;
   isMinimized?(): boolean;
+  getBounds?(): { x: number; y: number; width: number; height: number };
   restore?(): void;
   show?(): void;
   focus?(): void;

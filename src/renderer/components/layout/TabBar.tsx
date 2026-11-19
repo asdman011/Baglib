@@ -15,6 +15,7 @@ import React from 'react';
 import { Columns2, Plus, Volume2, X } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import { currentLocation, type TabGroup, type TabGroupColor, type WorkspaceTab } from '../../../shared/workspace-tabs';
+import { isOutsideWindowBounds } from '../../../shared/workspace-window-transfer';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { MenuItemProps } from '../ui/Menu';
 import { DRAG_THRESHOLD_PX, dropIndex, tabIcon, tabLabel, type TabSpan } from './tab-bar-model';
@@ -59,6 +60,8 @@ export interface TabBarProps {
   onToggleGroupCollapse?: (groupId: string) => void;
   getGroupMenuItems?: (groupId: string) => MenuItemProps[];
   onMoveGroup?: (groupId: string, toIndex: number) => void;
+  /** KEY-427 (WS-12): dragging a tab outside window bounds detaches it to a new or target window. */
+  onDetachTab?: (id: string, position: { x: number; y: number }) => void;
 }
 
 export const GROUP_COLOR_STYLES: Record<TabGroupColor, { chip: string; line: string; swatch: string }> = {
@@ -94,7 +97,7 @@ export const TabBar: React.FC<TabBarProps> = ({
   tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot,
   renderQuickOpen, onDropToEdge, onOpenBeside, selectedIds, onTabClick, onClearSelection,
   onExtendSelection, getTabMenuItems, onMoveSelection, groups, onToggleGroupCollapse,
-  getGroupMenuItems, onMoveGroup,
+  getGroupMenuItems, onMoveGroup, onDetachTab,
 }) => {
   const listRef = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<DragState | null>(null);
@@ -156,6 +159,11 @@ export const TabBar: React.FC<TabBarProps> = ({
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     const current = dragRef.current;
     if (!current) return;
+    // Dragged outside the browser window: ready to detach into a new or existing window on release.
+    if (!current.groupId && onDetachTab && typeof window !== 'undefined' && isOutsideWindowBounds({ screenX: event.screenX, screenY: event.screenY }, window)) {
+      if (!current.out || current.edge !== null) setDragState({ ...current, moved: true, out: true, edge: null });
+      return;
+    }
     // Pulled down out of the bar: a drop near a side edge opens the tab side by side.
     const barBottom = listRef.current?.getBoundingClientRect().bottom ?? 0;
     if (!current.groupId && onDropToEdge && barBottom > 0 && event.clientY > barBottom + PULL_OUT_PX) {
@@ -173,6 +181,11 @@ export const TabBar: React.FC<TabBarProps> = ({
     const current = dragRef.current;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     setDragState(null);
+    if (current && !current.groupId && onDetachTab && typeof window !== 'undefined' && isOutsideWindowBounds({ screenX: event.screenX, screenY: event.screenY }, window)) {
+      suppressClick.current = true;
+      onDetachTab(current.id, { x: event.screenX, y: event.screenY });
+      return;
+    }
     if (current?.out) {
       suppressClick.current = true;
       if (current.edge) onDropToEdge?.(current.id, current.edge);
