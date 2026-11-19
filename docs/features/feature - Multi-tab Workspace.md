@@ -1,6 +1,6 @@
 # Multi-tab workspace: plan (epic KEY-380)
 
-Status: **plan; the user's decisions were recorded on 2026-11-19 (section 6).** Nothing is built.
+Status: **plan; the user's decisions were recorded on 2026-11-19 (section 6).** WS-1 (the pure model, ADR-018) is built; the UI is not.
 Written 2026-11-19 by Claude Code. It unblocks KEY-381 (drag passages into a manuscript side by side).
 
 ## 1. What the user asked for (from KEY-380)

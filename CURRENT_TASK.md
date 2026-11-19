@@ -1,3 +1,47 @@
+## KEY-417 WS-1: ADR-018 and the pure multi-tab model - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user said "Start WS-1", the first step of the multi-tab workspace (epic KEY-380). No UI and no schema change: everything is stored in `settings` keys.
+
+**What changed:**
+- **`docs/ADR-018-multi-tab-workspace.md` (Accepted).** It records the user's decisions of 2026-11-19:
+  - the tab model and browser-style history;
+  - keep 6 alive, with exemptions;
+  - one snapshot format;
+  - the five `workspace.*.v1` settings keys and their caps;
+  - the restore and link preferences;
+  - the WS-2 context split.
+- **`src/shared/workspace-tabs.ts`** is the pure model:
+  - **`tabsReducer`** handles open, close, activate, move, duplicate, navigate, update, back, forward, go, reopen, openBeside and closeSplit.
+    - Single-instance views (Settings, Statistics) focus their existing tab.
+    - Closing the active tab focuses the tab to its right, or to its left at the end. The split pane wins if there is one.
+    - Closing the last tab leaves a new Home tab.
+  - **Per-tab history:** a new view or item makes an entry; the same item updates the current entry. Forward entries are dropped after a new navigation, there are at most 50 entries, and `backEntries`/`forwardEntries` feed the Edge-style history menu.
+  - **`awakeTabIds`:** the active and split tabs are always awake, exempt tabs never sleep and don't count, and up to 6 non-exempt tabs stay awake by recent use. `tabsToSleep` lists the tabs that must save and sleep.
+  - **`sanitizeSnapshot` and `readSnapshot`** follow the snapshot rules: non-JSON values dropped, the largest fields dropped above 16 KB, another version ignored, invalid fields dropped. They never throw.
+  - **`parseTabs` and `serializeTabs`:** an unknown view drops the entry, an invalid target is cleared, and duplicate ids and second single-instance tabs are dropped. At most 30 tabs are saved, always including the active and split tabs.
+  - **Prefs:** `DEFAULT_WORKSPACE_PREFS` is restore on, a new Home tab and links in a new tab. Also `parsePrefs`, `restoreFocusEnabled`, `linkOpensNewTab` (Ctrl, Cmd or middle-click flips the setting) and `startupTabs`. For example, 9 saved tabs restore as 9 plus a focused new Home tab.
+  - **Most used:** `recordUsage` and `rankDestinations`, with a 14-day half-life and Library, Quran and Sunnah until 5 uses are recorded.
+  - **Recents:** `pushRecent` and `parseRecent`, deduplicated, up to 30.
+  - **Closed tabs:** `pushClosed` and `parseClosed`, up to 10.
+- **`tests/shared/workspace-tabs.test.ts`:** 45 tests.
+- **The plan doc's status line** now says WS-1 is built.
+
+**Verified (2026-11-19):**
+- `tests/shared/workspace-tabs.test.ts` 45/45.
+- `tsc --noEmit` and eslint are clean on the new files.
+- Full suite 2692/2694 on the first run:
+  - `settings-directory-coverage` failed because the new `workspace.*.v1` keys weren't listed. Fixed: the four state keys are operational, and `workspace.prefs.v1` is listed until WS-5/WS-7 add its Settings entry. Now 2/2.
+  - The Buckwalter "under 50ms" timing check flaked under full-suite load. It passes 3/3 on its own and is unrelated.
+- No live run: there is no UI yet. WS-2 and WS-3 carry the live checks.
+
+**Limits:**
+- The renderer's `WorkspaceViewMode` is mirrored by `WORKSPACE_VIEWS`. WS-2 should derive one from the other so they can't drift.
+- Snapshot size is measured in JSON characters, a close bound on the settings value.
+
+**Files:** docs/ADR-018-multi-tab-workspace.md, src/shared/workspace-tabs.ts, tests/shared/workspace-tabs.test.ts, tests/ui/settings-directory-coverage.test.ts, docs/features/feature - Multi-tab Workspace.md, CURRENT_TASK.md.
+
+---
+
 ## KEY-415 Personal lists hold lecture moments, whole notes and exact book pages (migration 039) - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user approved migration 039 ("yes approve 039"). Lists should hold a lecture at a timestamp, a whole note and an exact book page, so tabs can later be saved as a list (KEY-380). The Dashboard is never saved.
