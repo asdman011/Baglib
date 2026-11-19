@@ -440,4 +440,77 @@ describe('workspace tabs wired to the providers', () => {
       assert.ok(window.document.querySelector(`[data-tab-panel="${dialogTabId}"]`), 'tab with open dialog never sleeps');
     } finally { restore(); }
   });
+
+  it('passes periodic vs sleep reason, restores snapshot once per wake without re-running on updates, and skips no-op dispatches', async () => {
+    const { window, root, restore } = setup();
+    try {
+      const reasons: string[] = [];
+      let restoreCount = 0;
+      let effectRuns = 0;
+      let tabsApi: ReturnType<typeof useTabs> | null = null;
+
+      const WatcherScreen: React.FC<{ view: WorkspaceView }> = () => {
+        const tab = useTab();
+        const registerSnapshot = tab.registerSnapshot;
+        React.useEffect(() => {
+          effectRuns += 1;
+          return registerSnapshot({
+            saveState: async reason => {
+              reasons.push(reason || 'none');
+              return { version: 1, data: { value: 'same' } };
+            },
+            restoreState: () => {
+              restoreCount += 1;
+            },
+          });
+        }, [registerSnapshot]);
+        return createElement('div', { 'data-screen': 'watcher' });
+      };
+
+      const ProbeShell: React.FC = () => {
+        tabsApi = useTabs();
+        return createElement(React.Fragment, null,
+          createElement(WorkspaceTabRow),
+          createElement('main', null, createElement(WorkspaceTabPanels, { render: view => createElement(WatcherScreen, { view }) })));
+      };
+
+      const initial = {
+        ...threeTabs(),
+        tabs: [
+          {
+            ...threeTabs().tabs[0],
+            history: [{ view: 'library' as const, title: 'T1', snapshot: { version: 1, data: { value: 'initial' } } }],
+          },
+          ...threeTabs().tabs.slice(1),
+        ],
+      };
+
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: initial }, createElement(ProbeShell))));
+      assert.equal(restoreCount, 1, 'restoreState ran once on mount');
+      assert.equal(effectRuns, 1, 'view effect ran once');
+
+      // 1. Call saveTabSnapshot with default / 'periodic'
+      await act(async () => {
+        await tabsApi!.saveTabSnapshot('t1');
+      });
+      assert.deepEqual(reasons, ['periodic'], 'periodic reason passed by default');
+      assert.equal(restoreCount, 1, 'restoreState does not run again after periodic save');
+      assert.equal(effectRuns, 1, 'view effect did not re-run after periodic save');
+
+      // 2. Call saveTabSnapshot with 'sleep'
+      await act(async () => {
+        await tabsApi!.saveTabSnapshot('t1', 'sleep');
+      });
+      assert.deepEqual(reasons, ['periodic', 'sleep'], 'sleep reason passed when requested');
+
+      // 3. Skip update dispatch when snapshot and scroll match the current entry
+      const stateBeforeNoOp = tabsApi!.state;
+      await act(async () => {
+        await tabsApi!.saveTabSnapshot('t1', 'periodic');
+      });
+      assert.strictEqual(tabsApi!.state, stateBeforeNoOp, 'tabs state reference is unchanged when snapshot is identical');
+      assert.equal(restoreCount, 1, 'restoreState still did not re-run');
+      assert.equal(effectRuns, 1, 'view effect still did not re-run');
+    } finally { restore(); }
+  });
 });

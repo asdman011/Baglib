@@ -1,4 +1,28 @@
-﻿## Review of Antigravity's tab commits, and the next queue - 2026-11-19 - Agent: Claude Code
+﻿## KEY-424 (WS-8 review fix 1): per-view snapshot periodic vs sleep fixes — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/use-tab-keep-alive.ts`:
+  - Added `TabSnapshotSaveReason = 'periodic' | 'sleep'`: 3s timer passes `'periodic'`, `useTabKeepAlive` sleep path passes `'sleep'`.
+  - `saveTabSnapshot(id, reason)` passes reason to `saveState(reason)` and skips dispatching `update` when JSON stringified snapshot and scroll match the current history entry.
+  - Added `__baglibDisableTabsPersist` check to prevent unload flush when intentionally clearing workspace tabs.
+  - In `TabScope`: removed `location.snapshot` from `registerSnapshot` dependencies. Added `initialSnapshotRef` and `hasRestoredRef` to ensure `restoreState` runs strictly once per wake/mount. Stabilized `locationRef` across snapshot/scroll updates.
+- `src/renderer/components/research/ResearchEditorView.tsx`: runs `host.bridge.explicitSave()` ONLY when `reason === 'sleep'`. Stabilized dependencies to `[registerSnapshot, host]`.
+- `src/renderer/components/notes/NoteEditorPane.tsx`: runs `handleSave()` ONLY when `reason === 'sleep'` and `isDirty`. Falls back empty note content to title to satisfy SQLite constraints.
+- `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/quran/QuranReaderView.tsx`, `src/renderer/components/lectures/LecturesView.tsx`, `src/renderer/components/layout/SettingsDirectory.tsx`: stabilized `registerSnapshot` dependencies.
+- `tests/ui/workspace-tabs-wiring.test.ts`: added test verifying periodic vs sleep reason, single restoreState per wake, stable view effect, and no-op update skipping (16/16 pass).
+- `scripts/workspace-tabs-live/main.cjs`: added live step verifying 15s wait with no explicit saves or chapter reloads and preserved cursor, sleep-saving dirty note to SQLite, and wake restoration.
+
+**Tests:**
+- Focused tests (`workspace-tabs-wiring`, `workspace-tabs`, `workspace-links`, `tab-bar`, `workspace-tabs-restore`): 68/68 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,813/2,813 pass across 396 suites, 0 fail.
+- `npx tsc --noEmit`: 0 errors.
+- `git diff --check`: clean (0 whitespace errors).
+- Live Electron run: `node scripts/workspace-tabs-live/run.mjs` PASS in `ar` and `en` (0 renderer errors, throwaway profiles removed).
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-424.md`, `scripts/workspace-tabs-live/main.cjs`, `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/SettingsDirectory.tsx`, `src/renderer/components/layout/use-tab-keep-alive.ts`, `src/renderer/components/lectures/LecturesView.tsx`, `src/renderer/components/notes/NoteEditorPane.tsx`, `src/renderer/components/quran/QuranReaderView.tsx`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/research/ResearchEditorView.tsx`, `tests/ui/workspace-tabs-wiring.test.ts`.
+
+## Review of Antigravity's tab commits, and the next queue - 2026-11-19 - Agent: Claude Code
 
 **Review of KEY-421 20b9dd33, KEY-425 56ccec45, KEY-428 2dc61b1a, KEY-426 a2990805 and KEY-424 bb79d2a6.**
 - Checks: tsc is clean. workspace-tabs-wiring, workspace-links and workspace-tabs pass 64/64.

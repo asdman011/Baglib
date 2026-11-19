@@ -157,8 +157,10 @@ export interface TabScopeContextType extends TabScopeState {
 
 export interface WorkspaceContextType extends WorkspaceGlobalContextType, TabScopeContextType {}
 
+export type TabSnapshotSaveReason = 'periodic' | 'sleep';
+
 export interface TabSnapshotHandlers {
-  saveState?: () => Promise<ViewSnapshot | undefined> | ViewSnapshot | undefined;
+  saveState?: (reason?: TabSnapshotSaveReason) => Promise<ViewSnapshot | undefined> | ViewSnapshot | undefined;
   restoreState?: (snapshot: ViewSnapshot) => void;
 }
 
@@ -188,7 +190,7 @@ export interface UseTabsResult {
   /** KEY-425: any other tab action (side by side: openBeside, closeSplit, setSplitRatio). */
   dispatchTabs: (action: TabsAction) => void;
   /** KEY-424 (WS-8): saves a tab's snapshot (and runs any view save); returns false if save failed. */
-  saveTabSnapshot: (id: string) => Promise<boolean>;
+  saveTabSnapshot: (id: string, reason?: TabSnapshotSaveReason) => Promise<boolean>;
 }
 
 interface BookSyncSubscriber {
@@ -899,6 +901,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
       saveTimerRef.current = null;
     }
     if (!restoredRef.current || initialTabs !== undefined) return;
+    if (typeof window !== 'undefined' && (window as unknown as { __baglibDisableTabsPersist?: boolean }).__baglibDisableTabsPersist) return;
     const api = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
     if (!api?.set) return;
     if (tabsDirtyRef.current) {
@@ -921,6 +924,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
 
   const schedulePersist = useCallback(() => {
     if (!restoredRef.current || initialTabs !== undefined) return;
+    if (typeof window !== 'undefined' && (window as unknown as { __baglibDisableTabsPersist?: boolean }).__baglibDisableTabsPersist) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       void flushPersist();
@@ -973,6 +977,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
   // Persist tab state on a 500ms debounce after startup restore completes.
   useEffect(() => {
     if (!restoredRef.current || initialTabs !== undefined) return;
+    if (typeof window !== 'undefined' && (window as unknown as { __baglibDisableTabsPersist?: boolean }).__baglibDisableTabsPersist) return;
     if (skipNextTabsPersistRef.current) {
       skipNextTabsPersistRef.current = false;
       return;
@@ -1070,27 +1075,43 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     else snapshotHandlersMapRef.current.delete(tabId);
   }, []);
 
-  const saveTabSnapshot = useCallback(async (id: string): Promise<boolean> => {
+  const saveTabSnapshot = useCallback(async (id: string, reason: TabSnapshotSaveReason = 'periodic'): Promise<boolean> => {
     const handlers = snapshotHandlersMapRef.current.get(id);
     let scroll: number | undefined;
     if (typeof document !== 'undefined' && typeof CSS !== 'undefined') {
       const panel = document.querySelector<HTMLElement>(`[data-tab-panel="${CSS.escape(id)}"]`);
       if (panel) {
         const scroller = panel.querySelector<HTMLElement>('[data-tab-scroll]') ?? panel;
-        if (typeof scroller.scrollTop === 'number' && scroller.scrollTop > 0) {
-          scroll = Math.round(scroller.scrollTop);
+        if (typeof scroller.scrollTop === 'number') {
+          const top = Math.round(scroller.scrollTop);
+          if (top > 0) scroll = top;
+          else if (findTab(stateRef.current, id)?.history[findTab(stateRef.current, id)?.index ?? 0]?.scroll) {
+            scroll = 0;
+          }
         }
       }
     }
     try {
-      const raw = handlers?.saveState ? await handlers.saveState() : undefined;
+      const raw = handlers?.saveState ? await handlers.saveState(reason) : undefined;
       const snapshot = raw ? sanitizeSnapshot(raw) : undefined;
-      if (snapshot || scroll !== undefined) {
+
+      const currentTab = findTab(stateRef.current, id);
+      const currentLoc = currentTab ? currentLocation(currentTab) : undefined;
+      const currentSnapshot = currentLoc?.snapshot;
+      const currentScroll = currentLoc?.scroll;
+
+      const nextSnapshot = snapshot !== undefined ? snapshot : currentSnapshot;
+      const nextScroll = scroll !== undefined ? scroll : currentScroll;
+
+      const snapshotEqual = JSON.stringify(nextSnapshot ?? null) === JSON.stringify(currentSnapshot ?? null);
+      const scrollEqual = (nextScroll ?? undefined) === (currentScroll ?? undefined);
+
+      if (!snapshotEqual || !scrollEqual) {
         dispatch({
           type: 'update',
           id,
           patch: {
-            ...(snapshot ? { snapshot } : {}),
+            ...(snapshot !== undefined ? { snapshot } : {}),
             ...(scroll !== undefined ? { scroll } : {}),
           },
         });
@@ -1106,7 +1127,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     if (initialTabs || !state.activeId) return;
     const activeId = state.activeId;
     const timer = setInterval(() => {
-      void saveTabSnapshot(activeId);
+      void saveTabSnapshot(activeId, 'periodic');
     }, 3000);
     (timer as unknown as { unref?: () => void }).unref?.();
     return () => clearInterval(timer);
@@ -1361,7 +1382,6 @@ export const TabScope: React.FC<{ tabId: string; children: React.ReactNode }> = 
   const internal = useContext(TabsInternalContext);
   const scopeValue = useTabScopeState(tabId);
   const snapshotHandlersRef = useRef<TabSnapshotHandlers | null>(null);
-  const restoredSnapshotRef = useRef<ViewSnapshot | undefined>(undefined);
 
   const tab = tabsCtx ? findTab(tabsCtx.state, tabId) : undefined;
   const activeTab = tabsCtx ? getActiveTab(tabsCtx.state) : undefined;
@@ -1369,12 +1389,18 @@ export const TabScope: React.FC<{ tabId: string; children: React.ReactNode }> = 
   const location = tab ? currentLocation(tab) : homeLocation();
   const registerTabSnapshot = internal?.registerTabSnapshot;
 
+  // Restore once per mount/wake from the snapshot captured at wake time; never on periodic saves.
+  const initialSnapshotRef = useRef(location.snapshot);
+  const hasRestoredRef = useRef(false);
+
   const registerSnapshot = useCallback((handlers: TabSnapshotHandlers) => {
     snapshotHandlersRef.current = handlers;
     registerTabSnapshot?.(tabId, handlers);
-    if (location.snapshot && restoredSnapshotRef.current !== location.snapshot) {
-      restoredSnapshotRef.current = location.snapshot;
-      handlers.restoreState?.(location.snapshot);
+    if (!hasRestoredRef.current) {
+      hasRestoredRef.current = true;
+      if (initialSnapshotRef.current) {
+        handlers.restoreState?.(initialSnapshotRef.current);
+      }
     }
     return () => {
       if (snapshotHandlersRef.current === handlers) {
@@ -1382,14 +1408,24 @@ export const TabScope: React.FC<{ tabId: string; children: React.ReactNode }> = 
         registerTabSnapshot?.(tabId, null);
       }
     };
-  }, [tabId, registerTabSnapshot, location.snapshot]);
+  }, [tabId, registerTabSnapshot]);
+
+  // Keep location reference stable across snapshot/scroll updates so tabResult memo does not churn.
+  const locationRef = useRef(location);
+  if (
+    location.view !== locationRef.current.view ||
+    location.target !== locationRef.current.target ||
+    location.title !== locationRef.current.title
+  ) {
+    locationRef.current = location;
+  }
 
   const tabResult = useMemo<UseTabResult>(() => ({
     id: tabId,
     isFocused,
-    location,
+    location: locationRef.current,
     registerSnapshot,
-  }), [tabId, isFocused, location, registerSnapshot]);
+  }), [tabId, isFocused, locationRef.current, registerSnapshot]);
 
   const publishFocusedScope = internal?.publishFocusedScope;
   const unpublishFocusedScope = internal?.unpublishFocusedScope;

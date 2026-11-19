@@ -212,9 +212,10 @@ const SourceBookReader: React.FC = () => {
   const chrome = useReaderChrome(activeBook?.id, panels.activePanel, panels.setters);
   const readerSnapshotRef = useRef({ workId: activeBook?.id, sourceId: activeBook?.sourceId, readingPage, splitOrientation });
   useEffect(() => { readerSnapshotRef.current = { workId: activeBook?.id, sourceId: activeBook?.sourceId, readingPage, splitOrientation }; });
+  const registerSnapshot = readerTab?.registerSnapshot;
   useEffect(() => {
-    if (!readerTab) return;
-    return readerTab.registerSnapshot({
+    if (!registerSnapshot) return;
+    return registerSnapshot({
       saveState: () => ({
         version: 1,
         data: {
@@ -233,7 +234,7 @@ const SourceBookReader: React.FC = () => {
         if (data.splitOrientation !== undefined) setSplitOrientation(data.splitOrientation);
       },
     });
-  }, [readerTab, setReadingPage, setSplitOrientation]);
+  }, [registerSnapshot, setReadingPage, setSplitOrientation]);
   const [focusMode, setFocusMode] = useState(false);
   const [pdfReviews, setPdfReviews] = useState<PdfReview[]>([]);
   const isDocumentPanelOpen = panels.activePanel === 'document';

@@ -9,7 +9,7 @@ import { researchSettings } from '../../../shared/research-editor-apparatus';
 import { useOpenStudyLink } from '../../utils/use-study-link';
 import { translations } from '../../translations';
 import { collectionKeys } from '../../utils/sunnah-collections';
-import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
+import { useOptionalTab, useWorkspace, type TabSnapshotSaveReason } from '../context/WorkspaceContext';
 import { readSnapshot } from '../../../shared/workspace-tabs';
 import { createResearchEditorHost, shouldForwardEditorShortcut } from './editor-host';
 import { registerEditorLeave } from './editor-leave';
@@ -258,12 +258,13 @@ export function ResearchEditorView() {
     snapshotStateRef.current = { opened, activeDoc, activeManuscript, docMode, isSidebarCollapsed, isRightPanelOpen, zoomLevel };
   }, [opened, activeDoc, activeManuscript, docMode, isSidebarCollapsed, isRightPanelOpen, zoomLevel]);
 
+  const registerSnapshot = tab?.registerSnapshot;
   useEffect(() => {
-    if (!tab) return;
-    return tab.registerSnapshot({
-      saveState: async () => {
+    if (!registerSnapshot) return;
+    return registerSnapshot({
+      saveState: async (reason?: TabSnapshotSaveReason) => {
         const s = snapshotStateRef.current;
-        if (s.opened && s.activeDoc?.id) {
+        if (reason === 'sleep' && s.opened && s.activeDoc?.id) {
           await host.bridge.explicitSave();
         }
         return {
@@ -301,7 +302,7 @@ export function ResearchEditorView() {
         }
       },
     });
-  }, [tab, host]);
+  }, [registerSnapshot, host]);
 
   const handleOpenDocument = async (value: ManuscriptDocument) => {
     setError(false);

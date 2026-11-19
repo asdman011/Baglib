@@ -50,7 +50,7 @@ const without = (set: ReadonlySet<string>, ids: Iterable<string>) => { const nex
  * Only the tabs that finished sleeping are kept as state; the awake set is derived from them on each render,
  * so a tab that becomes wanted again is shown in the same render that wants it.
  */
-export function useTabKeepAlive(state: TabsState, exempt: ReadonlySet<string>, saveTab: (id: string) => Promise<boolean>, keepAlive?: number): ReadonlySet<string> {
+export function useTabKeepAlive(state: TabsState, exempt: ReadonlySet<string>, saveTab: (id: string, reason?: 'periodic' | 'sleep') => Promise<boolean>, keepAlive?: number): ReadonlySet<string> {
   const open = new Set(state.tabs.map(tab => tab.id));
   const [failed, setFailed] = React.useState<ReadonlySet<string>>(() => new Set());
   const shown = shownIds(state);
@@ -84,7 +84,7 @@ export function useTabKeepAlive(state: TabsState, exempt: ReadonlySet<string>, s
     for (const id of toSleepKey ? toSleepKey.split('\n') : []) {
       if (saving.current.has(id)) continue;
       saving.current.add(id);
-      saveRef.current(id)
+      saveRef.current(id, 'sleep')
         .catch(() => false)
         .then(ok => {
           saving.current.delete(id);

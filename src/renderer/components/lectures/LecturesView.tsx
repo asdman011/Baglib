@@ -207,11 +207,13 @@ export function LecturesView() {
   useEffect(() => { tabRef.current = tab; }, [tab]);
   const selectedRef = useRef(selected);
   useEffect(() => { selectedRef.current = selected; });
+  const registerSnapshot = tab?.registerSnapshot;
+  const tabId = tab?.id;
   useEffect(() => {
-    if (!tab) return;
-    return tab.registerSnapshot({
+    if (!registerSnapshot) return;
+    return registerSnapshot({
       saveState: () => {
-        const media = tab.id ? document.querySelector<HTMLMediaElement>(`[data-tab-panel="${CSS.escape(tab.id)}"] [data-lecture-player]`) : null;
+        const media = tabId ? document.querySelector<HTMLMediaElement>(`[data-tab-panel="${CSS.escape(tabId)}"] [data-lecture-player]`) : null;
         return {
           version: 1,
           data: {
@@ -228,7 +230,7 @@ export function LecturesView() {
         if (data.lectureId) setSelected({ id: data.lectureId, seek: data.seek ?? null, autoplay: false });
       },
     });
-  }, [tab]);
+  }, [registerSnapshot, tabId]);
   useEffect(() => {
     const open = (event?: Event) => {
       if (event && !isTabEventTarget(tabRef.current, event)) return;

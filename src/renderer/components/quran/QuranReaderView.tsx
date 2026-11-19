@@ -341,9 +341,10 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
   useEffect(() => { tabRef.current = tab; }, [tab]);
   const quranSnapshotRef = useRef({ panelOpen, inspected, pageNumber });
   useEffect(() => { quranSnapshotRef.current = { panelOpen, inspected, pageNumber }; });
+  const registerSnapshot = tab?.registerSnapshot;
   useEffect(() => {
-    if (!tab) return;
-    return tab.registerSnapshot({
+    if (!registerSnapshot) return;
+    return registerSnapshot({
       saveState: () => ({
         version: 1,
         data: {
@@ -362,7 +363,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
         if (data.inspected !== undefined) setInspected(data.inspected);
       },
     });
-  }, [tab]);
+  }, [registerSnapshot]);
   const restoringTarget = useRef(false);
   useEffect(() => {
     const open = (event?: Event) => {

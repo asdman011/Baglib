@@ -288,11 +288,12 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
   const [query, setQuery] = useState('');
   const [panel, setPanel] = useState<string | null>(null);
   const tab = useTabOptional();
+  const registerSnapshot = tab?.registerSnapshot;
   const snapshotRef = useRef({ query, panel });
   useEffect(() => { snapshotRef.current = { query, panel }; });
   useEffect(() => {
-    if (!tab) return;
-    return tab.registerSnapshot({
+    if (!registerSnapshot) return;
+    return registerSnapshot({
       saveState: () => ({ version: 1, data: { query: snapshotRef.current.query, panel: snapshotRef.current.panel } }),
       restoreState: snapshot => {
         const data = readSnapshot<{ query?: string; panel?: string | null }>(snapshot, 1, {
@@ -303,7 +304,7 @@ export function SettingsDirectory({ athan }: { athan?: ReturnType<typeof useAtha
         if (data.panel !== undefined) setPanel(data.panel);
       },
     });
-  }, [tab]);
+  }, [registerSnapshot]);
   const [failed, setFailed] = useState(false);
   const [folder, setFolder] = useState('');
   const entries = searchSettings(query);

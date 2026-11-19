@@ -58,7 +58,7 @@ app.on('browser-window-created', (_, win) => {
       assert.ok(book && lecture, 'imported items found');
       errors.length = 0;
       // KEY-423 restores tabs across reloads; each language starts from a clean workspace.
-      await evaluate("Promise.all(['workspace.tabs.v1', 'workspace.closed.v1'].map(key => window.electronAPI.settings.set(key, null)))");
+      await evaluate("(() => { window.__baglibDisableTabsPersist = true; return Promise.all(['workspace.tabs.v1', 'workspace.closed.v1'].map(key => window.electronAPI.settings.set(key, null))); })()");
       await evaluate('localStorage.setItem("baglib-lang",' + JSON.stringify(language) + ')');
       win.setContentSize(1280, 900);
       await win.loadURL('http://localhost:3000');
@@ -261,6 +261,54 @@ app.on('browser-window-created', (_, win) => {
       await until("!!document.querySelector('[data-menu-action=\"group-ungroup\"]')");
       await click('[data-menu-action="group-ungroup"]');
       await until("!document.querySelector('[data-group-id]')");
+
+      // KEY-424: open a manuscript and a note, type, wait 15 s (no explicit save, no document reopen, cursor kept); force sleep and confirm save ran first.
+      key('T', ['control']);
+      await until(`!!document.querySelector('[data-nav-item="notes"]')`);
+      const noteTabId = await activeId();
+      await click('[data-nav-item="notes"]');
+      await until("!!document.querySelector('[data-new-note-button]')");
+      await click('[data-new-note-button]');
+      await until("!!document.querySelector('[data-note-editor-title]')");
+      await evaluate("document.querySelector('[data-note-editor-title]').focus(); document.querySelector('[data-note-editor-title]').select();");
+      const noteTitleText = rtl ? 'ملاحظة تبويب مباشرة' : 'Live Tab Note';
+      await win.webContents.insertText(noteTitleText);
+      await pause(100);
+      await evaluate("document.querySelector('.cm-content')?.focus()");
+      key('A', ['control']);
+      await win.webContents.insertText(rtl ? 'محتوى الملاحظة للتجربة' : 'Live Note Body Text');
+      await pause(100);
+      await evaluate("document.querySelector('[data-note-editor-title]').focus()");
+      await pause(100);
+      const notesBeforeWait = (await evaluate('window.electronAPI.studyNotes.list()')).length;
+      assert.equal(await evaluate('document.activeElement === document.querySelector("[data-note-editor-title]")'), true, 'cursor is in note title');
+
+      // Wait 15 seconds across multiple 3s periodic snapshot intervals
+      await pause(15000);
+
+      // Confirm no explicit save ran, note editor is still active, cursor kept
+      const notesAfterWait = (await evaluate('window.electronAPI.studyNotes.list()')).length;
+      assert.equal(notesAfterWait, notesBeforeWait, 'no explicit save ran during 15s wait');
+      assert.equal(await evaluate('document.activeElement === document.querySelector("[data-note-editor-title]")'), true, 'cursor kept in title during 15s wait');
+      assert.equal(await evaluate("document.querySelector('[data-note-editor-title]')?.value"), noteTitleText, 'note title text unchanged during 15s wait');
+
+      // Now force sleep by opening 6 more tabs
+      for (let n = 0; n < 6; n++) {
+        key('T', ['control']);
+        await pause(100);
+      }
+      await until(`!document.querySelector('[data-tab-panel="${noteTabId}"]')`);
+
+      // Confirm the dirty note saved to SQLite before sleeping
+      const notesAfterSleep = (await evaluate('window.electronAPI.studyNotes.list()')).length;
+      assert.equal(notesAfterSleep, notesBeforeWait + 1, 'dirty note was saved to SQLite before sleeping');
+      await shot(`${language}-6i-sleep-saved`);
+
+      // Wake the note tab back up: panel remounts and title is restored
+      await evaluate(`document.querySelector('[data-tab-id="${noteTabId}"]').click()`);
+      await until(`!!document.querySelector('[data-tab-panel="${noteTabId}"] [data-note-editor-title]')`);
+      assert.equal(await evaluate(`document.querySelector('[data-tab-panel="${noteTabId}"] [data-note-editor-title]').value`), noteTitleText, 'note title restored on wake');
+      await shot(`${language}-6j-wake-restored`);
 
       // Narrow window: the bar scrolls sideways and the page never does.
       win.setContentSize(480, 900);

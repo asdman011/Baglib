@@ -20,7 +20,7 @@ import {
   Download,
   FileType,
 } from 'lucide-react';
-import { useTabOptional, useWorkspace } from '../context/WorkspaceContext';
+import { useTabOptional, useWorkspace, type TabSnapshotSaveReason } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { Button, IconButton } from '../ui/Button';
 import { Chip } from '../ui/Chip';
@@ -201,7 +201,7 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
       const savedNote = await window.electronAPI.studyNotes.save({
         id: targetId,
         title: trimmedTitle,
-        content: currentContent,
+        content: currentContent.trim() ? currentContent : trimmedTitle,
         tags,
         aliases,
         workId: workId || undefined,
@@ -226,21 +226,22 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
 
   // KEY-424 (WS-8): save dirty note before sleeping; a failed save keeps the tab awake.
   const tab = useTabOptional();
+  const registerSnapshot = tab?.registerSnapshot;
   const noteSnapshotRef = useRef({ isDirty, handleSave, noteId: note?.id });
   useEffect(() => { noteSnapshotRef.current = { isDirty, handleSave, noteId: note?.id }; });
   useEffect(() => {
-    if (!tab) return;
-    return tab.registerSnapshot({
-      saveState: async () => {
+    if (!registerSnapshot) return;
+    return registerSnapshot({
+      saveState: async (reason?: TabSnapshotSaveReason) => {
         const s = noteSnapshotRef.current;
-        if (s.isDirty) {
+        if (reason === 'sleep' && s.isDirty) {
           const ok = await s.handleSave();
           if (!ok) throw new Error('Note save failed');
         }
         return { version: 1, data: { noteId: s.noteId } };
       },
     });
-  }, [tab]);
+  }, [registerSnapshot]);
 
   const handleAddTag = () => {
     const trimmed = newTagVal.trim().replace(/^#/u, '');
