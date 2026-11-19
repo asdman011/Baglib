@@ -11,6 +11,14 @@ export function parseDeepLink(url: unknown): string | null {
   } catch { return null; }
 }
 
+/**
+ * KEY-428: the `baglib:` link for a study target, for "Copy links". Colons stay readable; everything else is
+ * encoded, so `parseDeepLink(formatDeepLink(target))` gives the target back.
+ */
+export function formatDeepLink(target: string): string {
+  return `baglib:${encodeURIComponent(target).replace(/%3A/giu, ':')}`;
+}
+
 /** The dev app path is resolved by the caller; normal dev/harness runs must never alter OS registration. */
 export function protocolRegistrationArgs(packaged: boolean, optIn: string | undefined, executable: string, appPath: string | undefined): [string] | [string, string, string[]] | null {
   if (packaged) return ['baglib'];

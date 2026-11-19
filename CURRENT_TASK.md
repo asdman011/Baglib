@@ -1,3 +1,28 @@
+## KEY-428 / KEY-426 model: tab multi-select, tab-menu helpers and tab groups (WS-10, WS-11 pure parts) - 2026-11-19 - Agent: Claude Code
+
+**Request.** Nonstop work in parallel with Antigravity's KEY-418, while the user is away. These are the pure-model parts of WS-10 and WS-11, built ahead of their UI. They touch none of KEY-418's files.
+
+**Done:**
+- `src/shared/workspace-tab-selection.ts` (new): the selection model from plan section 7.3. A click selects one tab, Ctrl+click toggles, Shift+click selects a range from an anchor, Ctrl+Shift+arrow extends one tab at a time, and Esc leaves only the focused tab, which is always selected. The selection is UI state and is never saved. Tab-menu helpers from 7.4:
+  - `menuTargets`: the selection if the pointer is on it, else that tab;
+  - `otherTabIds`;
+  - `tabIdsAfter`: in bar order, so "to the left" in Arabic is the same list;
+  - `canOpenSideBySide`: exactly 2 tabs;
+  - `copyLinksText`: title plus `baglib:` link, or the title alone for a tab without an item;
+  - `listableTargets`: the items for Add to list, plus a count of skipped tabs.
+- `src/shared/deep-link.ts`: `formatDeepLink(target)`, the inverse of `parseDeepLink`. Colons stay readable.
+- `src/shared/workspace-tabs.ts`, tab groups (7.5):
+  - The `TabGroup {id, name, color (8), collapsed}` type, `WorkspaceTab.groupId` and `TabsState.groups`. These are stored inside the existing `workspace.tabs.v1` settings value, so there is no DB schema change.
+  - Actions: group, addToGroup, removeFromGroup, updateGroup, ungroup, moveGroup.
+  - A group's tabs always sit together. Dragging a tab out leaves the group; dropping one between two grouped tabs joins it; opening or duplicating inside a group joins it. A group never lands inside another group.
+  - Empty groups disappear, and there are no empty `groups`/`splitId` keys.
+  - A collapsed group's tabs sleep, with exemptions kept. Focusing a hidden tab opens its group. Collapsing the focused tab's group moves focus outside it.
+  - parse/serialize keep groups, drop broken ones, and rejoin split groups. Startup keeps the groups. A reopened tab doesn't revive a dead group.
+- Tests: `tests/shared/workspace-tab-selection.test.ts` (12) and `tests/shared/workspace-tab-groups.test.ts` (13), both new.
+
+**Tests:** 127/127 across every test that imports these modules, including the existing workspace-tabs tests, deep-link and Antigravity's workspace-tab-scope test. ESLint shows 0 errors, and tsc shows no errors in these files.
+
+**Not done:** the UI. Highlighting the selection, the tab right-click menu, group labels and colours, and dragging a label all need the KEY-419 part B wiring and come after KEY-423 (WS-7) in Jira order. Group colour tokens are a renderer job.
 ## KEY-420 / KEY-422 part A: back/forward strip and the + quick-open panel (WS-4, WS-6; not yet wired) - 2026-11-19 - Agent: Claude Code
 
 **Request.** The user is away and asked for nonstop work in parallel with Antigravity, skipping anything that needs approval. KEY-418 (WS-2, Antigravity) holds WorkspaceContext, AppLayout and the navigation files, so these pieces were built in new files and in Claude's own tab-bar files.

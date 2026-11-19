@@ -139,6 +139,20 @@ export interface WorkspaceTab {
   history: TabLocation[];
   /** The current entry in `history`. */
   index: number;
+  /** KEY-426 (WS-11): the group this tab belongs to. A group's tabs always sit next to each other. */
+  groupId?: string;
+}
+
+/** KEY-426 (WS-11): the 8 group colours; the renderer maps each to its theme tokens. */
+export const TAB_GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'] as const;
+export type TabGroupColor = typeof TAB_GROUP_COLORS[number];
+
+/** A named, coloured group of tabs. A collapsed group shows only its label and its tabs sleep. */
+export interface TabGroup {
+  id: string;
+  name: string;
+  color: TabGroupColor;
+  collapsed: boolean;
 }
 
 export interface TabsState {
@@ -146,6 +160,8 @@ export interface TabsState {
   activeId: string | null;
   /** The tab in the second pane (WS-9), if two tabs are side by side. */
   splitId?: string;
+  /** KEY-426 (WS-11): groups that have at least one tab. Absent when there are none. */
+  groups?: TabGroup[];
 }
 
 export const EMPTY_TABS: TabsState = { tabs: [], activeId: null };
@@ -212,12 +228,84 @@ export type TabsAction =
   /** Bring back a closed tab (Ctrl+Shift+T) with its history, under a new id. */
   | { type: 'reopen'; tab: WorkspaceTab; id: string; now: number }
   | { type: 'openBeside'; id: string }
-  | { type: 'closeSplit' };
+  | { type: 'closeSplit' }
+  /** KEY-426: put tabs in a new group, gathered where the first of them is. */
+  | { type: 'group'; ids: string[]; groupId: string; name: string; color: TabGroupColor }
+  /** Add tabs to an existing group, after its last tab. */
+  | { type: 'addToGroup'; ids: string[]; groupId: string }
+  /** Take tabs out of their groups; each lands just after its old group. */
+  | { type: 'removeFromGroup'; ids: string[] }
+  | { type: 'updateGroup'; groupId: string; patch: Partial<Pick<TabGroup, 'name' | 'color' | 'collapsed'>> }
+  /** Dissolve a group; its tabs stay where they are. */
+  | { type: 'ungroup'; groupId: string }
+  /** Drag a group's label: move all its tabs to `toIndex` among the other tabs. */
+  | { type: 'moveGroup'; groupId: string; toIndex: number };
 
-/** Keeps the state free of an empty `splitId` key, so saved and compared states stay identical. */
-function withSplit(tabs: WorkspaceTab[], activeId: string | null, splitId: string | undefined): TabsState {
-  return splitId ? { tabs, activeId, splitId } : { tabs, activeId };
+function withoutGroup(tab: WorkspaceTab): WorkspaceTab {
+  if (tab.groupId === undefined) return tab;
+  const copy = { ...tab };
+  delete copy.groupId;
+  return copy;
 }
+
+/** Gathers each group's tabs where its first tab is, keeping their order, so a group is never split. */
+function compactGroups(tabs: WorkspaceTab[]): WorkspaceTab[] {
+  if (!tabs.some(tab => tab.groupId)) return tabs;
+  const placed = new Set<string>();
+  const out: WorkspaceTab[] = [];
+  for (const tab of tabs) {
+    if (!tab.groupId) { out.push(tab); continue; }
+    if (placed.has(tab.groupId)) continue;
+    placed.add(tab.groupId);
+    out.push(...tabs.filter(other => other.groupId === tab.groupId));
+  }
+  return out;
+}
+
+/**
+ * Builds a state from `base`'s groups. It keeps the state free of empty `splitId` and `groups` keys, so saved and
+ * compared states stay identical; drops links to missing groups and groups left without tabs; keeps groups whole.
+ */
+function withSplit(base: TabsState, tabs: WorkspaceTab[], activeId: string | null, splitId: string | undefined): TabsState {
+  const groups = base.groups ?? [];
+  const live = new Set(groups.map(group => group.id));
+  const cleaned = compactGroups(tabs.map(tab => (tab.groupId && !live.has(tab.groupId) ? withoutGroup(tab) : tab)));
+  const used = new Set(cleaned.map(tab => tab.groupId).filter(Boolean));
+  const kept = groups.filter(group => used.has(group.id));
+  const out: TabsState = splitId ? { tabs: cleaned, activeId, splitId } : { tabs: cleaned, activeId };
+  if (kept.length) out.groups = kept;
+  return out;
+}
+
+const rebuild = (state: TabsState, tabs: WorkspaceTab[] = state.tabs, groups: TabGroup[] | undefined = state.groups): TabsState =>
+  withSplit({ ...state, groups }, tabs, state.activeId, state.splitId);
+
+/**
+ * After a tab lands at `index`: between two tabs of one group it joins that group; next to a tab of its own group
+ * it stays; otherwise it leaves its group. This is how dragging a tab out of a group, or into one, works.
+ */
+function settleMembership(tabs: WorkspaceTab[], index: number): WorkspaceTab[] {
+  const tab = tabs[index];
+  if (!tab) return tabs;
+  const left = tabs[index - 1]?.groupId, right = tabs[index + 1]?.groupId;
+  let groupId: string | undefined;
+  if (left && left === right) groupId = left;
+  else if (tab.groupId && (left === tab.groupId || right === tab.groupId)) groupId = tab.groupId;
+  if (groupId === tab.groupId) return tabs;
+  const next = [...tabs];
+  next[index] = groupId ? { ...tab, groupId } : withoutGroup(tab);
+  return next;
+}
+
+/** The tabs of a group, in the bar's order (for "Close the group" and "Save the group as a list"). */
+export const groupTabIds = (state: TabsState, groupId: string): string[] =>
+  state.tabs.filter(tab => tab.groupId === groupId).map(tab => tab.id);
+
+export const findGroup = (state: TabsState, groupId: string | undefined): TabGroup | undefined =>
+  (groupId ? state.groups?.find(group => group.id === groupId) : undefined);
+
+/** Whether a tab is hidden inside a collapsed group (it sleeps unless exempt). */
+export const inCollapsedGroup = (state: TabsState, tab: WorkspaceTab): boolean => !!findGroup(state, tab.groupId)?.collapsed;
 
 function replaceTab(state: TabsState, tab: WorkspaceTab): TabsState {
   return { ...state, tabs: state.tabs.map(item => (item.id === tab.id ? tab : item)) };
@@ -227,7 +315,9 @@ function touch(state: TabsState, id: string, now: number): TabsState {
   const tab = findTab(state, id);
   if (!tab) return state;
   const next = replaceTab(state, { ...tab, lastActiveAt: now });
-  return withSplit(next.tabs, id, next.splitId === id ? undefined : next.splitId);
+  // Focusing a tab inside a collapsed group opens the group.
+  const groups = next.groups?.map(group => (group.id === tab.groupId && group.collapsed ? { ...group, collapsed: false } : group));
+  return withSplit({ ...next, groups }, next.tabs, id, next.splitId === id ? undefined : next.splitId);
 }
 
 function insertAfter(tabs: WorkspaceTab[], tab: WorkspaceTab, afterId: string | null | undefined): WorkspaceTab[] {
@@ -255,9 +345,11 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       if (holder) return touch(state, holder.id, action.now);
       if (findTab(state, action.id)) return state;
       const tab = newTab(action.id, action.location, action.now);
-      const tabs = insertAfter(state.tabs, tab, action.afterId ?? state.activeId);
-      if (action.background && state.activeId) return { ...state, tabs };
-      return { ...state, tabs, activeId: tab.id };
+      // A tab opened inside a group (between two of its tabs) joins it.
+      const inserted = insertAfter(state.tabs, tab, action.afterId ?? state.activeId);
+      const tabs = settleMembership(inserted, inserted.indexOf(tab));
+      if (action.background && state.activeId) return rebuild(state, tabs);
+      return withSplit(state, tabs, tab.id, state.splitId);
     }
     case 'close': {
       const at = state.tabs.findIndex(tab => tab.id === action.id);
@@ -267,10 +359,10 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       if (tabs.length === 0) {
         return { tabs: [newTab(action.homeId, homeLocation(), action.now)], activeId: action.homeId };
       }
-      if (state.activeId !== action.id) return withSplit(tabs, state.activeId, splitId);
+      if (state.activeId !== action.id) return withSplit(state, tabs, state.activeId, splitId);
       // Like a browser: the tab to the right takes focus, or the one to the left at the end. A split pane wins.
       const nextId = splitId ?? (tabs[at] ?? tabs[at - 1]).id;
-      return touch(withSplit(tabs, state.activeId, splitId === nextId ? undefined : splitId), nextId, action.now);
+      return touch(withSplit(state, tabs, state.activeId, splitId === nextId ? undefined : splitId), nextId, action.now);
     }
     case 'activate':
       return touch(state, action.id, action.now);
@@ -279,13 +371,14 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       if (!tab) return state;
       const rest = state.tabs.filter(item => item.id !== action.id);
       const to = Math.max(0, Math.min(rest.length, Math.trunc(action.toIndex)));
-      return { ...state, tabs: [...rest.slice(0, to), tab, ...rest.slice(to)] };
+      return rebuild(state, settleMembership([...rest.slice(0, to), tab, ...rest.slice(to)], to));
     }
     case 'duplicate': {
       const tab = findTab(state, action.id);
       if (!tab || findTab(state, action.newId) || singleInstanceHolder(state, currentLocation(tab).view)) return state;
+      // The copy sits next to the original, so it stays in the original's group.
       const copy: WorkspaceTab = { ...tab, id: action.newId, openedAt: action.now, lastActiveAt: action.now, history: tab.history.map(entry => ({ ...entry })) };
-      return { ...state, tabs: insertAfter(state.tabs, copy, tab.id), activeId: copy.id };
+      return withSplit(state, insertAfter(state.tabs, copy, tab.id), copy.id, state.splitId);
     }
     case 'navigate': {
       const tab = findTab(state, action.id);
@@ -323,14 +416,81 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
       if (findTab(state, action.id) || action.tab.history.length === 0) return state;
       const holder = singleInstanceHolder(state, currentLocation(action.tab).view);
       if (holder) return touch(state, holder.id, action.now);
-      const tab: WorkspaceTab = { ...action.tab, id: action.id, lastActiveAt: action.now };
-      return { ...state, tabs: insertAfter(state.tabs, tab, state.activeId), activeId: tab.id };
+      // Its old group may be gone; it joins a group only if it lands inside one.
+      const tab: WorkspaceTab = withoutGroup({ ...action.tab, id: action.id, lastActiveAt: action.now });
+      const inserted = insertAfter(state.tabs, tab, state.activeId);
+      return withSplit(state, settleMembership(inserted, inserted.indexOf(tab)), tab.id, state.splitId);
     }
     case 'openBeside':
       if (!findTab(state, action.id) || action.id === state.activeId) return state;
       return { ...state, splitId: action.id };
     case 'closeSplit':
-      return state.splitId ? withSplit(state.tabs, state.activeId, undefined) : state;
+      return state.splitId ? withSplit(state, state.tabs, state.activeId, undefined) : state;
+    case 'group': {
+      const ids = new Set(action.ids);
+      const members = state.tabs.filter(tab => ids.has(tab.id));
+      if (members.length === 0 || !action.groupId || findGroup(state, action.groupId)) return state;
+      const group: TabGroup = { id: action.groupId, name: cleanTitle(action.name), color: TAB_GROUP_COLORS.includes(action.color) ? action.color : 'grey', collapsed: false };
+      const first = state.tabs.findIndex(tab => ids.has(tab.id));
+      const before = state.tabs.slice(0, first).filter(tab => !ids.has(tab.id));
+      const after = state.tabs.slice(first).filter(tab => !ids.has(tab.id));
+      const tabs = [...before, ...members.map(tab => ({ ...tab, groupId: group.id })), ...after];
+      return rebuild(state, tabs, [...(state.groups ?? []), group]);
+    }
+    case 'addToGroup': {
+      if (!findGroup(state, action.groupId)) return state;
+      const ids = new Set(action.ids.filter(id => findTab(state, id)));
+      if (ids.size === 0) return state;
+      const moving = state.tabs.filter(tab => ids.has(tab.id)).map(tab => ({ ...tab, groupId: action.groupId }));
+      const rest = state.tabs.filter(tab => !ids.has(tab.id));
+      let end = -1;
+      rest.forEach((tab, index) => { if (tab.groupId === action.groupId) end = index; });
+      // The group may have no tabs left outside the moving ones; then they stay where the first one was.
+      const at = end >= 0 ? end + 1 : state.tabs.findIndex(tab => ids.has(tab.id));
+      return rebuild(state, [...rest.slice(0, at), ...moving, ...rest.slice(at)]);
+    }
+    case 'removeFromGroup': {
+      const ids = new Set(action.ids);
+      let tabs = state.tabs;
+      for (const tab of state.tabs.filter(item => ids.has(item.id) && item.groupId)) {
+        const rest = tabs.filter(item => item.id !== tab.id);
+        let end = -1;
+        rest.forEach((item, index) => { if (item.groupId === tab.groupId) end = index; });
+        const at = end >= 0 ? end + 1 : tabs.findIndex(item => item.id === tab.id);
+        tabs = [...rest.slice(0, at), withoutGroup(tab), ...rest.slice(at)];
+      }
+      return tabs === state.tabs ? state : rebuild(state, tabs);
+    }
+    case 'updateGroup': {
+      const group = findGroup(state, action.groupId);
+      if (!group) return state;
+      const next: TabGroup = { ...group };
+      if (typeof action.patch.name === 'string') next.name = cleanTitle(action.patch.name);
+      if (action.patch.color && TAB_GROUP_COLORS.includes(action.patch.color)) next.color = action.patch.color;
+      if (typeof action.patch.collapsed === 'boolean') next.collapsed = action.patch.collapsed;
+      const groups = state.groups!.map(item => (item.id === group.id ? next : item));
+      // Collapsing the group that holds the focused tab moves focus to the nearest tab outside it, like a browser.
+      if (next.collapsed && findTab(state, state.activeId)?.groupId === group.id) {
+        const at = state.tabs.findIndex(tab => tab.id === state.activeId);
+        const outside = state.tabs.map((tab, index) => ({ tab, index })).filter(entry => entry.tab.groupId !== group.id)
+          .sort((a, b) => Math.abs(a.index - at) - Math.abs(b.index - at) || b.index - a.index)[0];
+        if (!outside) return state;
+        return withSplit({ ...state, groups }, state.tabs, outside.tab.id, state.splitId === outside.tab.id ? undefined : state.splitId);
+      }
+      return rebuild(state, state.tabs, groups);
+    }
+    case 'ungroup':
+      if (!findGroup(state, action.groupId)) return state;
+      return rebuild(state, state.tabs.map(tab => (tab.groupId === action.groupId ? withoutGroup(tab) : tab)), state.groups!.filter(group => group.id !== action.groupId));
+    case 'moveGroup': {
+      if (!findGroup(state, action.groupId)) return state;
+      const members = state.tabs.filter(tab => tab.groupId === action.groupId);
+      const rest = state.tabs.filter(tab => tab.groupId !== action.groupId);
+      let to = Math.max(0, Math.min(rest.length, Math.trunc(action.toIndex)));
+      // Never drop a group inside another group: slide to that group's edge.
+      while (to > 0 && to < rest.length && rest[to - 1].groupId && rest[to - 1].groupId === rest[to].groupId) to += 1;
+      return rebuild(state, [...rest.slice(0, to), ...members, ...rest.slice(to)]);
+    }
     default:
       return state;
   }
@@ -355,7 +515,8 @@ export function awakeTabIds(state: TabsState, exempt: ReadonlySet<string> = new 
     awake.add(id);
     budget -= 1;
   }
-  const byRecent = state.tabs.filter(tab => !awake.has(tab.id)).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  // A collapsed group's tabs sleep (KEY-426); exemptions still apply above.
+  const byRecent = state.tabs.filter(tab => !awake.has(tab.id) && !inCollapsedGroup(state, tab)).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
   for (const tab of byRecent) {
     if (budget <= 0) break;
     awake.add(tab.id);
@@ -387,7 +548,20 @@ function sanitizeTab(raw: unknown): WorkspaceTab | undefined {
   if (kept.length === 0) return undefined;
   const capped = capHistory(kept, Math.min(index, kept.length - 1));
   const openedAt = finiteNumber(raw.openedAt, 0);
-  return { id: raw.id, openedAt, lastActiveAt: finiteNumber(raw.lastActiveAt, openedAt), ...capped };
+  const tab: WorkspaceTab = { id: raw.id, openedAt, lastActiveAt: finiteNumber(raw.lastActiveAt, openedAt), ...capped };
+  if (typeof raw.groupId === 'string' && raw.groupId && raw.groupId.length <= 100) tab.groupId = raw.groupId;
+  return tab;
+}
+
+function sanitizeGroups(raw: unknown): TabGroup[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TabGroup[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id || entry.id.length > 100 || out.some(group => group.id === entry.id)) continue;
+    const color = TAB_GROUP_COLORS.find(item => item === entry.color) ?? 'grey';
+    out.push({ id: entry.id, name: cleanTitle(entry.name), color, collapsed: entry.collapsed === true });
+  }
+  return out;
 }
 
 /**
@@ -417,7 +591,11 @@ export function parseTabs(raw: unknown): TabsState {
   if (tabs.length === 0) return EMPTY_TABS;
   const activeId = typeof value.activeId === 'string' && ids.has(value.activeId) ? value.activeId : tabs[0].id;
   const splitId = typeof value.splitId === 'string' && ids.has(value.splitId) && value.splitId !== activeId ? value.splitId : undefined;
-  return withSplit(tabs, activeId, splitId);
+  const parsed = withSplit({ tabs, activeId, groups: sanitizeGroups(value.groups) }, tabs, activeId, splitId);
+  // The focused tab is never hidden in a collapsed group.
+  const holder = findGroup(parsed, findTab(parsed, activeId)?.groupId);
+  if (holder?.collapsed) parsed.groups = parsed.groups!.map(group => (group.id === holder.id ? { ...group, collapsed: false } : group));
+  return parsed;
 }
 
 /** What goes in `workspace.tabs.v1`: at most `maxSavedTabs` tabs (the active and split tabs always kept). */
@@ -433,9 +611,8 @@ export function serializeTabs(state: TabsState, maxTabs: number = TAB_LIMITS.max
     tabs = tabs.filter(tab => keep.has(tab.id));
   }
   tabs = tabs.map(tab => ({ ...tab, ...capHistory(tab.history, tab.index) }));
-  const out: TabsState = { tabs, activeId: state.activeId };
-  if (state.splitId) out.splitId = state.splitId;
-  return out;
+  // Groups ride along with their tabs; a group whose tabs were all dropped goes too.
+  return withSplit(state, tabs, state.activeId, state.splitId);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -486,7 +663,7 @@ export function startupTabs(saved: TabsState, prefs: WorkspacePrefs, homeId: str
   if (prefs.restoreFocus === 'last' && findTab(saved, saved.activeId)) return saved;
   if (findTab(saved, homeId)) return saved;
   // A new Home tab in front; the saved split pair isn't shown beside it.
-  return { tabs: [...saved.tabs, newTab(homeId, homeLocation(), now)], activeId: homeId };
+  return withSplit(saved, [...saved.tabs, newTab(homeId, homeLocation(), now)], homeId, undefined);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
