@@ -1,3 +1,17 @@
+## KEY-427 groundwork: window registry and the inventory of single-window code (WS-12, not wired) - 2026-11-19 - Agent: Claude Code
+
+**Request.** Nonstop parallel work while Antigravity holds KEY-423. This avoids its files and the shared dev server.
+
+**Done:**
+- `src/main/window-registry.ts` (new): `createWindowRegistry()` with add, remove, noteFocus, all, primary, lastFocused, fromWebContents, broadcast (optionally skipping the sender) and bringToFront. It is written against a minimal window interface so it can be tested without Electron. **Not wired in**: `src/main/index.ts` still keeps one `mainWindow`.
+- `tests/main/window-registry.test.ts` (new, 6 tests).
+- `docs/features/feature - Multi-tab Workspace - Windows Inventory.md` (new): the 48 main-process uses of `mainWindow` and `getAllWindows()`, each with its target (sender, all, front, primary or per window). Two findings:
+  - the broadcasts also reach helper windows (QUL browser, clipper, widget);
+  - `notifications.ts:36` picks the first window rather than the focused one.
+
+**Tests:** 6/6, and ESLint is clean.
+
+**Not done:** WS-12's first step, the cross-window drag spike, needs live Electron runs on the shared dev server. It waits until KEY-423 is done. Jira order still puts KEY-427 after KEY-428.
 ## KEY-422: the + panel shows most-used destinations and recent items (WS-6 wiring) - 2026-11-19 - Agent: Claude Code
 
 **Request.** Nonstop work in parallel with Antigravity, which holds KEY-423 (WorkspaceContext, SettingsDirectory, translations).
