@@ -10,7 +10,7 @@
  * - `useWorkspaceTabShortcuts`: Ctrl+T/W/Tab/1…9, Ctrl+Shift+T, Alt+Left/Right and the mouse back/forward buttons.
  */
 import React from 'react';
-import { FolderPlus, Columns2, Copy, ListPlus, Plus, RotateCcw, X } from 'lucide-react';
+import { AppWindow, FolderPlus, Columns2, Copy, ListPlus, Plus, RotateCcw, X } from 'lucide-react';
 import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
 import { editorLeaveGuard } from '../research/editor-leave';
 import { activeTab, currentLocation, homeLocation, SINGLE_INSTANCE_VIEWS, TAB_GROUP_COLORS, type TabGroupColor, type TabLocation, type TabsState, type WorkspaceTab, type WorkspaceView } from '../../../shared/workspace-tabs';
@@ -23,6 +23,7 @@ import { personalLists, usePersonalLists } from '../../libs/personal-lists';
 import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import type { MenuItemProps } from '../ui/Menu';
 import { useToastOptional } from '../ui/Toast';
+import { buildTabTransfer } from '../../../shared/workspace-window-transfer';
 import { QuickOpenPanel } from './QuickOpenPanel';
 import { useQuickOpenData } from './workspace-usage';
 import { GROUP_COLOR_STYLES, TabBar } from './TabBar';
@@ -51,6 +52,28 @@ function useGuardedClose() {
     if (allowed) close(id);
     return allowed;
   }, [state, close, activate]);
+  /**
+   * KEY-427 (WS-12 spike): moves a tab into a new window. A manuscript tab's unsaved-changes guard runs first. The
+   * tab closes here only after main confirms the new window holds it, so a failure never loses the tab.
+   */
+  const moveOut = React.useCallback(async (id: string): Promise<boolean> => {
+    const tab = state.tabs.find(item => item.id === id);
+    const windows = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
+    if (!tab || !windows) return false;
+    const guard = currentLocation(tab).view === 'notes-editor' ? editorLeaveGuard(id) : undefined;
+    if (guard) {
+      if (id !== state.activeId) activate(id);
+      if (!(await guard())) return false;
+    }
+    try {
+      const result = await windows.moveTab(buildTabTransfer(tab));
+      if (!result.ok) return false;
+    } catch {
+      return false;
+    }
+    close(id);
+    return true;
+  }, [state, close, activate]);
   const closeTab = React.useCallback((id: string) => { void closeOne(id); }, [closeOne]);
   const closeMany = React.useCallback(async (ids: readonly string[]) => {
     for (const id of ids) {
@@ -58,14 +81,14 @@ function useGuardedClose() {
       if (!closed) break;
     }
   }, [closeOne]);
-  return { closeTab, closeMany };
+  return { closeTab, closeMany, moveOut };
 }
 
 export const WorkspaceTabRow: React.FC = () => {
   const { dir, t, books } = useWorkspace();
   const { state, open, activate, move, duplicate, reopenClosed, closedTabs, dispatchTabs } = useTabs();
   const toast = useToastOptional();
-  const { closeTab, closeMany } = useGuardedClose();
+  const { closeTab, closeMany, moveOut } = useGuardedClose();
   const playing = usePlayingTabs();
   const quick = useQuickOpenData(state);
 
@@ -326,6 +349,19 @@ export const WorkspaceTabRow: React.FC = () => {
         onClick: () => openBeside(targets[0]),
       });
     }
+    if (typeof window !== 'undefined' && window.electronAPI?.workspaceWindow && !window.electronAPI.workspaceWindow.isSecondary) {
+      items.push({
+        id: 'move-to-new-window',
+        label: t('workspaceTabMoveToNewWindow'),
+        icon: <AppWindow className="h-3.5 w-3.5" aria-hidden="true" />,
+        disabled: targets.length !== 1,
+        onClick: () => {
+          void moveOut(targets[0]).then(moved => {
+            if (!moved) toast?.showToast({ message: t('workspaceTabMoveToNewWindowFailed'), type: 'danger' });
+          });
+        },
+      });
+    }
     items.push({
       id: 'copy-links',
       label: t('workspaceTabCopyLinks'),
@@ -388,7 +424,7 @@ export const WorkspaceTabRow: React.FC = () => {
       onClick: () => reopenClosed(),
     });
     return items;
-  }, [state, selection, t, open, duplicate, activate, dispatchTabs, openBeside, toast, lists, addTabsToList, closeMany, closedTabs.length, reopenClosed]);
+  }, [state, selection, t, open, duplicate, activate, dispatchTabs, openBeside, toast, lists, addTabsToList, closeMany, moveOut, closedTabs.length, reopenClosed]);
 
   return (
     <div className="relative z-[61] flex h-10 shrink-0 items-center border-b border-subtle bg-surface/80 px-2 sm:px-3" data-workspace-tab-row>

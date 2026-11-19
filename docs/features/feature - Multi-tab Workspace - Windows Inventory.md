@@ -1,6 +1,6 @@
 # Multi-tab workspace: inventory of single-window code (KEY-427, WS-12 groundwork)
 
-Written 2026-11-19 by Claude Code. Tearing a tab off into its own window (plan section 7.2) needs a **registry of app windows** in place of the single `mainWindow`. This lists every main-process place that assumes one window, with its target. The registry is built and tested (`src/main/window-registry.ts`, `tests/main/window-registry.test.ts`) but not wired in. The cross-window drag spike, which is WS-12's first step, has not been done.
+Written 2026-11-19 by Claude Code. Tearing a tab off into its own window (plan section 7.2) needs a **registry of app windows** in place of the single `mainWindow`. This lists every main-process place that assumes one window, with its target. The registry is built and tested (`src/main/window-registry.ts`, `tests/main/window-registry.test.ts`) but not wired in. The menu-driven move spike is built (see the last section); real drag-out is not.
 
 Verified by reading the code at commit c85e3dee: 48 matches for `mainWindow`, `getAllWindows()` and `getFocusedWindow()` under `src/main`.
 
@@ -55,3 +55,23 @@ These already loop over `BrowserWindow.getAllWindows()`, so they work with sever
 - Pointer capture outside the window during a drag on Windows, including across monitors with different scaling. The plan names this as the main risk.
 - Whether `pdf-page-cover.service` should use a hidden worker window, so it never depends on which app window is open.
 - Memory with 2 windows of 6 tabs and real PDFs (each window is its own renderer process).
+
+## Spike findings: "Move to new window" (2026-11-19, Antigravity)
+
+**Built and verified** (unit tests `tests/main/workspace-windows.test.ts` and the wiring test; live run `scripts/tab-window-live`, real PDF, ar and en):
+
+- Tab right-click menu, "Move to new window" / "نقل إلى نافذة جديدة". Single tab only (disabled for a multi-selection). Hidden inside a torn-off window.
+- Renderer: `window.electronAPI.workspaceWindow.moveTab(payload)`. The payload (`src/shared/workspace-window-transfer.ts`) is `{ version: 1, history, index }`: the tab's history entries, with study target, title, scroll and view snapshot, but no tab id, group, or document content.
+- Main (`src/main/workspace-windows.ts`): trusts only an app window as sender, validates the payload with `sanitizeLocation`, creates a window through the registry factory and keeps the payload until that window's renderer asks for it (`workspace:window-ready`). Pulling avoids a race with renderer startup. At most 8 payloads wait at once.
+- `src/main/index.ts`: `createWindow({ secondary })` now registers every window in the window registry, passes `--baglib-secondary-window` to the preload, and keeps `mainWindow` pointing at the primary window (the next one if it closes). A secondary window does not reset `studyNavigationReady`.
+- The new window opens with exactly the moved tab. It never reads or writes `workspace.tabs.v1` / `workspace.closed.v1` (the provider's `restoredRef` stays false), so the first window stays the owner of the saved workspace.
+- The source closes the tab only after main confirms. A manuscript tab runs its unsaved-changes guard first; a refused or failed move keeps the tab.
+
+**Bug found by the live run:** React runs the "ask for my tab" effect twice in development, and the tab is handed over once, so the second call got nothing. The preload now memoizes `ready()`.
+
+**Real drag-out: findings, not built.**
+
+- Electron has no cross-window drag of web content. A DOM drag ends when the pointer leaves the window, and `dragend` carries no usable target for another BrowserWindow. (Hypothesis from Electron/Chromium behavior; not tested here.)
+- Pointer capture (`setPointerCapture`) should keep `pointermove` events coming outside the window on Windows, with `screenX/screenY`, so the renderer can tell when the pointer is outside its window. Not tested; mixed-DPI monitors are the open risk.
+- What it needs: (1) on pointer release outside the window, the renderer sends the screen point with the payload; (2) main hit-tests all app windows (`getBounds()`, with `screen.dipToScreenPoint` for scaled displays) and either asks that window's tab bar to accept the tab (a new `workspace:receive-tab` message) or opens a new window at that point; (3) a drag ghost, since the browser drag image disappears outside the window; (4) an Escape/cancel path.
+- Still open: the multi-window quit flow (`before-quit` closes only `mainWindow` today), restoring several windows after a restart, closing the last tab of a secondary window, per-window memory, deep links targeting a secondary window, and the helper windows (cover renderer, QUL browser, companion), which still use `getAllWindows()`.

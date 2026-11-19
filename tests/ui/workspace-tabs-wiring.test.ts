@@ -513,4 +513,50 @@ describe('workspace tabs wired to the providers', () => {
       assert.equal(effectRuns, 1, 'view effect still did not re-run');
     } finally { restore(); }
   });
+
+  it('KEY-427: "Move to new window" sends the tab history over IPC and closes the tab only after main confirms', async () => {
+    const { window, root, restore } = setup();
+    const sent: { history: { view: string; target?: string }[]; index: number }[] = [];
+    let reply: { ok: boolean } = { ok: true };
+    const win = window as unknown as { electronAPI?: unknown };
+    try {
+      win.electronAPI = { workspaceWindow: { isSecondary: false, moveTab: async (payload: never) => { sent.push(payload); return reply; }, ready: async () => ({ primary: true }) } };
+      const initial: TabsState = {
+        tabs: [
+          newTab('t1', { view: 'library', title: '' }, 1),
+          { ...newTab('t2', { view: 'library', title: 'Book' }, 2), history: [{ view: 'library', title: '' }, { view: 'reader', target: 'book:abc#p=3', title: 'Book', scroll: 40 }], index: 1 },
+        ],
+        activeId: 't1',
+      };
+      await act(async () => root.render(createElement(WorkspaceProvider, { initialTabs: initial }, createElement(Shell))));
+      const openMenu = async (id: string) => {
+        const tab = window.document.querySelector(`[data-tab-id="${id}"]`)!;
+        await act(async () => fire(tab, 'onContextMenu', { clientX: 80, clientY: 10, target: tab }));
+        return window.document.querySelector('[data-menu-action="move-to-new-window"]');
+      };
+
+      // A refused move keeps the tab.
+      reply = { ok: false };
+      let item = await openMenu('t2');
+      assert.ok(item, 'the menu offers Move to new window');
+      await act(async () => { fire(item!, 'onClick'); await new Promise(resolve => setTimeout(resolve, 5)); });
+      assert.equal(sent.length, 1);
+      assert.deepEqual(tabIds(window), ['t1', 't2'], 'a refused move keeps the tab');
+
+      // A confirmed move sends only the history entries and closes the tab here.
+      reply = { ok: true };
+      item = await openMenu('t2');
+      await act(async () => { fire(item!, 'onClick'); await new Promise(resolve => setTimeout(resolve, 5)); });
+      assert.equal(sent.length, 2);
+      assert.deepEqual(Object.keys(sent[1]).sort(), ['history', 'index', 'version']);
+      assert.equal(sent[1].index, 1);
+      assert.equal(sent[1].history[1].target, 'book:abc#p=3');
+      assert.deepEqual(tabIds(window), ['t1'], 'the tab left this window');
+
+      // A torn-off window does not offer the item: its tabs are not saved or restored.
+      win.electronAPI = { workspaceWindow: { isSecondary: true, moveTab: async () => reply, ready: async () => ({ primary: false }) } };
+      await act(async () => root.render(createElement(WorkspaceProvider, { key: 'second', initialTabs: initial }, createElement(Shell))));
+      assert.equal(await openMenu('t2'), null, 'no item in a secondary window');
+    } finally { restore(); }
+  });
 });

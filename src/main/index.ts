@@ -65,6 +65,9 @@ import { initializeDatabase, closeDatabase } from "./database";
 import { ContentShieldService } from "./services/shield/content-shield.service";
 import { installPdfDiagnosticFilter } from "./services/digital/pdf-diagnostics";
 import { streamAssetResponse } from './services/digital/asset-range';
+import { createWindowRegistry } from './window-registry';
+import { createTabTransferBroker } from './workspace-windows';
+import { WORKSPACE_WINDOW_CHANNELS } from '../shared/workspace-window-transfer';
 
 installPdfDiagnosticFilter();
 
@@ -126,6 +129,10 @@ queueMicrotask(() => protocol.registerSchemesAsPrivileged([
 ]));
 
 let mainWindow: BrowserWindow | null = null;
+const windowRegistry = createWindowRegistry<BrowserWindow>();
+const tabTransfers = createTabTransferBroker<BrowserWindow>({ registry: windowRegistry, createWindow: () => createWindow({ secondary: true }) });
+ipcMain.handle(WORKSPACE_WINDOW_CHANNELS.moveTab, (event, payload: unknown) => tabTransfers.moveTabToNewWindow(event.sender.id, payload));
+ipcMain.handle(WORKSPACE_WINDOW_CHANNELS.windowReady, event => tabTransfers.windowReady(event.sender.id));
 let studyNavigationReady = false;
 const pendingStudyTargets: string[] = [];
 function flushStudyTargets() {
@@ -256,8 +263,8 @@ async function handleAssetProtocolRequest(request: Request): Promise<Response> {
   }
 }
 
-async function createWindow() {
-  mainWindow = new BrowserWindow({
+async function createWindow(options: { secondary?: boolean } = {}): Promise<BrowserWindow> {
+  const win = new BrowserWindow({
     show: false,
     width: 1200,
     height: 800,
@@ -269,18 +276,28 @@ async function createWindow() {
       nodeIntegration: false,
       webSecurity: false,
       plugins: true,
+      additionalArguments: options.secondary ? ['--baglib-secondary-window'] : [],
     },
   });
+  if (!options.secondary) mainWindow = win;
+  windowRegistry.add(win);
+  win.on('focus', () => windowRegistry.noteFocus(win));
+  win.on('closed', () => {
+    windowRegistry.remove(win);
+    if (mainWindow === win) mainWindow = windowRegistry.primary() ?? null;
+  });
 
-  installEditorContextMenu(mainWindow);
-  studyNavigationReady = false;
-  mainWindow.webContents.on('did-start-loading', () => { studyNavigationReady = false; });
-  mainWindow.webContents.on('did-finish-load', flushStudyTargets);
+  installEditorContextMenu(win);
+  if (!options.secondary) {
+    studyNavigationReady = false;
+    win.webContents.on('did-start-loading', () => { studyNavigationReady = false; });
+    win.webContents.on('did-finish-load', flushStudyTargets);
+  }
 
   // ADR-012 retains the stuck-renderer fallback. A responding manuscript guard can hold it
   // while its asynchronous save finishes, then explicitly approve or cancel the close.
   {
-    const owner = mainWindow;
+    const owner = win;
     let allowed = false;
     let waiting = false;
     owner.on('close', event => {
@@ -309,34 +326,40 @@ async function createWindow() {
       owner.webContents.send('app:close-requested');
     });
   }
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
-    mainWindow?.focus();
+  win.once('ready-to-show', () => {
+    win?.show();
+    win?.focus();
   });
 
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     if (errorCode !== -3) {
       console.warn(`[baglib:renderer] Navigation failed (${errorCode}: ${errorDescription}) on ${validatedURL}`);
     }
   });
 
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+  win.webContents.on('render-process-gone', (_event, details) => {
     console.error('[baglib:renderer] Render process crashed/gone:', details.reason, details.exitCode);
   });
 
+  if (options.secondary) {
+    // One attempt, not awaited: the first window already proved the page loads, and the transfer broker must record
+    // the waiting tab before the page's renderer can ask for it.
+    void (isDev ? win.loadURL(process.env.BAGLIB_DEV_URL || 'http://localhost:3000') : loadApp(win)).catch(() => undefined);
+    return win;
+  }
   if (isDev) {
     const devUrl = process.env.BAGLIB_DEV_URL || "http://localhost:3000";
     let loaded = false;
     const maxRetries = 60;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      if (!mainWindow || mainWindow.isDestroyed()) break;
+      if (!win || win.isDestroyed()) break;
       try {
-        await mainWindow.loadURL(devUrl);
+        await win.loadURL(devUrl);
         loaded = true;
         console.log(`[baglib] Successfully connected to dev server on attempt ${attempt}.`);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.show();
-          mainWindow.focus();
+        if (win && !win.isDestroyed()) {
+          win.show();
+          win.focus();
         }
         break;
       } catch {
@@ -346,12 +369,13 @@ async function createWindow() {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
-    if (!loaded && mainWindow && !mainWindow.isDestroyed()) {
+    if (!loaded && win && !win.isDestroyed()) {
       console.error(`[baglib] Could not connect to dev server at ${devUrl} after ${maxRetries} attempts.`);
     }
   } else {
-    await loadApp(mainWindow);
+    await loadApp(win);
   }
+  return win;
 }
 
 // Single-instance lock and OS file association / protocol routing

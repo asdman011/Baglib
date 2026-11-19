@@ -1,4 +1,29 @@
-﻿## KEY-424 (WS-8 review fix 1): per-view snapshot periodic vs sleep fixes — 2026-11-19 - Agent: Antigravity
+﻿## KEY-427 (WS-12 spike): "Move to new window" — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/shared/workspace-window-transfer.ts`: added `WORKSPACE_WINDOW_CHANNELS`, `TabTransferPayload` (`{ version: 1, history, index }`), `WorkspaceWindowInfo`, `MoveTabResult`, `buildTabTransfer`, `parseTabTransfer` (validated via `sanitizeLocation` and capped to `TAB_LIMITS.maxHistory`), and `transferToTab`.
+- `src/main/workspace-windows.ts`: added `createTabTransferBroker` to validate sender app windows, create a secondary window via `WindowRegistry` factory, hold pending transfer payloads (capped at 8), and deliver once on `workspace:window-ready`.
+- `src/main/index.ts`: updated `createWindow({ secondary })` to register every app window in `windowRegistry`, track focus/close, pass `--baglib-secondary-window` to secondary windows, keep `mainWindow` pointing to primary, avoid resetting `studyNavigationReady` on secondary loads, and wire `workspace:move-tab-to-new-window` and `workspace:window-ready` IPC handlers.
+- `src/preload/index.ts`: exposed `electronAPI.workspaceWindow { isSecondary, moveTab, ready }` with memoized `ready()` so React dev double-effects don't lose the single-delivery transfer.
+- `src/renderer/components/context/WorkspaceContext.tsx`: secondary windows pull their single tab via `workspaceWindow.ready()` and never read or write `workspace.tabs.v1` / `workspace.closed.v1`.
+- `src/renderer/components/layout/WorkspaceTabs.tsx`: added "Move to new window" item to `getTabMenuItems` (single tab only, hidden in secondary windows); runs manuscript unsaved-changes guard before IPC move and closes the tab only after main confirms.
+- `src/renderer/translations.ts`: added `workspaceTabMoveToNewWindow` and `workspaceTabMoveToNewWindowFailed` in `ar` and `en`.
+- `docs/features/feature - Multi-tab Workspace - Windows Inventory.md`: documented menu-driven move implementation and real drag-out spike findings (Electron web-content drag limits, pointer-capture approach, DPI/hit-testing needs, open multi-window work).
+
+**Tests:**
+- Unit tests (`tests/main/workspace-windows.test.ts`, `tests/main/window-registry.test.ts`): 13/13 pass.
+- Wiring tests (`tests/ui/workspace-tabs-wiring.test.ts`): 17/17 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,821/2,821 pass, 0 fail.
+- `npx tsc --noEmit`: 0 errors. `git diff --check`: clean.
+- Live Electron run (`node scripts/tab-window-live/run.mjs`): PASS in `ar` and `en` with real PDFs from `tests/real-files/` (0 renderer errors, throwaway profile removed).
+
+**Jira:**
+- KEY-427 transitioned to In Progress (21) with commit comment; drag-out and remaining WS-12 items stay open.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-427.md`, `docs/features/feature - Multi-tab Workspace - Windows Inventory.md`, `scripts/tab-window-live/main.cjs`, `scripts/tab-window-live/run.mjs`, `src/main/index.ts`, `src/main/workspace-windows.ts`, `src/preload/index.ts`, `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/translations.ts`, `src/shared/workspace-window-transfer.ts`, `tests/main/workspace-windows.test.ts`, `tests/ui/workspace-tabs-wiring.test.ts`.
+
+## KEY-424 (WS-8 review fix 1): per-view snapshot periodic vs sleep fixes — 2026-11-19 - Agent: Antigravity
 
 **Done:**
 - `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/use-tab-keep-alive.ts`:

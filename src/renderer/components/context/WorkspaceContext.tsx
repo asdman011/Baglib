@@ -39,6 +39,7 @@ import {
   type ViewSnapshot,
   type WorkspaceView,
 } from '../../../shared/workspace-tabs';
+import { transferToTab } from '../../../shared/workspace-window-transfer';
 
 import type { CategoryNode } from '../../../shared/types/category';
 import type { TagWithCount } from '../../../shared/types/tag';
@@ -935,6 +936,19 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
   useEffect(() => {
     if (initialTabs !== undefined) return;
     let alive = true;
+    const windowApi = typeof window !== 'undefined' ? window.electronAPI?.workspaceWindow : undefined;
+    if (windowApi?.isSecondary) {
+      // KEY-427 (WS-12 spike): a torn-off window starts from the one tab it was opened for and never reads or writes
+      // the saved workspace (restoredRef stays false, which gates every write above).
+      void windowApi.ready().then(info => {
+        if (!alive || !info.transfer) return;
+        const tab = transferToTab(info.transfer, allocateId(), Date.now());
+        const next: TabsState = { tabs: [tab], activeId: tab.id };
+        stateRef.current = next;
+        dispatch({ type: '__restore', state: next });
+      }).catch(() => {});
+      return () => { alive = false; };
+    }
     const api = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
     if (!api?.get) {
       restoredRef.current = true;

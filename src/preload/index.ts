@@ -124,6 +124,7 @@ const manuscripts: ManuscriptsAPI = {
   quickNotesList: () => ipcRenderer.invoke('manuscripts:quickNotesList'),
 };
 
+let windowReadyPromise: Promise<import('../shared/workspace-window-transfer').WorkspaceWindowInfo> | undefined;
 export const API = {
   researchEditor: {
     available: () => ipcRenderer.invoke('researchEditor.available'),
@@ -1002,6 +1003,15 @@ export const API = {
   personalLists: {
     invoke: <T = unknown>(action: 'all' | 'create' | 'rename' | 'remove' | 'reorder' | 'items' | 'add' | 'remove-item' | 'reorder-items' | 'toggle-star' | 'membership' | 'filter', ...args: unknown[]): Promise<{ ok: true; data: T } | { ok: false; error: string }> =>
       ipcRenderer.invoke(`personal-lists:${action}`, ...args),
+  },
+  // KEY-427 (WS-12 spike): move a tab into a new app window; a new window pulls its tab once at startup.
+  workspaceWindow: {
+    isSecondary: process.argv.includes('--baglib-secondary-window'),
+    moveTab: (payload: import('../shared/workspace-window-transfer').TabTransferPayload): Promise<import('../shared/workspace-window-transfer').MoveTabResult> =>
+      ipcRenderer.invoke('workspace:move-tab-to-new-window', payload),
+    // Memoized: main hands the waiting tab over once, and React may run the effect that asks twice in development.
+    ready: (): Promise<import('../shared/workspace-window-transfer').WorkspaceWindowInfo> =>
+      (windowReadyPromise ??= ipcRenderer.invoke('workspace:window-ready')),
   },
   revisionRecommendations: {
     list: (): Promise<{ ok: true; data: import('../shared/revision-recommendations').Recommendation[] } | { ok: false; error: string }> => ipcRenderer.invoke('revision-recommendations:list'),
