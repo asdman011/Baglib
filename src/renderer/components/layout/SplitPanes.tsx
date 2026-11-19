@@ -30,11 +30,25 @@ export interface SplitDividerProps {
 
 export const SplitDivider: React.FC<SplitDividerProps> = ({ dir, t, ratio, boxRef, onRatioChange, onClose, style }) => {
   const [dragging, setDragging] = React.useState(false);
+  const draggingRef = React.useRef(false);
   const current = clampRatio(ratio);
-  const fromPointer = (x: number) => {
+  const fromPointer = React.useCallback((x: number) => {
     const rect = boxRef.current?.getBoundingClientRect();
     if (rect) onRatioChange(ratioFromPointer(x, { left: rect.left, width: rect.width }, dir));
-  };
+  }, [boxRef, dir, onRatioChange]);
+  React.useEffect(() => {
+    if (!dragging) return;
+    const onMove = (event: PointerEvent) => fromPointer(event.clientX);
+    const onUp = () => { draggingRef.current = false; setDragging(false); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [dragging, fromPointer]);
   return (
     <div className="relative flex w-2 shrink-0 flex-col items-center" style={style} data-split-divider-wrap>
       <button
@@ -60,12 +74,13 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({ dir, t, ratio, boxRe
         onPointerDown={event => {
           if (event.button !== 0) return;
           event.preventDefault();
+          draggingRef.current = true;
           setDragging(true);
           event.currentTarget.setPointerCapture?.(event.pointerId);
         }}
-        onPointerMove={event => { if (dragging) fromPointer(event.clientX); }}
-        onPointerUp={event => { setDragging(false); event.currentTarget.releasePointerCapture?.(event.pointerId); }}
-        onPointerCancel={() => setDragging(false)}
+        onPointerMove={event => { if (draggingRef.current) fromPointer(event.clientX); }}
+        onPointerUp={event => { draggingRef.current = false; setDragging(false); event.currentTarget.releasePointerCapture?.(event.pointerId); }}
+        onPointerCancel={() => { draggingRef.current = false; setDragging(false); }}
         onDoubleClick={() => onRatioChange(DEFAULT_SPLIT_RATIO)}
         onKeyDown={event => {
           const next = ratioFromKey(current, event.key, dir, event.shiftKey);

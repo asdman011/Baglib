@@ -75,6 +75,15 @@ export const WorkspaceTabRow: React.FC = () => {
     }
   }, [state, activate, dispatchTabs]);
 
+  // KEY-425: opens a tab side by side with the focused tab (or its most recent partner when right-clicking the
+  // focused tab itself).
+  const openBeside = React.useCallback((id: string) => {
+    const target = id === state.activeId
+      ? [...state.tabs].filter(tab => tab.id !== id).sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0]?.id
+      : id;
+    if (target) dispatchTabs({ type: 'openBeside', id: target });
+  }, [state.activeId, state.tabs, dispatchTabs]);
+
   return (
     <div className="relative z-[61] flex h-10 shrink-0 items-center border-b border-subtle bg-surface/80 px-2 sm:px-3" data-workspace-tab-row>
       <TabBar
@@ -87,6 +96,7 @@ export const WorkspaceTabRow: React.FC = () => {
         onMove={move}
         playing={playing}
         onDropToEdge={dropToEdge}
+        onOpenBeside={openBeside}
         onNew={() => { open(homeLocation(), { afterId: lastTabId(state) }); }}
         renderQuickOpen={({ close, autoFocus }) => (
           <QuickOpenPanel destinations={quick.destinations} recent={quick.recent} t={t} onOpen={openQuick} onClose={close} autoFocus={autoFocus} />

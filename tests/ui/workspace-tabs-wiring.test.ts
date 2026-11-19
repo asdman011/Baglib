@@ -281,4 +281,23 @@ describe('workspace tabs wired to the providers', () => {
       assert.equal(mounted().length, 6);
     } finally { restore(); }
   });
+
+  it('right-clicking a tab offers "Open beside" when a second tab exists and opens both side by side', async () => {
+    const { window, root, restore } = setup();
+    try {
+      const oneTab: TabsState = { tabs: [newTab('t1', { view: 'library', title: '' }, 1)], activeId: 't1' };
+      await act(async () => root.render(createElement(WorkspaceProvider, { key: 'one', initialTabs: oneTab }, createElement(Shell))));
+      await act(async () => fire(window.document.querySelector('[data-tab-id="t1"]')!, 'onContextMenu', { clientX: 20, clientY: 10, target: window.document.querySelector('[data-tab-id="t1"]')! }));
+      assert.equal(window.document.querySelectorAll('[role="menuitem"]').length, 0, 'no Open beside when only one tab exists');
+
+      await act(async () => root.render(createElement(WorkspaceProvider, { key: 'three', initialTabs: threeTabs() }, createElement(Shell))));
+      const t2 = window.document.querySelector('[data-tab-id="t2"]')!;
+      await act(async () => fire(t2, 'onContextMenu', { clientX: 80, clientY: 10, target: t2 }));
+      const items = [...window.document.querySelectorAll('[role="menuitem"]')];
+      assert.equal(items.length, 1);
+      await act(async () => fire(items[0], 'onClick'));
+      assert.equal(window.document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels'), 'split');
+      assert.deepEqual(visibleScreens(window).sort(), ['library', 'quran']);
+    } finally { restore(); }
+  });
 });

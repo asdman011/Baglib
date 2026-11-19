@@ -12,9 +12,11 @@
  * - Too many tabs scroll sideways; the mouse wheel scrolls the bar.
  */
 import React from 'react';
-import { Plus, Volume2, X } from 'lucide-react';
+import { Columns2, Plus, Volume2, X } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import { currentLocation, type WorkspaceTab } from '../../../shared/workspace-tabs';
+import { ContextMenu } from '../ui/ContextMenu';
+import type { MenuItemProps } from '../ui/Menu';
 import { DRAG_THRESHOLD_PX, dropIndex, tabIcon, tabLabel, type TabSpan } from './tab-bar-model';
 import { edgeZone } from './split-model';
 
@@ -43,6 +45,8 @@ export interface TabBarProps {
    * side. `end` is the second pane's side (right in English, left in Arabic).
    */
   onDropToEdge?: (id: string, side: 'start' | 'end') => void;
+  /** KEY-425 (WS-9): opens a tab side by side from its right-click menu. */
+  onOpenBeside?: (id: string) => void;
 }
 
 /** How far below the bar the pointer must go before a dragged tab counts as pulled out of it. */
@@ -63,7 +67,7 @@ function previewOrder(tabs: WorkspaceTab[], drag: DragState | null): WorkspaceTa
   return [...rest.slice(0, drag.target), dragged, ...rest.slice(drag.target)];
 }
 
-export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot, renderQuickOpen, onDropToEdge }) => {
+export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActivate, onClose, onMove, onNew, asleep, playing, endSlot, renderQuickOpen, onDropToEdge, onOpenBeside }) => {
   const listRef = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
@@ -188,9 +192,20 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
           const label = tabLabel(tab, t);
           const active = tab.id === activeId;
           const dragging = drag?.moved && drag.id === tab.id;
+          const tabMenuItems = (): MenuItemProps[] => {
+            if (!onOpenBeside || tabs.length < 2) return [];
+            return [{
+              id: 'open-beside',
+              label: t('workspaceTabOpenBeside'),
+              icon: <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />,
+              onClick: () => onOpenBeside(tab.id),
+            }];
+          };
           return (
-            <div
+            <ContextMenu
+              as="div"
               key={tab.id}
+              onOpenMenu={tabMenuItems}
               role="tab"
               data-tab-id={tab.id}
               data-tab-view={location.view}
@@ -230,7 +245,7 @@ export const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, dir, t, onActiva
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>
-            </div>
+            </ContextMenu>
           );
         })}
       </div>

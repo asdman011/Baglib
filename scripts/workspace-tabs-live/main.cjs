@@ -186,6 +186,44 @@ app.on('browser-window-created', (_, win) => {
       await evaluate(`[...document.querySelectorAll('[data-quick-open-item=recent]')].find(item => item.textContent.includes(${bookKey})).click()`);
       await until(`document.querySelectorAll('[data-workspace-tab-row] [data-tab-id]').length===${tabsBefore + 1} && !!${visiblePanel}?.querySelector('[data-reader-go-to]')`);
       assert.equal(await evaluate(`document.querySelector('[data-workspace-tab-row] [aria-selected="true"]').getAttribute('title')`), book.title, 'the new tab is on the book');
+
+      // KEY-425: reader and research editor side by side, click each pane, drag the divider, close the split.
+      const readerSplitTab = await activeId();
+      key('T', ['control']);
+      await until(`document.querySelectorAll('[data-workspace-tab-row] [data-tab-id]').length===${tabsBefore + 2} && !!document.querySelector('[data-nav-item="notes-editor"]')`);
+      const editorSplitTab = await activeId();
+      await click('[data-nav-item="notes-editor"]');
+      await until(`!!${visiblePanel}?.querySelector('iframe')`);
+      await evaluate(`(() => { const t = document.querySelector('[data-tab-id="${readerSplitTab}"]'); const r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); })()`);
+      await until("document.querySelectorAll('[role=\"menuitem\"]').length >= 1");
+      await click('[role="menuitem"]');
+      await until("document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels') === 'split'");
+      await until(`!!document.querySelector('[data-tab-panel="${readerSplitTab}"][data-split-pane]') && !!document.querySelector('[data-tab-panel="${editorSplitTab}"][data-split-pane]')`);
+      await shot(`${language}-6c-split`);
+      const readerBox = await evaluate(`(() => { const r = document.querySelector('[data-tab-panel="${readerSplitTab}"]').getBoundingClientRect(); return { x: Math.round(r.left + 40), y: Math.round(r.top + 80) }; })()`);
+      win.webContents.sendInputEvent({ type: 'mouseDown', x: readerBox.x, y: readerBox.y, button: 'left', clickCount: 1 });
+      win.webContents.sendInputEvent({ type: 'mouseUp', x: readerBox.x, y: readerBox.y, button: 'left', clickCount: 1 });
+      await until(`document.querySelector('[data-tab-panel="${readerSplitTab}"]')?.hasAttribute('data-focused') && document.querySelector('[data-workspace-tab-row] [aria-selected="true"]')?.dataset.tabId === ${JSON.stringify(readerSplitTab)}`);
+      const editorBox = await evaluate(`(() => { const r = document.querySelector('[data-tab-panel="${editorSplitTab}"]').getBoundingClientRect(); return { x: Math.round(r.left + 40), y: Math.round(r.top + 80) }; })()`);
+      win.webContents.sendInputEvent({ type: 'mouseDown', x: editorBox.x, y: editorBox.y, button: 'left', clickCount: 1 });
+      win.webContents.sendInputEvent({ type: 'mouseUp', x: editorBox.x, y: editorBox.y, button: 'left', clickCount: 1 });
+      await until(`document.querySelector('[data-tab-panel="${editorSplitTab}"]')?.hasAttribute('data-focused') && document.querySelector('[data-workspace-tab-row] [aria-selected="true"]')?.dataset.tabId === ${JSON.stringify(editorSplitTab)}`);
+      const divBox = await evaluate("(() => { const r = document.querySelector('[data-split-divider]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), before: document.querySelector('[data-split-divider]').getAttribute('aria-valuenow') }; })()");
+      const divTargetX = divBox.x + (rtl ? -140 : 140);
+      win.webContents.sendInputEvent({ type: 'mouseMove', x: divBox.x, y: divBox.y });
+      await pause(30);
+      win.webContents.sendInputEvent({ type: 'mouseDown', x: divBox.x, y: divBox.y, button: 'left', clickCount: 1 });
+      await pause(50);
+      for (let step = 1; step <= 8; step++) {
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(divBox.x + (divTargetX - divBox.x) * step / 8), y: divBox.y, button: 'left', modifiers: ['leftButtonDown'] });
+        await pause(25);
+      }
+      win.webContents.sendInputEvent({ type: 'mouseUp', x: divTargetX, y: divBox.y, button: 'left', clickCount: 1 });
+      await until(`document.querySelector('[data-split-divider]')?.getAttribute('aria-valuenow') !== ${JSON.stringify(divBox.before)}`);
+      await shot(`${language}-6d-split-dragged`);
+      await click('[data-split-close]');
+      await until("document.querySelector('[data-tab-panels]')?.getAttribute('data-tab-panels') === 'single' && document.querySelectorAll('[data-tab-panel]:not([hidden])').length === 1");
+
       // Narrow window: the bar scrolls sideways and the page never does.
       win.setContentSize(480, 900);
       await until('innerWidth <= 500');

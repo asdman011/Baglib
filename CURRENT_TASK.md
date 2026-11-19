@@ -1,3 +1,21 @@
+## KEY-425 (WS-9): side-by-side split view finished — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/layout/TabBar.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/translations.ts`:
+  - Wrapped each tab in `ContextMenu` (`as="div"`) and added **"Open beside"** (`workspaceTabOpenBeside`: `"فتح جنبًا إلى جنب"` / `"Open beside"`) when at least two tabs exist (`tabs.length >= 2`), wired to `useTabs().dispatchTabs({ type: 'openBeside', id })` (using the most recently active partner tab when right-clicking the active tab itself).
+- `src/renderer/components/layout/SplitPanes.tsx`:
+  - Added `draggingRef` and `window` `pointermove` / `pointerup` / `pointercancel` listeners during active divider drag so resizing stays responsive across fast pointer moves and over `iframe` panes.
+- `tests/ui/workspace-tabs-wiring.test.ts`: added unit test for "Open beside" visibility and split activation.
+- `scripts/workspace-tabs-live/main.cjs`: extended with the KEY-425 split step (reader + Research Editor side by side via right-click menu, click each pane to verify focus, drag divider, close split) in `ar` and `en`.
+
+**Tests:**
+- Focused (`workspace-tabs-wiring`): 12/12 pass.
+- Full suite (`npm test -- --test-concurrency=2`): 2,809/2,809 pass (396 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `eslint` on touched files: 0 errors. `git diff --check`: clean.
+- Live Electron run (`node scripts/workspace-tabs-live/run.mjs`): PASS in `ar` and `en` (screenshots `ar-6c-split.png`, `ar-6d-split-dragged.png`, `en-6c-split.png`, `en-6d-split-dragged.png` in `.baglib-data/key419-evidence/`, 0 renderer errors, throwaway profile removed).
+
+**Files:** `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-425.md`, `scripts/workspace-tabs-live/main.cjs`, `src/renderer/components/layout/SplitPanes.tsx`, `src/renderer/components/layout/TabBar.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/translations.ts`, `tests/ui/workspace-tabs-wiring.test.ts`.
+
 ## KEY-421 (WS-5): content links open in a new tab by default, Ctrl/middle-click flip, right-click menu, and workspace links setting - 2026-11-19 - Agent: Antigravity
 
 **Done:**
