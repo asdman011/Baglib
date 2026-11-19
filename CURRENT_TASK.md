@@ -1,3 +1,47 @@
+## Test runs can no longer hang - 2026-11-19 - Agent: Claude Code
+
+**Request.** The user asked why two test runs hung today, and to fix it.
+
+**Cause:**
+1. 11:50 and 12:50 (KEY-418): Antigravity's throwaway `.baglib-data/mem-check.cjs`, which isn't in the repo, threw on a failed step without quitting Electron, so the window stayed open and the agent waited on it.
+2. 16:54 (KEY-424, Antigravity): a full `npm test` run sat idle for over two hours. `scripts/test-runner.js` had no per-test limit, no overall limit, and no force-exit, so one stuck test or an open handle (a timer or listener left by a test) blocked the run forever. The wiring test that was being changed passes 15/15 now, so the hang came from a half-finished work state. The exact test can't be recovered, because the hung process was stopped.
+
+**Fix (`scripts/test-runner.js`):**
+- Each test now fails after 2 minutes, by default `--test-timeout=120000`, with its name in the report.
+- `--test-force-exit` ends the run once the tests finish, even with open handles.
+- The whole run is killed, as a process tree, after 45 minutes with exit code 124. `BAGLIB_TEST_RUN_TIMEOUT_MS` overrides it, and 0 turns it off.
+- Any flags you pass still win.
+
+**Tests:**
+- A normal run passes (51/51 across two files).
+- A deliberately hanging test file (a promise that never settles, plus a test that leaves an interval open) now fails in 1 second with exit 1, instead of hanging. The probe file was deleted.
+
+**Harness rule (the first cause):** every Electron live script needs a hard timeout and must quit on error. The briefs for KEY-423, KEY-421 and the queue already say so.
+## KEY-424 (WS-8): per-view snapshots and save-before-sleep — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`:
+  - Wired `registerTabSnapshot` and `saveTabSnapshot(tabId)` in `TabsProvider` and `TabScope`: runs the view's `saveState()` before sleeping (and on a 3s `.unref()`-ed active-tab interval), sanitizes the `ViewSnapshot` with `sanitizeSnapshot`, captures `[data-tab-panel]` / `[data-tab-scroll]` scroll offset, and persists via `{ type: 'update', id, patch: { snapshot, scroll } }`.
+  - If `saveState()` rejects or throws, `saveTabSnapshot` returns `false`, keeping the tab awake via `useTabKeepAlive`.
+  - On mount/wake (`registerSnapshot`), restores any saved `location.snapshot` via `restoreState(snapshot)`. Exported `useTabOptional()`.
+  - Added `useOpenDialogTabs()` in `WorkspaceTabs.tsx` so tabs with an open `[role="dialog"]` or `[aria-modal="true"]` never sleep, and replaced `saveGenericSnapshot` with `saveTabSnapshot`.
+- Wired `registerSnapshot` + `readSnapshot` into:
+  - `src/renderer/components/research/ResearchEditorView.tsx`: runs `host.bridge.explicitSave()` before sleeping (failed save keeps tab awake) and saves/restores `{ manuscriptId, chapterId, docMode, isSidebarCollapsed, isRightPanelOpen, zoomLevel }`.
+  - `src/renderer/components/notes/NoteEditorPane.tsx`: runs `handleSave()` when `isDirty` before sleeping (returning `boolean`, throwing on failure to keep tab awake) and saves `{ noteId }`.
+  - `src/renderer/components/reader/FullPageBookReader.tsx`: saves/restores `{ workId, sourceId, readingPage, splitOrientation }`.
+  - `src/renderer/components/quran/QuranReaderView.tsx`: saves/restores `{ panelOpen, inspected, pageNumber }`.
+  - `src/renderer/components/lectures/LecturesView.tsx`: saves/restores `{ lectureId, seek }`.
+  - `src/renderer/components/layout/SettingsDirectory.tsx`: saves/restores `{ query, panel }`.
+- `tests/ui/workspace-tabs-wiring.test.ts`: added unit test verifying snapshot save/restore on sleep/wake, failed-save keeping the tab awake, and open-dialog exemption.
+
+**Tests:**
+- Focused (`workspace-tabs-wiring`, `workspace-tabs`): 60/60 pass.
+- Full suite (`npm test -- --test-concurrency=2`): 2,812/2,812 pass (396 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `eslint`: 0 errors on newly edited files. `git diff --check`: clean.
+- Live Electron runs: `scripts/workspace-tabs-live/run.mjs` PASS in `ar` and `en`; `scripts/workspace-restore-live/run.mjs` PASS in `ar` and `en` (0 renderer errors, throwaway profiles removed).
+
+**Files:** `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-424.md`, `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/layout/SettingsDirectory.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/components/lectures/LecturesView.tsx`, `src/renderer/components/notes/NoteEditorPane.tsx`, `src/renderer/components/quran/QuranReaderView.tsx`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/research/ResearchEditorView.tsx`, `tests/ui/workspace-tabs-wiring.test.ts`.
+
 ## KEY-426 (WS-11): tab groups UI — 2026-11-19 - Agent: Antigravity
 
 **Done:**
