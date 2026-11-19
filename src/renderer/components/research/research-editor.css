@@ -625,6 +625,40 @@
 }
 
 /* Edgeless Bottom Controls (Screenshot 1.png & 2.png) */
+.research-canvas-actions-bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 3.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background-color: var(--color-surface-panel, rgba(28, 28, 28, 0.9));
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 0.75rem;
+  padding: 0.3rem 0.45rem;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35), 0 4px 8px -2px rgba(0, 0, 0, 0.2);
+  z-index: 25;
+}
+
+.research-zoom-controls-dock {
+  position: absolute;
+  inset-inline-start: 1.5rem;
+  bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background-color: var(--color-surface-panel, rgba(32, 32, 32, 0.85));
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.4rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-size: 0.75rem;
+  z-index: 25;
+}
+
 .research-edgeless-container {
   position: absolute;
   inset-inline: 0;
