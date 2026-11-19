@@ -22,7 +22,7 @@ import { consumeSunnahReference, isTabEventTarget } from '../../utils/study-navi
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { useCompanionContext } from '../../utils/companion-context';
 import { validStudyTarget } from '../../../shared/study-notes';
-import { navigateStudyReference } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { usePersonalLists, useListFilter } from '../../libs/personal-lists';
 import { ListFilterBar } from '../lists/PersonalListControls';
 export { collectionKeys };
@@ -56,6 +56,7 @@ function restorePosition(): Position {
 
 export function SunnahView() {
   const { t, lang, dir } = useWorkspace();
+  const { openLink } = useOpenStudyLink();
   // KEY-386: "in list" filter for hadith; the list chips on each hadith set it.
   const { lists } = usePersonalLists();
   const listFilter = useListFilter('hadith');
@@ -303,7 +304,7 @@ export function SunnahView() {
           <label className="sunnah-search"><Search size={16} /><input type="search" maxLength={500} value={query} onChange={event => { setQuery(event.target.value); setVisibleCount(24); }} placeholder={t(catalog.research ? 'sunnahResearchSearch' : 'sunnahBasicSearch')} aria-label={t(catalog.research ? 'sunnahResearchSearch' : 'sunnahBasicSearch')} disabled={loading || importing} /></label>
         </div>
       </div>}
-      {catalog && <ListFilterBar kind="hadith" lists={lists} filter={listFilter} className="px-5 pb-3" onOpen={item => { void navigateStudyReference(item.itemRef, [], () => undefined, () => undefined).catch(() => undefined); }} />}
+      {catalog && <ListFilterBar kind="hadith" lists={lists} filter={listFilter} className="px-5 pb-3" onOpen={(item, options) => { void openLink(item.itemRef, { ...options, title: item.label }).catch(() => undefined); }} />}
       {error && <div role="alert" className="sunnah-message text-amber-700 dark:text-amber-300"><p>{t(error)}</p><button type="button" className="sunnah-button" onClick={() => setRetry(value => value + 1)}>{t('sunnahRetry')}</button></div>}
       {(loading || importing) && <div role="status" className="sunnah-message"><LoaderCircle size={24} className="animate-spin" /><p>{t(importing || !catalog ? 'sunnahPreparing' : 'sunnahLoading')}</p></div>}
       {!loading && !importing && !catalog && <div className="sunnah-welcome"><BookOpenText size={42} /><h2>{t('sunnahWelcome')}</h2><p>{t('sunnahImportHint')}</p><button type="button" className="sunnah-button" onClick={() => void importCorpus()}><Upload size={17} />{t('sunnahImport')}</button></div>}

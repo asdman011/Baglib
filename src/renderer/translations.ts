@@ -6218,6 +6218,11 @@ export const translations = {
     settingWorkspaceAfterRestore: "بعد الاستعادة، اعرض",
     settingWorkspaceShowNewHome: "علامة تبويب رئيسية جديدة",
     settingWorkspaceShowLastTab: "آخر علامة تبويب كنت عليها",
+    settingWorkspaceLinks: "فتح الروابط في",
+    settingWorkspaceLinksNewTab: "علامة تبويب جديدة",
+    settingWorkspaceLinksSameTab: "نفس علامة التبويب",
+    ctxOpenInNewTab: "فتح في علامة تبويب جديدة",
+    ctxOpenHere: "فتح هنا",
   },
   en: {
     ...researchEditorTranslations.en,
@@ -12437,6 +12442,11 @@ export const translations = {
     settingWorkspaceAfterRestore: "After restoring, show",
     settingWorkspaceShowNewHome: "A new Home tab",
     settingWorkspaceShowLastTab: "The tab I was on last",
+    settingWorkspaceLinks: "Open links in",
+    settingWorkspaceLinksNewTab: "A new tab",
+    settingWorkspaceLinksSameTab: "The same tab",
+    ctxOpenInNewTab: "Open in new tab",
+    ctxOpenHere: "Open here",
   }
 };
 

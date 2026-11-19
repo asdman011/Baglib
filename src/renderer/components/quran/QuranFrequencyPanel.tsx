@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { navigateStudyReference } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { LexiconDeckDialog } from '../knowledge/LexiconDeckDialog';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { QuranFrequency, QuranFrequencyFamily, QuranFrequencyPlace } from '../../../shared/types/quran';
@@ -12,6 +13,7 @@ const control = 'rounded-lg border border-subtle bg-surface p-2 text-sm text-mai
 
 export function QuranFrequencyPanel() {
   const { t, dir, lang } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [family, setFamily] = useState<QuranFrequencyFamily>('root');
   const [text, setText] = useState('');
   const [surah, setSurah] = useState(0);
@@ -122,7 +124,10 @@ export function QuranFrequencyPanel() {
               {st.message}
             </p>
           )}
-          {open?.text === row.text && <div className="flex flex-wrap gap-2 p-2" dir="ltr">{open.places.map(place => <button key={`${place.surah}:${place.ayah}`} type="button" className="text-xs underline" onClick={() => void navigateStudyReference(`quran:hafs:${place.surah}:${place.ayah}`, [], () => {}, () => {}).catch(() => {})}>{place.surah}:{place.ayah}{place.count > 1 && ` ×${place.count}`}</button>)}</div>}
+          {open?.text === row.text && <div className="flex flex-wrap gap-2 p-2" dir="ltr">{open.places.map(place => {
+            const target = `quran:hafs:${place.surah}:${place.ayah}`;
+            return <ContextMenu as="span" tabIndex={-1} key={`${place.surah}:${place.ayah}`} className="inline" items={linkMenuItems(target)}><button type="button" className="text-xs underline" {...linkHandlers(target)}>{place.surah}:{place.ayah}{place.count > 1 && ` ×${place.count}`}</button></ContextMenu>;
+          })}</div>}
         </li>;
       })}</ol>
     </div>

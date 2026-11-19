@@ -45,7 +45,8 @@ import {
 } from '../../../shared/boards';
 import { studyLinks, type StudyNote } from '../../../shared/study-notes';
 import type { TranslationKey } from '../../translations';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { openStudyNote } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { Button, IconButton } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 
@@ -80,13 +81,16 @@ function BoardItemContext({ item, onEdit, onRemove, ...props }: Omit<React.Compo
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  const { t, books, openBookForReading } = useWorkspace();
-  return <ContextMenu {...props} items={contextActions('board', {
-    open: item.target ? () => navigateStudyReference(item.target!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })) : undefined,
+  const { t } = useWorkspace();
+  const { openLink, linkMenuItems } = useOpenStudyLink();
+  const baseItems = contextActions('board', {
+    open: item.target ? () => void openLink(item.target!).catch(() => {}) : undefined,
     copy: () => navigator.clipboard.writeText(item.text || item.label || ''),
     edit: onEdit,
     delete: onRemove,
-  }, t)} />;
+  }, t);
+  const items = item.target ? [...linkMenuItems(item.target), ...baseItems.filter(entry => entry.id !== 'open')] : baseItems;
+  return <ContextMenu {...props} items={items} />;
 }
 
 /** The board surface: cards, sticky notes and labelled arrows; pan by dragging the background, zoom with the wheel. */
@@ -101,7 +105,8 @@ function BoardCanvas({
   onBack: () => void;
   onSaved: (board: Board) => void;
 }) {
-  const { t, dir, books, openBookForReading, setViewMode } = useWorkspace();
+  const { t, dir, setViewMode } = useWorkspace();
+  const { linkHandlers } = useOpenStudyLink();
   const [board, setBoard] = useState(initial);
   const history = useRef(createBoardHistory(initial));
   const boardRef = useRef(initial);
@@ -873,14 +878,7 @@ function BoardCanvas({
                       data-board-open
                       className="shrink-0 rounded bg-surface/80 px-1.5 text-primary-text hover:underline"
                       onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => {
-                        void navigateStudyReference(
-                          item.target!,
-                          books,
-                          openBookForReading,
-                          (id, anchor) => openStudyNote({ id, anchor })
-                        ).catch(() => {});
-                      }}
+                      {...linkHandlers(item.target!)}
                     >
                       {t('boardsOpenLink')}
                     </button>

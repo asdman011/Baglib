@@ -7,7 +7,8 @@ import { Skeleton } from '../ui/Skeleton';
 import { NoteHistory } from '../notes/NoteHistory';
 import { COMMENTARY_KINDS, type CommentaryEntry, type CommentaryKind } from '../../../shared/personal-commentary';
 import { validStudyTarget } from '../../../shared/study-notes';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 
 /** KEY-251: a commentary reference that names a readable source (an ayah, a note, a book, a hadith) opens it. */
 export function commentaryStudyTarget(reference: string): string | null {
@@ -20,7 +21,8 @@ const KIND_LABELS = { reflection: 'commentaryReflection', question: 'commentaryQ
 
 /** The user's own words on a source. With no `reference` it only searches all of them. */
 export function PersonalCommentary({ reference }: { reference?: string }) {
-  const { t, books, openBookForReading } = useWorkspace();
+  const { t } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [entries, setEntries] = useState<CommentaryEntry[]>([]);
   const [query, setQuery] = useState('');
   const [text, setText] = useState('');
@@ -71,7 +73,7 @@ export function PersonalCommentary({ reference }: { reference?: string }) {
         {entries.map(entry => <li key={entry.id} data-commentary-entry={entry.id} className="rounded border border-subtle p-2">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs text-muted">{t(KIND_LABELS[entry.kind])}{entry.reference !== reference && <> · {commentaryStudyTarget(entry.reference)
-              ? <button type="button" data-commentary-open={entry.reference} className="underline" onClick={() => void navigateStudyReference(commentaryStudyTarget(entry.reference)!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => setFailed(true))}><bdi>{entry.reference}</bdi></button>
+              ? <ContextMenu as="span" tabIndex={-1} className="inline" items={linkMenuItems(commentaryStudyTarget(entry.reference)!, { onError: () => setFailed(true) })}><button type="button" data-commentary-open={entry.reference} className="underline" {...linkHandlers(commentaryStudyTarget(entry.reference)!, { onError: () => setFailed(true) })}><bdi>{entry.reference}</bdi></button></ContextMenu>
               : <bdi>{entry.reference}</bdi>}</>}</p>
             <button type="button" onClick={() => void act(() => window.electronAPI.commentary.remove(entry.id))} title={t('savedCardsDelete')} aria-label={t('savedCardsDelete')} className="shrink-0 rounded p-1 text-muted hover:bg-canvas"><Trash2 className="size-3.5" /></button>
           </div>

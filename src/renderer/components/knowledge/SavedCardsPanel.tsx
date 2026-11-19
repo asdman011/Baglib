@@ -5,7 +5,7 @@ import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Repeat2, Search, Sparkles, BookOpen, Layers } from 'lucide-react';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { CARD_HOVER_SETTING, cardHoverEnabled, KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { KnowledgeCard, PreservedKnowledge } from '../../../shared/types/knowledge-cards';
@@ -32,7 +32,8 @@ export function SavedCardsPanel({
   onStartReview?: (deckId?: string | null) => void;
   initialSearch?: string;
 }) {
-  const { t, dir, books, openBookForReading } = useWorkspace();
+  const { t, dir } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const removeWithUndo = useUndoFeedback();
   const [editing, setEditing] = useState<string | null>(null);
   const [practicing, setPracticing] = useState<string | null>(null);
@@ -278,22 +279,17 @@ export function SavedCardsPanel({
 
                   {card.sourceRef && (
                     <div className="flex items-center gap-2 text-xs">
-                      <button
-                        type="button"
-                        data-card-source={card.id}
-                        className="inline-flex items-center gap-1.5 text-primary-text hover:underline"
-                        onClick={() =>
-                          void navigateStudyReference(
-                            card.sourceRef!,
-                            books,
-                            openBookForReading,
-                            (id, anchor) => openStudyNote({ id, anchor })
-                          ).catch(() => setFailed(true))
-                        }
-                      >
-                        <BookOpen className="size-3" />
-                        <span>{t('practiceOpenSource')}</span>
-                      </button>
+                      <ContextMenu as="span" tabIndex={-1} className="inline" items={linkMenuItems(card.sourceRef, { onError: () => setFailed(true) })}>
+                        <button
+                          type="button"
+                          data-card-source={card.id}
+                          className="inline-flex items-center gap-1.5 text-primary-text hover:underline"
+                          {...linkHandlers(card.sourceRef, { onError: () => setFailed(true) })}
+                        >
+                          <BookOpen className="size-3" />
+                          <span>{t('practiceOpenSource')}</span>
+                        </button>
+                      </ContextMenu>
                       {card.sourceLabel && (
                         <span dir="auto" className="text-muted">
                           · {card.sourceLabel}

@@ -20,6 +20,7 @@ import type { TranslationKey } from '../../translations';
 import { STARRED_LIST_ID, type PersonalList, type PersonalListItem, type PersonalListItemKind } from '../../../shared/personal-lists';
 import { personalLists, useListFilter, useListMembership, usePersonalLists } from '../../libs/personal-lists';
 import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink, type LinkOpenOptions } from '../../utils/use-study-link';
 
 export interface ListItemInput {
   kind: PersonalListItemKind;
@@ -327,8 +328,9 @@ type Filter = ReturnType<typeof useListFilter>;
  * A section's "in list" filter: only lists that hold this kind (plus any already chosen), any/all
  * when two or more are chosen. With `items`, the matching items are listed and open on click.
  */
-export function ListFilterBar({ kind, lists, filter, onOpen, className = '' }: { kind: PersonalListItemKind; lists: PersonalList[]; filter: Filter; onOpen?: (item: PersonalListItem) => void; className?: string }) {
+export function ListFilterBar({ kind, lists, filter, onOpen, className = '' }: { kind: PersonalListItemKind; lists: PersonalList[]; filter: Filter; onOpen?: (item: PersonalListItem, options?: LinkOpenOptions) => void; className?: string }) {
   const { t } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const offered = lists.filter(l => l.counts[kind] > 0 || filter.chosen.includes(l.id));
   const [items, setItems] = useState<PersonalListItem[]>([]);
   const refsKey = filter.refs ? [...filter.refs].join('\n') : '';
@@ -381,12 +383,12 @@ export function ListFilterBar({ kind, lists, filter, onOpen, className = '' }: {
         <ul className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-subtle bg-surface p-1.5" data-list-filter-results={kind}>
           {shownItems.length === 0 && <li className="px-2 py-1.5 text-xs text-muted">{t('listsFilterEmpty')}</li>}
           {shownItems.map(item => (
-            <li key={item.itemRef}>
-              <button type="button" data-list-filter-result={item.itemRef} onClick={() => onOpen(item)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-main hover:bg-canvas">
+            <ContextMenu as="li" tabIndex={-1} key={item.itemRef} items={linkMenuItems(item.itemRef, { title: item.label, onOpen: opts => onOpen(item, opts) })}>
+              <button type="button" data-list-filter-result={item.itemRef} {...linkHandlers(item.itemRef, { title: item.label, onOpen: opts => onOpen(item, opts) })} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-main hover:bg-canvas">
                 <Icon className="size-4 shrink-0 text-muted" />
                 <span className="line-clamp-2" dir="auto">{item.label || item.itemRef}</span>
               </button>
-            </li>
+            </ContextMenu>
           ))}
         </ul>
       )}
@@ -394,13 +396,14 @@ export function ListFilterBar({ kind, lists, filter, onOpen, className = '' }: {
   );
 }
 
-/** Wraps a search hit so its right-click menu offers Star and "Add to list". */
-export function ListContextMenu({ item, children, className }: { item: ListItemInput; children: React.ReactNode; className?: string }) {
+/** Wraps a search hit so its right-click menu offers Star and "Add to list" (and optional extra actions). */
+export function ListContextMenu({ item, extraItems, children, className }: { item: ListItemInput; extraItems?: MenuItemProps[]; children: React.ReactNode; className?: string }) {
   const { t } = useWorkspace();
   const { lists } = usePersonalLists();
   const membership = useListMembership(item.kind, [item.itemRef]);
+  const items = [...(extraItems ?? []), ...listMenuItems(item, lists, membership[item.itemRef] ?? [], t)];
   return (
-    <ContextMenu items={listMenuItems(item, lists, membership[item.itemRef] ?? [], t)} tabIndex={-1} className={className} data-list-context={item.itemRef}>
+    <ContextMenu items={items} tabIndex={-1} className={className} data-list-context={item.itemRef}>
       {children}
     </ContextMenu>
   );

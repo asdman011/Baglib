@@ -5,13 +5,15 @@ import type { SunnahCatalog, SunnahCollectionId, SunnahSearchHit, SunnahStatisti
 import { sunnahSubjects } from '../../../shared/sunnah-subjects';
 import { matchesStudyQuery } from '../../../shared/study-notes';
 import { collectionKeys } from '../../utils/sunnah-collections';
-import { openSunnahReference } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import type { SunnahTranslate } from './SunnahChapterView';
 import { SunnahNarratorCard } from './SunnahNarratorCard';
 
 const SHOWN_SUBJECTS = 60;
 
 export function SunnahInsightsPanel({ catalog, lang, t, onChapter }: { catalog: SunnahCatalog; lang: 'ar' | 'en'; t: SunnahTranslate; onChapter: (collection: SunnahCollectionId, chapter: number) => void }) {
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [tab, setTab] = useState<'subjects' | 'statistics'>('subjects');
   const [stats, setStats] = useState<SunnahStatistics | null>(null);
   const [failed, setFailed] = useState(false);
@@ -59,7 +61,7 @@ export function SunnahInsightsPanel({ catalog, lang, t, onChapter }: { catalog: 
           <tbody>{stats.collections.map(row => <tr key={row.id}><th scope="row">{t(collectionKeys[row.id])}</th><td>{number.format(row.hadiths)}</td><td>{number.format(row.chapters)}</td><td>{number.format(row.commentary)}</td><td>{number.format(row.corroborated)}</td></tr>)}</tbody>
         </table></div>
         <h3 className="sunnah-insights-heading">{t('sunnahTopNarrators')}</h3>
-        <ol className="sunnah-subjects">{stats.topNarrators.map(row => <li key={row.id}><button type="button" aria-expanded={narrator === row.id} onClick={() => { setHits([]); setNarrator(current => current === row.id ? null : row.id); }}><span dir="rtl" lang="ar">{row.name}</span><small>{number.format(row.mentions)}</small></button>{narrator === row.id && <SunnahNarratorCard key={row.id} id={row.id} t={t} onHadiths={showHadiths} />}{narrator === row.id && hits.length > 0 && <div className="sunnah-research-results">{hits.slice(0, 30).map(hit => <button type="button" key={hit.hadith.id} onClick={() => openSunnahReference({ collection: hit.chapter.collection, chapter: hit.chapter.number, hadith: hit.hadith.id })}><span>{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 180)}</span></button>)}</div>}</li>)}</ol>
+        <ol className="sunnah-subjects">{stats.topNarrators.map(row => <li key={row.id}><button type="button" aria-expanded={narrator === row.id} onClick={() => { setHits([]); setNarrator(current => current === row.id ? null : row.id); }}><span dir="rtl" lang="ar">{row.name}</span><small>{number.format(row.mentions)}</small></button>{narrator === row.id && <SunnahNarratorCard key={row.id} id={row.id} t={t} onHadiths={showHadiths} />}{narrator === row.id && hits.length > 0 && <div className="sunnah-research-results">{hits.slice(0, 30).map(hit => { const target = `sunnah:${hit.chapter.collection}:${hit.chapter.number}:${hit.hadith.id}`; return <ContextMenu as="div" tabIndex={-1} key={hit.hadith.id} items={linkMenuItems(target)}><button type="button" {...linkHandlers(target)}><span>{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 180)}</span></button></ContextMenu>; })}</div>}</li>)}</ol>
       </>}
     </>}
   </section>;

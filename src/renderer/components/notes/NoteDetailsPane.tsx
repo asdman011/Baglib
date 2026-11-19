@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { IconButton } from '../ui/Button';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink, type LinkOpenOptions } from '../../utils/use-study-link';
 import { NoteHistory } from './NoteHistory';
 import { NoteManuscriptLinks } from './NoteManuscriptLinks';
 import { KnowledgeTools } from './KnowledgeTools';
@@ -18,7 +20,7 @@ import { studyBacklinks, studyLinks, studyNoteExcerpt, type StudyNote } from '..
 export interface NoteDetailsPaneProps {
   note: StudyNote;
   notes: StudyNote[];
-  onOpenTarget: (target: string) => void;
+  onOpenTarget: (target: string, options?: LinkOpenOptions) => void;
   onRefresh: () => void;
   onClose: () => void;
 }
@@ -31,6 +33,7 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
   onClose,
 }) => {
   const { t, dir } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [activeTab, setActiveTab] = useState<'links' | 'history' | 'questions'>('links');
 
   const backlinks = studyBacklinks(notes, `note:${note.id}`);
@@ -124,23 +127,27 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
                 <p className="text-muted text-[11px] py-1">{t('notesNoLinks')}</p>
               ) : (
                 <ul className="space-y-1.5">
-                  {backlinks.map((link) => (
-                    <li key={link.id}>
-                      <button
-                        type="button"
-                        onClick={() => onOpenTarget(`note:${link.id}`)}
-                        dir="auto"
-                        className="w-full text-start p-2 rounded-lg bg-canvas hover:bg-canvas/80 border border-subtle transition-colors group cursor-pointer block"
-                      >
-                        <span className="block font-medium text-main group-hover:text-primary-text truncate">
-                          {link.title || t('dashScratchpadGeneralNote')}
-                        </span>
-                        <span className="block text-[11px] text-muted truncate mt-0.5 line-clamp-1">
-                          {studyNoteExcerpt(link.content, 80)}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
+                  {backlinks.map((link) => {
+                    const target = `note:${link.id}`;
+                    const onOpen = (opts: LinkOpenOptions) => onOpenTarget(target, opts);
+                    return (
+                      <ContextMenu as="li" tabIndex={-1} key={link.id} items={linkMenuItems(target, { onOpen })}>
+                        <button
+                          type="button"
+                          {...linkHandlers(target, { onOpen })}
+                          dir="auto"
+                          className="w-full text-start p-2 rounded-lg bg-canvas hover:bg-canvas/80 border border-subtle transition-colors group cursor-pointer block"
+                        >
+                          <span className="block font-medium text-main group-hover:text-primary-text truncate">
+                            {link.title || t('dashScratchpadGeneralNote')}
+                          </span>
+                          <span className="block text-[11px] text-muted truncate mt-0.5 line-clamp-1">
+                            {studyNoteExcerpt(link.content, 80)}
+                          </span>
+                        </button>
+                      </ContextMenu>
+                    );
+                  })}
                 </ul>
               )}
             </section>
@@ -161,27 +168,30 @@ export const NoteDetailsPane: React.FC<NoteDetailsPaneProps> = ({
                 <p className="text-muted text-[11px] py-1">{t('notesNoLinks')}</p>
               ) : (
                 <ul className="space-y-1.5">
-                  {outgoingLinks.map((link) => (
-                    <li key={link.target}>
-                      <button
-                        type="button"
-                        onClick={() => onOpenTarget(link.target)}
-                        dir="auto"
-                        className="w-full text-start p-2 rounded-lg bg-canvas hover:bg-canvas/80 border border-subtle transition-colors group cursor-pointer block"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-medium text-primary-text truncate group-hover:underline">
-                            {link.label || link.target}
-                          </span>
-                        </div>
-                        {link.relation && (
-                          <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary-text">
-                            {link.relation}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
+                  {outgoingLinks.map((link) => {
+                    const onOpen = (opts: LinkOpenOptions) => onOpenTarget(link.target, opts);
+                    return (
+                      <ContextMenu as="li" tabIndex={-1} key={link.target} items={linkMenuItems(link.target, { onOpen })}>
+                        <button
+                          type="button"
+                          {...linkHandlers(link.target, { onOpen })}
+                          dir="auto"
+                          className="w-full text-start p-2 rounded-lg bg-canvas hover:bg-canvas/80 border border-subtle transition-colors group cursor-pointer block"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium text-primary-text truncate group-hover:underline">
+                              {link.label || link.target}
+                            </span>
+                          </div>
+                          {link.relation && (
+                            <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary-text">
+                              {link.relation}
+                            </span>
+                          )}
+                        </button>
+                      </ContextMenu>
+                    );
+                  })}
                 </ul>
               )}
             </section>

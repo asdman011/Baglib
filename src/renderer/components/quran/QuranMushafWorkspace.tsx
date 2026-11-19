@@ -28,7 +28,8 @@ import { QuranTopicDrawer } from './QuranTopicDrawer';
 import { QuranSimilarAyahsDrawer } from './QuranSimilarAyahsDrawer';
 import { QuranAyahDeckDialog } from './QuranAyahDeckDialog';
 import { collectionKeys } from '../../utils/sunnah-collections';
-import { openSunnahReference } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { groupThemeLabels } from './quran-theme-labels';
 import { quranStudyReferences } from '../../../shared/quran-study-scope';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
@@ -149,6 +150,7 @@ const labels: Record<Tool, TranslationKey> = {
   mutashabihat: 'quranCatMutashabihat', explore: 'quranReadingOptions',
 };
 function RootHadiths({ root, t }: { root: string; t: Props['t'] }) {
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [hits, setHits] = useState<SunnahSearchHit[] | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'failed'>('idle');
   const load = async () => {
@@ -163,7 +165,7 @@ function RootHadiths({ root, t }: { root: string; t: Props['t'] }) {
     <button type="button" aria-expanded={hits !== null} disabled={state === 'loading'} onClick={() => { if (hits) setHits(null); else void load(); }} className="text-xs underline">{t('quranRootHadiths')}</button>
     {state === 'loading' && <p role="status" className="text-xs">{t('quranLoading')}</p>}
     {state === 'failed' && <p role="alert" className="text-xs">{t('sunnahResearchError')}</p>}
-    {hits && (hits.length ? <><p className="text-xs text-muted">{t('sunnahRelatedLimit')}</p><ul>{hits.slice(0, 30).map(hit => <li key={hit.hadith.id}><button type="button" className="block w-full text-start py-1 border-b border-subtle" onClick={() => openSunnahReference({ collection: hit.chapter.collection, chapter: hit.chapter.number, hadith: hit.hadith.id })}><span className="block text-xs text-muted">{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar" className="block font-reading leading-loose">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 140)}</span></button></li>)}</ul></> : <p className="text-xs">{t('sunnahNoResults')}</p>)}
+    {hits && (hits.length ? <><p className="text-xs text-muted">{t('sunnahRelatedLimit')}</p><ul>{hits.slice(0, 30).map(hit => { const target = `sunnah:${hit.chapter.collection}:${hit.chapter.number}:${hit.hadith.id}`; return <ContextMenu as="li" tabIndex={-1} key={hit.hadith.id} items={linkMenuItems(target)}><button type="button" className="block w-full text-start py-1 border-b border-subtle" {...linkHandlers(target)}><span className="block text-xs text-muted">{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar" className="block font-reading leading-loose">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 140)}</span></button></ContextMenu>; })}</ul></> : <p className="text-xs">{t('sunnahNoResults')}</p>)}
   </div>;
 }
 

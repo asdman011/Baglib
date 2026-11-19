@@ -6,9 +6,10 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { buildKnowledgeGraph, connectionCount, filterByRelations, graphRelations, localGraph, type GraphNode, type GraphNodeKind, type KnowledgeGraph } from '../../../shared/knowledge-graph';
 import type { StudyNote } from '../../../shared/study-notes';
 import type { TranslationKey } from '../../translations';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
 import { relationLabel } from '../../utils/relation-labels';
+import { ContextMenu } from '../ui/ContextMenu';
 import { Modal } from '../ui/Modal';
+import { useOpenStudyLink, type LinkOpenOptions } from '../../utils/use-study-link';
 
 type Placed = GraphNode & SimulationNodeDatum & { x: number; y: number };
 type PlacedEdge = SimulationLinkDatum<Placed> & { source: Placed; target: Placed; kind: string; relation?: string };
@@ -46,7 +47,7 @@ function layout(graph: KnowledgeGraph, center: string | null): { nodes: Placed[]
 }
 
 function GraphDialog({ noteId, graph, onClose }: { noteId: string; graph: KnowledgeGraph; onClose: () => void }) {
-  const { t, books, openBookForReading } = useWorkspace();
+  const { t } = useWorkspace();
   const [whole, setWhole] = useState(false);
   const center = `note:${noteId}`;
   const scoped = useMemo(() => (whole ? graph : localGraph(graph, center)), [whole, graph, center]);
@@ -62,11 +63,11 @@ function GraphDialog({ noteId, graph, onClose }: { noteId: string; graph: Knowle
   const drag = useRef<{ x: number; y: number; box: [number, number, number, number] } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const dense = placed.nodes.length > 120;
+  const { openLink, linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [hovered, setHovered] = useState<string | null>(null);
-  const open = (node: GraphNode) => {
+  const open = (node: GraphNode, options?: LinkOpenOptions) => {
     if (!node.target) return;
-    onClose();
-    void navigateStudyReference(node.target, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => {});
+    void openLink(node.target, { ...options, onBeforeOpen: onClose }).catch(() => {});
   };
   const zoom = (event: React.WheelEvent) => {
     const factor = event.deltaY > 0 ? 1.15 : 1 / 1.15;
@@ -120,7 +121,7 @@ function GraphDialog({ noteId, graph, onClose }: { noteId: string; graph: Knowle
             const isCenter = node.id === center;
             const showLabel = !dense || isCenter || hovered === node.id;
             return <g key={node.id} data-graph-node={node.id} transform={`translate(${node.x},${node.y})`} className={node.target ? 'cursor-pointer' : undefined}
-              onPointerDown={event => event.stopPropagation()} onClick={() => open(node)} onMouseEnter={() => setHovered(node.id)} onMouseLeave={() => setHovered(null)}>
+              onPointerDown={event => event.stopPropagation()} onClick={event => open(node, { ctrl: event.ctrlKey, meta: event.metaKey })} onMouseDown={event => { if (event.button === 1) event.preventDefault(); }} onAuxClick={event => { if (event.button === 1) { event.preventDefault(); open(node, { middle: true }); } }} onMouseEnter={() => setHovered(node.id)} onMouseLeave={() => setHovered(null)}>
               <title>{`${t(kindKeys[node.kind])}: ${node.label}`}</title>
               <circle r={isCenter ? 13 : node.kind === 'tag' ? 6 : 9} fill={kindColors[node.kind]} stroke={isCenter ? 'currentColor' : 'none'} strokeWidth={2} />
               {showLabel && <text y={isCenter ? 28 : 22} textAnchor="middle" fontSize={isCenter ? 13 : 11} fill="currentColor" style={{ unicodeBidi: 'plaintext' }}>{node.label.length > 28 ? `${node.label.slice(0, 27)}…` : node.label}</text>}
@@ -134,10 +135,16 @@ function GraphDialog({ noteId, graph, onClose }: { noteId: string; graph: Knowle
       {/* The same connections as text, for keyboards and screen readers. */}
       <details className="border-t border-subtle px-4 py-2 text-xs">
         <summary>{t('graphListTitle', { count: neighbours.length })}</summary>
-        <ul data-graph-list className="mt-1 max-h-28 space-y-1 overflow-auto">{neighbours.map(({ node, relation, incoming }) => <li key={node.id} className="flex flex-wrap items-center gap-1">
-          {relation && <span data-graph-list-relation={relation} className="rounded bg-emerald-500/15 px-1.5 font-semibold text-emerald-700 dark:text-emerald-300" dir="auto">{incoming ? t('graphRelationIncoming', { relation: relationLabel(t, relation) }) : relationLabel(t, relation)}</span>}
-          <button type="button" disabled={!node.target} onClick={() => open(node)} className="underline disabled:no-underline" dir="auto">{t(kindKeys[node.kind])}: {node.label}</button>
-        </li>)}</ul>
+        <ul data-graph-list className="mt-1 max-h-28 space-y-1 overflow-auto">{neighbours.map(({ node, relation, incoming }) => {
+          const item = <li key={node.id} className="flex flex-wrap items-center gap-1">
+            {relation && <span data-graph-list-relation={relation} className="rounded bg-emerald-500/15 px-1.5 font-semibold text-emerald-700 dark:text-emerald-300" dir="auto">{incoming ? t('graphRelationIncoming', { relation: relationLabel(t, relation) }) : relationLabel(t, relation)}</span>}
+            <button type="button" disabled={!node.target} {...(node.target ? linkHandlers(node.target, { onBeforeOpen: onClose }) : {})} className="underline disabled:no-underline" dir="auto">{t(kindKeys[node.kind])}: {node.label}</button>
+          </li>;
+          return node.target ? <ContextMenu as="li" tabIndex={-1} key={node.id} items={linkMenuItems(node.target, { onBeforeOpen: onClose })} className="flex flex-wrap items-center gap-1">
+            {relation && <span data-graph-list-relation={relation} className="rounded bg-emerald-500/15 px-1.5 font-semibold text-emerald-700 dark:text-emerald-300" dir="auto">{incoming ? t('graphRelationIncoming', { relation: relationLabel(t, relation) }) : relationLabel(t, relation)}</span>}
+            <button type="button" {...linkHandlers(node.target, { onBeforeOpen: onClose })} className="underline" dir="auto">{t(kindKeys[node.kind])}: {node.label}</button>
+          </ContextMenu> : item;
+        })}</ul>
       </details>
     </div></Modal>
   </div>;

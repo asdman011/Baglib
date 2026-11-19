@@ -27,6 +27,7 @@ import { Chip } from '../ui/Chip';
 import { Menu } from '../ui/Menu';
 import { StudyNoteEditor, type StudyNoteEditorHandle } from './StudyNoteEditor';
 import { StudyNoteContent } from './StudyNoteContent';
+import type { LinkOpenOptions } from '../../utils/use-study-link';
 import { KnowledgeGraphButton } from './KnowledgeGraph';
 import { ItemListButtons } from '../lists/PersonalListControls';
 import { noteListRef } from '../../../shared/personal-lists';
@@ -55,7 +56,7 @@ export interface NoteEditorPaneProps {
   onTogglePanel?: () => void;
   draftKey?: string;
   /** KEY-320: open study links (note:, book:, quran: ...) through the parent's navigator. */
-  onOpenTarget?: (target: string) => void;
+  onOpenTarget?: (target: string, options?: LinkOpenOptions) => void;
   /** KEY-320: a paragraph to show; switches to preview so the parent can highlight it. */
   focusAnchor?: { anchor: string; at: number } | null;
 }
@@ -573,8 +574,8 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
             <StudyNoteContent
               content={content}
               notes={notes}
-              onOpen={(target) => {
-                if (onOpenTarget) { onOpenTarget(target); return; }
+              onOpen={(target, options) => {
+                if (onOpenTarget) { onOpenTarget(target, options); return; }
                 const parts = target.split(':');
                 if (parts[0] === 'book') {
                   const b = books.find((book) => book.id === parts[1]);

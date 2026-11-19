@@ -12,7 +12,7 @@ import { ContextMenu } from '../ui/ContextMenu';
 import { ListDeckDialog } from './ListDeckDialog';
 import type { PersonalList } from '../../../shared/personal-lists';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { PERSONAL_LIST_KINDS, STARRED_LIST_ID, matchListName, type PersonalListItem, type PersonalListItemKind } from '../../../shared/personal-lists';
 import { personalLists, usePersonalLists } from '../../libs/personal-lists';
 import { KIND_ICON, KIND_LABEL, createListWith, listName } from './PersonalListControls';
@@ -20,7 +20,8 @@ import { KIND_ICON, KIND_LABEL, createListWith, listName } from './PersonalListC
 const total = (counts: Record<PersonalListItemKind, number>) => PERSONAL_LIST_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
 
 export function PersonalListsHub() {
-  const { t, dir, books, openBookForReading } = useWorkspace();
+  const { t, dir } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const { lists } = usePersonalLists();
   const [selected, setSelected] = useState<string>(STARRED_LIST_ID);
   const [query, setQuery] = useState('');
@@ -72,9 +73,6 @@ export function PersonalListsHub() {
     if (at < 0 || to < 0 || to >= ids.length) return;
     [ids[at], ids[to]] = [ids[to], ids[at]];
     guard(personalLists.reorderItems(current.id, ids));
-  };
-  const open = (item: PersonalListItem) => {
-    void navigateStudyReference(item.itemRef, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => setFailed(true));
   };
   const saveName = (id: string) => {
     if (draft.trim()) guard(personalLists.rename(id, draft));
@@ -158,10 +156,11 @@ export function PersonalListsHub() {
               {visible.length === 0 && <li className="px-2 py-6 text-center text-sm text-muted">{t(current.kind === 'starred' ? 'listsStarredEmpty' : 'listsEmpty')}</li>}
               {visible.map((item, index) => {
                 const Icon = KIND_ICON[item.itemKind];
+                const onError = () => setFailed(true);
                 return (
-                  <li key={item.id} data-lists-item={item.itemRef} className="group flex items-center gap-2 rounded-xl border border-subtle bg-canvas px-2 py-1.5">
+                  <ContextMenu as="li" tabIndex={-1} key={item.id} data-lists-item={item.itemRef} items={linkMenuItems(item.itemRef, { title: item.label, onError })} className="group flex items-center gap-2 rounded-xl border border-subtle bg-canvas px-2 py-1.5">
                     <Icon className="size-4 shrink-0 text-muted" aria-label={t(KIND_LABEL[item.itemKind])} />
-                    <button type="button" data-lists-item-open={item.itemRef} onClick={() => open(item)} className="min-w-0 flex-1 text-start text-sm text-main hover:underline" title={t('listsOpenItem')}>
+                    <button type="button" data-lists-item-open={item.itemRef} {...linkHandlers(item.itemRef, { title: item.label, onError })} className="min-w-0 flex-1 text-start text-sm text-main hover:underline" title={t('listsOpenItem')}>
                       <span className="line-clamp-2" dir="auto">{item.label || item.itemRef}</span>
                     </button>
                     <span className="flex items-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
@@ -169,7 +168,7 @@ export function PersonalListsHub() {
                       <button type="button" disabled={index === visible.length - 1} onClick={() => moveItem(item.id, 1)} aria-label={t('listsMoveDown')} title={t('listsMoveDown')} className="rounded p-1 text-muted hover:text-main disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
                       <button type="button" data-lists-item-remove={item.itemRef} onClick={() => guard(personalLists.removeItem(current.id, item.itemKind, item.itemRef))} aria-label={t('listsRemoveItem')} title={t('listsRemoveItem')} className="rounded p-1 text-muted hover:text-danger"><X className="size-3.5" /></button>
                     </span>
-                  </li>
+                  </ContextMenu>
                 );
               })}
             </ol>

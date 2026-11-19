@@ -17,7 +17,9 @@ import type { ChatAction, ChatSourceRef } from '../../../shared/assistant-chat';
 import { matchesStudyQuery, parseBookTarget } from '../../../shared/study-notes';
 import { searchCorpus, type CorpusOption } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { openStudyNote } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
+import { ContextMenu } from '../ui/ContextMenu';
 import type { TranslationKey } from '../../translations';
 
 const AISettingsModal = React.lazy(() => import('./AISettingsModal').then(module => ({ default: module.AISettingsModal })));
@@ -121,7 +123,8 @@ export function GlobalAssistant() {
     }
   };
 
-  const openSource = (target: string) => void navigateStudyReference(target, books, openBookForReading, (noteId, anchor) => openStudyNote({ id: noteId, anchor })).catch(() => {});
+  const { openLink, linkHandlers, linkMenuItems } = useOpenStudyLink();
+  const openSource = (target: string) => void openLink(target).catch(() => {});
   const asNote = (message: Extract<Message, { role: 'assistant' }>) => [message.text, ...(message.citations.length ? ['', `## ${t('assistantSources')}`, ...message.citations.map(citation => `- [${citation.n}] [[${citation.ref}|${citation.label.replace(/[[\]|\r\n]/gu, ' ')}]]`)] : [])].join('\n') + '\n';
   const insert = async (message: Extract<Message, { role: 'assistant' }>) => {
     if (!chapter?.insert) return;
@@ -213,10 +216,10 @@ export function GlobalAssistant() {
             {message.role === 'error' && message.settings && <button type="button" onClick={() => setSettingsOpen(true)} className="mt-2 self-start rounded-md border border-subtle px-2 py-1">{t('researchAiOpenSettings')}</button>}
             {message.role === 'assistant' && <>
               {message.citations.length > 0 && <ol className="mt-2 space-y-1 border-t border-subtle pt-2" aria-label={t('researchAiSources')} data-research-ai-citations>
-                {message.citations.map(citation => <li key={citation.n} className="flex gap-1.5">
+                {message.citations.map(citation => <ContextMenu as="li" tabIndex={-1} key={citation.n} items={linkMenuItems(citation.ref, { title: citation.label })} className="flex gap-1.5">
                   <span className="tabular-nums text-muted">[{citation.n}]</span>
-                  <button type="button" dir="auto" onClick={() => openSource(citation.ref)} data-research-ai-citation={citation.ref} className="text-start font-medium text-primary-text underline-offset-2 hover:underline">{citation.label}</button>
-                </li>)}
+                  <button type="button" dir="auto" {...linkHandlers(citation.ref, { title: citation.label })} data-research-ai-citation={citation.ref} className="text-start font-medium text-primary-text underline-offset-2 hover:underline">{citation.label}</button>
+                </ContextMenu>)}
               </ol>}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {chapter?.insert && <button type="button" disabled={message.inserted} onClick={() => void insert(message)} data-research-ai-insert className="inline-flex items-center gap-1 rounded-md border border-subtle px-2 py-1 hover:border-primary/40 disabled:opacity-60"><FilePlus2 className="size-3" />{message.inserted ? t('researchAiInserted') : t('researchAiInsert')}</button>}

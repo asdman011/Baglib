@@ -21,7 +21,7 @@ import { collectionKeys } from '../../utils/sunnah-collections';
 import type { StudyNote } from '../../../shared/study-notes';
 import { studyNoteHeading } from '../../../shared/study-notes';
 import type { TranslationKey } from '../../translations';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 
 const DRAFT_KEY = 'dashboard.scratchpad.draft.v1';
 export function detectTextDirection(text: string, fallback: 'rtl' | 'ltr' = 'rtl'): 'rtl' | 'ltr' {
@@ -41,7 +41,8 @@ export const QuickNoteScratchpad: React.FC<{
   /** Text to start each new line with, e.g. the lecture time while a lecture plays. */
   lineStamp?: () => string | null;
 }> = ({ initialNote, initialContent, onSaved, autoFocus, draftKey: ownDraftKey, companion, lineStamp }) => {
-  const { books, dir, t, lang, refreshTags, openBookForReading } = useWorkspace();
+  const { books, dir, t, lang, refreshTags } = useWorkspace();
+  const { openLink } = useOpenStudyLink();
   const slashLabels = { link: t('slashLink'), card: t('slashCard'), quran: t('slashQuran'), hadith: t('slashHadith'), poem: t('slashPoem'), heading: t('studyHeading'), quote: t('studyQuote'), list: t('studyList'), date: t('slashDate'), salla: t('slashSalla'), azza: t('slashAzza'), subhanahu: t('slashSubhanahu'), radiyaHu: t('slashRadiyaHu'), radiyaHa: t('slashRadiyaHa'), rahimahu: t('slashRahimahu') };
   const draftKey = ownDraftKey ?? (initialContent !== undefined ? 'study.capture.draft.v1' : DRAFT_KEY);
   const { notes } = useStudyNotes();
@@ -189,7 +190,7 @@ export const QuickNoteScratchpad: React.FC<{
       <button type="button" onClick={() => setPreview(value => !value)} className="ms-auto text-xs inline-flex items-center gap-1 p-2"><Eye size={14} />{t(preview ? 'dashScratchpadEdit' : 'dashScratchpadPreview')}</button>
     </div>
     {linksOpen && <StudyLinkPicker notes={notes} onInsert={text => { insert(text); setLinksOpen(false); }} />}
-    {preview ? <div data-scratchpad-preview className="min-h-32 max-h-72 overflow-auto rounded-lg border border-subtle p-3"><StudyNoteContent content={content} notes={notes} t={t} onOpen={target => { void navigateStudyReference(target, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => setStatus('studySourceUnavailable')); }} /></div> : <StudyNoteEditor ref={editor} disabled={!ready || saving} ariaLabel={t('dashScratchpadTitle')} placeholder={t('dashScratchpadPlaceholder')} value={content} onChange={changeContent} dir={effectiveDir} notes={notes} books={books} kindLabels={{ note: t('studyLinkKindNote'), book: t('studyLinkKindBook'), quran: t('studyLinkKindAyah'), hadith: t('studyLinkKindHadith'), poem: t('studyLinkKindPoem'), paragraph: t('studyLinkKindParagraph') }} relationLabels={relationLabels(t)} currentNoteId={initialNote?.id} onAnchorParagraph={anchorParagraphIn} searchCorpus={(kinds, query, options) => searchCorpus(kinds, query, id => t(collectionKeys[id]), options?.limit, 'hafs', { ...options, unsplitNotice: t('sunnahUnsplitNotice') })} autoFocus={autoFocus} onMakeCards={makeCards} expandHonorifics={honorificsOn} newLinePrefix={lineStamp} slashSearchLabels={{
+    {preview ? <div data-scratchpad-preview className="min-h-32 max-h-72 overflow-auto rounded-lg border border-subtle p-3"><StudyNoteContent content={content} notes={notes} t={t} onOpen={(target, options) => { void openLink(target, options).catch(() => setStatus('studySourceUnavailable')); }} /></div> : <StudyNoteEditor ref={editor} disabled={!ready || saving} ariaLabel={t('dashScratchpadTitle')} placeholder={t('dashScratchpadPlaceholder')} value={content} onChange={changeContent} dir={effectiveDir} notes={notes} books={books} kindLabels={{ note: t('studyLinkKindNote'), book: t('studyLinkKindBook'), quran: t('studyLinkKindAyah'), hadith: t('studyLinkKindHadith'), poem: t('studyLinkKindPoem'), paragraph: t('studyLinkKindParagraph') }} relationLabels={relationLabels(t)} currentNoteId={initialNote?.id} onAnchorParagraph={anchorParagraphIn} searchCorpus={(kinds, query, options) => searchCorpus(kinds, query, id => t(collectionKeys[id]), options?.limit, 'hafs', { ...options, unsplitNotice: t('sunnahUnsplitNotice') })} autoFocus={autoFocus} onMakeCards={makeCards} expandHonorifics={honorificsOn} newLinePrefix={lineStamp} slashSearchLabels={{
         scopes: { quran: t('navQuran'), sunnah: t('navSunnah'), albayan: t('navBayan'), notes: t('notesTabNotes'), books: t('pdfTypeBook'), lectures: t('notesFolderLectures') },
         loading: t('quranLoading'),
         empty: t('studyNoResults'),

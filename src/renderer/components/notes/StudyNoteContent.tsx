@@ -5,6 +5,8 @@ import { studyLinks, type StudyNote } from '../../../shared/study-notes';
 import type { TranslationKey } from '../../translations';
 import { localAssetUrl } from '../../utils/file-path-helper';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink, type LinkOpenOptions } from '../../utils/use-study-link';
 import { previewStudyTarget, type StudyPreview } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { PARAGRAPH_ANCHOR, findParagraph, noteParagraphs, parseNoteTarget, stripParagraphAnchors } from '../../../shared/note-paragraphs';
@@ -13,8 +15,9 @@ import { PARAGRAPH_ANCHOR, findParagraph, noteParagraphs, parseNoteTarget, strip
 const previewCache = new Map<string, StudyPreview | null>();
 
 /** A study link with a hover and focus card showing the linked text, so the reader need not leave the note. */
-function StudyLinkButton({ target, label, relation, notes, onOpen }: { target: string; label: string; relation?: string; notes: StudyNote[]; onOpen: (target: string) => void }) {
+function StudyLinkButton({ target, label, relation, notes, onOpen }: { target: string; label: string; relation?: string; notes: StudyNote[]; onOpen: (target: string, options?: LinkOpenOptions) => void }) {
   const { books, t } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [preview, setPreview] = useState<StudyPreview | null | 'loading' | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const id = useId();
@@ -30,10 +33,13 @@ function StudyLinkButton({ target, label, relation, notes, onOpen }: { target: s
       }, () => setPreview(current => current === undefined ? current : null));
     }, 350);
   };
-  const hide = () => { if (timer.current) clearTimeout(timer.current); setPreview(undefined); };
+  const hide = React.useCallback(() => { if (timer.current) clearTimeout(timer.current); setPreview(undefined); }, []);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const handleOpen = React.useCallback((opts: LinkOpenOptions) => { setPreview(undefined); onOpen(target, opts); }, [onOpen, target]);
   return <span className="relative" onMouseEnter={show} onMouseLeave={hide}>
-    <button type="button" dir="auto" data-study-link={target} aria-describedby={preview !== undefined ? id : undefined} onFocus={show} onBlur={hide} onKeyDown={event => { if (event.key === 'Escape') hide(); }} className="text-emerald-700 dark:text-emerald-300 underline underline-offset-2 text-start break-words" onClick={() => { hide(); onOpen(target); }}>{label}</button>
+    <ContextMenu as="span" tabIndex={-1} className="inline" items={linkMenuItems(target, { onOpen: handleOpen })}>
+      <button type="button" dir="auto" data-study-link={target} aria-describedby={preview !== undefined ? id : undefined} onFocus={show} onBlur={hide} onKeyDown={event => { if (event.key === 'Escape') hide(); }} className="text-emerald-700 dark:text-emerald-300 underline underline-offset-2 text-start break-words" {...linkHandlers(target, { onOpen: handleOpen })}>{label}</button>
+    </ContextMenu>
     {preview !== undefined && <span role="tooltip" id={id} data-study-link-preview className="absolute z-50 top-full mt-1 start-0 block w-72 max-w-[80vw] rounded-xl border border-subtle bg-surface p-3 text-main shadow-2xl whitespace-normal">
       {preview === 'loading' ? <span className="text-xs text-muted">{t('studyPreviewLoading')}</span>
         : preview === null ? <span className="text-xs text-muted">{t('studyPreviewUnavailable')}</span>
@@ -99,7 +105,7 @@ function embeddedText(target: string, notes: StudyNote[]): string | null {
   return stripParagraphAnchors(paragraph ? paragraph.text : note.content).slice(0, 1200);
 }
 
-function renderSegment(content: string, notes: StudyNote[], onOpen: (target: string) => void, t: (key: TranslationKey) => string, key: string): React.ReactNode[] {
+function renderSegment(content: string, notes: StudyNote[], onOpen: (target: string, options?: LinkOpenOptions) => void, t: (key: TranslationKey) => string, key: string): React.ReactNode[] {
   const pieces: React.ReactNode[] = [];
   let end = 0;
   for (const link of studyLinks(content)) {
@@ -117,7 +123,7 @@ function renderSegment(content: string, notes: StudyNote[], onOpen: (target: str
   return pieces;
 }
 
-export function StudyNoteContent({ content, notes, onOpen, t }: { content: string; notes: StudyNote[]; onOpen: (target: string) => void; t: (key: TranslationKey) => string }) {
+export function StudyNoteContent({ content, notes, onOpen, t }: { content: string; notes: StudyNote[]; onOpen: (target: string, options?: LinkOpenOptions) => void; t: (key: TranslationKey) => string }) {
   // Each anchored paragraph is wrapped so a paragraph link can scroll to it and highlight it.
   const pieces: React.ReactNode[] = [];
   let end = 0;

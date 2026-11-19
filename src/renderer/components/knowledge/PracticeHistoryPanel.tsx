@@ -2,11 +2,13 @@
 import {ExplainBack} from '../notes/ExplainBack';
 import type {ExplainCheck} from '../../../shared/explain-back';
 import { useCallback, useEffect, useState } from 'react';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { checkMethodKey, resultKey, MISTAKE_CATEGORIES, mistakeKey, type PracticeAttempt, type JudgeAttemptInput } from '../../../shared/practice';
 export function PracticeHistoryPanel() {
-    const { t, books, openBookForReading } = useWorkspace();
+    const { t } = useWorkspace();
+    const { openLink, linkHandlers, linkMenuItems } = useOpenStudyLink();
     const [explain,setExplain]=useState<ExplainCheck|null>(null);
     const [attempts, setAttempts] = useState<PracticeAttempt[]>([]);
     const [failed, setFailed] = useState(false);
@@ -32,7 +34,7 @@ export function PracticeHistoryPanel() {
     finally {
         setBusy(false);
     } };
-    if(explain)return <ExplainBack target={explain.target} label={explain.verdicts[0]?.citation.label??t('explainBackTitle')} initialCheck={explain} onClose={()=>{setExplain(null);void load();}} onOpen={target=>{setExplain(null);void navigateStudyReference(target,books,openBookForReading,(id,anchor)=>openStudyNote({id,anchor})).catch(()=>setFailed(true));}}/>;
+    if(explain)return <ExplainBack target={explain.target} label={explain.verdicts[0]?.citation.label??t('explainBackTitle')} initialCheck={explain} onClose={()=>{setExplain(null);void load();}} onOpen={target=>{setExplain(null);void openLink(target).catch(()=>setFailed(true));}}/>;
     return <section data-practice-history className="border-t border-subtle pt-3 space-y-3 min-w-0">
     <h3 className="font-bold">{t('practiceHistory')}</h3>
     {failed && <p role="alert">{t('srsFailed')}</p>}
@@ -42,7 +44,7 @@ export function PracticeHistoryPanel() {
       <p>{t(resultKey(a.result))} · {t(a.checkMethod === 'judgment' && a.result !== 'pending' ? 'practiceJudged' : checkMethodKey(a.checkMethod))}</p>
       <p className="text-sm">{t('practiceConfidenceValue', { value: a.confidence ?? '—' })} · {t('practiceRevision', { value: a.cardRevision ?? '—' })}</p>
       {a.mistakeCategory && <p>{t(mistakeKey(a.mistakeCategory))}</p>}
-      {a.sourceRef && <button data-practice-source className="underline text-sm" onClick={()=>void navigateStudyReference(a.sourceRef!,books,openBookForReading,(id,anchor)=>openStudyNote({id,anchor})).catch(()=>setFailed(true))}>{t('practiceOpenSource')}</button>}
+      {a.sourceRef && <ContextMenu as="span" tabIndex={-1} className="inline" items={linkMenuItems(a.sourceRef, { onError: () => setFailed(true) })}><button data-practice-source className="underline text-sm" {...linkHandlers(a.sourceRef, { onError: () => setFailed(true) })}>{t('practiceOpenSource')}</button></ContextMenu>}
       {a.result==='pending'&&a.questionKind==='explain_back'&&!a.knowledgeId&&<button data-explain-resume type="button" disabled={busy} className="rounded border border-subtle p-2" onClick={()=>void act(async()=>{const r=await window.electronAPI.studyAssistant.resumeExplainBack(a.id);if(!r.ok)throw new Error(r.error);setExplain(r.data);})}>{t('explainBackJudgment')}</button>}
       {a.result === 'pending' && !(a.questionKind==='explain_back'&&!a.knowledgeId) && <form onSubmit={e => { e.preventDefault(); const data = new FormData(e.currentTarget); void act(() => window.electronAPI.knowledgeCards.judgeAttempt({ id: a.id, result: data.get('result') as JudgeAttemptInput['result'], mistakeCategory: (data.get('mistake') || undefined) as JudgeAttemptInput['mistakeCategory'] })); }} className="flex flex-wrap gap-2">
         <select name="result" aria-label={t('practiceRate')} className="bg-canvas border border-subtle rounded p-2">{(['correct', 'partial', 'incorrect'] as const).map(r => <option value={r} key={r}>{t(resultKey(r))}</option>)}</select>

@@ -10,10 +10,12 @@ import { consumePoetryReference, POETRY_OPEN_EVENT } from '../../utils/poetry-na
 import { isTabEventTarget } from '../../utils/study-navigation';
 import { usePersonalLists, useListFilter, useListMembership } from '../../libs/personal-lists';
 import { ListFilterBar, ListItemControls } from '../lists/PersonalListControls';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { poemListRef } from '../../../shared/personal-lists';
 
 export function BayanView() {
   const { t, dir, lang } = useWorkspace();
+  const { openLink } = useOpenStudyLink();
   const [query, setQuery] = useState('');
   const [matchedQuery, setMatchedQuery] = useState('');
   const [after, setAfter] = useState(0);
@@ -162,7 +164,7 @@ export function BayanView() {
     </aside>}
     {panel === 'poet' && <PoetBrowser key={`${language}:${era}:${location}`} language={language} era={era} location={location} onPoet={id => { setPoetId(id); setAfter(0); setPanel(null); }} />}
     <input type="search" dir="auto" aria-label={t('bayanSearch')} placeholder={t('bayanSearch')} value={query} onChange={event => { setQuery(event.target.value); setAfter(0); }} className="my-4 rounded-lg border border-subtle bg-surface p-3 text-start" />
-    <ListFilterBar kind="poem" lists={lists} filter={listFilter} className="pb-3" onOpen={item => { const id = Number(item.itemRef.split(':')[2]); if (id > 0) void openPoem(id); }} />
+    <ListFilterBar kind="poem" lists={lists} filter={listFilter} className="pb-3" onOpen={(item, options) => { void openLink(item.itemRef, { ...options, title: item.label }).catch(() => {}); }} />
     {loading && <p role="status" className="pb-2 text-sm text-muted">{t('bayanLoading')}</p>}
     <div ref={resultsElement} aria-busy={loading} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-4 xl:grid-cols-2">

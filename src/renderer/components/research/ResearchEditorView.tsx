@@ -6,7 +6,7 @@ import { extractDocumentHeadings } from '../../../shared/manuscript-headings';
 import type { ManuscriptTemplate } from '../../../shared/manuscript-templates';
 import { createResearchSourceSearch } from './source-search';
 import { researchSettings } from '../../../shared/research-editor-apparatus';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { translations } from '../../translations';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
@@ -54,6 +54,11 @@ function saveFavourites(ids: string[]): void {
 
 export function ResearchEditorView() {
   const { lang, dir, theme, t, books, openBookForReading } = useWorkspace();
+  const { openLink } = useOpenStudyLink();
+  const openLinkRef = useRef(openLink);
+  useLayoutEffect(() => {
+    openLinkRef.current = openLink;
+  }, [openLink]);
   // KEY-423 review: each manuscript tab registers its own leave guard, so closing a background tab can ask it.
   const tabId = useOptionalTab()?.id;
   const current = useRef({ books, lang, openBookForReading });
@@ -174,7 +179,7 @@ export function ResearchEditorView() {
         },
         async open(id) {
           await host.bridge.explicitSave();
-          openStudyNote({ id });
+          await openLinkRef.current(`note:${id}`);
         },
         subscribe(listener) {
           window.addEventListener('baglib:notes-changed', listener);
@@ -186,12 +191,7 @@ export function ResearchEditorView() {
         () => current.current.books,
         async url => {
           await host.bridge.explicitSave();
-          await navigateStudyReference(
-            url,
-            current.current.books,
-            book => current.current.openBookForReading(book),
-            (id, anchor) => openStudyNote({ id, anchor })
-          );
+          await openLinkRef.current(url);
         },
         id => {
           const key = collectionKeys[id as keyof typeof collectionKeys];

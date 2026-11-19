@@ -11,7 +11,8 @@ import { parseBookTarget, matchesStudyQuery, type StudyNote } from '../../../sha
 import type { QuranReaderCatalog } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import type { ReaderStudySource } from '../../../shared/reader-study-selection';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { openStudyNote } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { Modal } from '../ui/Modal';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
 
@@ -105,7 +106,8 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
       else finish({ error: { code: result.error, detail: result.detail, ocrTarget: result.error === 'no-text-layer' ? result.target : undefined } });
     } catch { finish({ error: { code: 'engine-failed' } }); } finally { setBusy(false); }
   };
-  const open = (target: string) => { onClose(); void navigateStudyReference(target, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => {}); };
+  const { openLink } = useOpenStudyLink();
+  const open = (target: string) => { void openLink(target, { onBeforeOpen: onClose }).catch(() => {}); };
   const addCard = async (card: AssistantCard, key: string) => {
     try {
       const workId = parseBookTarget(card.target)?.id;

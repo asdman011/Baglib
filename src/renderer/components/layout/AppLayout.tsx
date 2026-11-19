@@ -20,6 +20,7 @@ import { HomeDashboardView, CompanionMiniWidget } from '../dashboard';
 import { QuotaWarningBanner } from './QuotaWarningBanner';
 import { SearchHubModal } from '../search/SearchHubModal';
 import { useTabs, useWorkspace, type WorkspaceViewMode } from '../context/WorkspaceContext';
+import { currentLocation, findTab } from '../../../shared/workspace-tabs';
 import { WorkspaceHistoryStrip, WorkspaceTabPanels, WorkspaceTabRow, useWorkspaceTabShortcuts } from './WorkspaceTabs';
 import { useAthan } from '../../hooks/useAthan';
 import { QURAN_OPEN_EVENT } from '../../utils/quran-navigation';
@@ -87,7 +88,11 @@ const AppLayoutContent: React.FC = () => {
   const { state: tabsState, navigate: navigateTab } = useTabs();
   const activeTabId = tabsState.activeId ?? tabsState.tabs[0]?.id ?? 'tab-1';
   const activeTabIdRef = React.useRef(activeTabId);
-  React.useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
+  const tabsStateRef = React.useRef(tabsState);
+  React.useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+    tabsStateRef.current = tabsState;
+  }, [activeTabId, tabsState]);
   useAppCloseBridge();
   // KEY-419/420: browser tab shortcuts and back/forward for the focused tab.
   useWorkspaceTabShortcuts();
@@ -159,9 +164,13 @@ const AppLayoutContent: React.FC = () => {
     };
     const openForTab = (view: Parameters<typeof setViewMode>[0], event?: Event) => {
       const targetTabId = (event as CustomEvent<{ tabId?: string }> | undefined)?.detail?.tabId;
-      if (targetTabId && targetTabId !== activeTabIdRef.current) {
-        navigateTab(targetTabId, { view, title: '' });
-        return;
+      if (targetTabId) {
+        const targetTab = findTab(tabsStateRef.current, targetTabId);
+        if (targetTab && currentLocation(targetTab).view === view) return;
+        if (targetTabId !== activeTabIdRef.current) {
+          navigateTab(targetTabId, { view, title: '' });
+          return;
+        }
       }
       setViewMode(view);
     };

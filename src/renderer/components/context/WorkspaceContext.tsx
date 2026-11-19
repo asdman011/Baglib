@@ -16,6 +16,7 @@ import { removeTempSelectionOverlay, clearActiveSelectionHighlight } from '../..
 import {
   activeTab as getActiveTab,
   currentLocation,
+  DEFAULT_WORKSPACE_PREFS,
   findTab,
   homeLocation,
   newTab,
@@ -32,6 +33,7 @@ import {
   type TabLocation,
   type TabsAction,
   type TabsState,
+  type WorkspacePrefs,
   type WorkspaceTab,
   type ViewSnapshot,
   type WorkspaceView,
@@ -168,6 +170,7 @@ export interface UseTabResult {
 
 export interface UseTabsResult {
   state: TabsState;
+  prefs: WorkspacePrefs;
   open: (location: TabLocation, options?: { afterId?: string; background?: boolean }) => string;
   close: (id: string) => void;
   activate: (id: string) => void;
@@ -181,11 +184,11 @@ export interface UseTabsResult {
   reopenClosed: () => void;
   /** The last closed tabs, newest first. */
   closedTabs: WorkspaceTab[];
+  /** KEY-425: any other tab action (side by side: openBeside, closeSplit, setSplitRatio). */
+  dispatchTabs: (action: TabsAction) => void;
 }
 
 interface BookSyncSubscriber {
-  /** KEY-425: any other tab action (side by side: openBeside, closeSplit, setSplitRatio). */
-  dispatchTabs: (action: TabsAction) => void;
   onUpdate: (book: BookItem) => void;
   onDelete: (bookId: string) => void;
 }
@@ -865,6 +868,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
   notifyBookDelete,
 }) => {
   const [state, dispatch] = useReducer(providerTabsReducer, initialTabs, (init) => init ?? createInitialTabsState());
+  const [prefs, setPrefs] = useState<WorkspacePrefs>(DEFAULT_WORKSPACE_PREFS);
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
   // Ids carry the session start, so they never collide with restored or reopened tabs (WS-7).
@@ -937,10 +941,11 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
       const closed = parseClosed(rawClosed);
       closedRef.current = closed;
       setClosedTabs(closed);
+      const loadedPrefs = parsePrefs(rawPrefs);
+      setPrefs(loadedPrefs);
       if (!userMutatedRef.current) {
         const saved = parseTabs(rawTabs);
-        const prefs = parsePrefs(rawPrefs);
-        const next = startupTabs(saved, prefs, allocateId(), Date.now());
+        const next = startupTabs(saved, loadedPrefs, allocateId(), Date.now());
         stateRef.current = next;
         skipNextTabsPersistRef.current = true;
         dispatch({ type: '__restore', state: next });
@@ -949,6 +954,17 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     });
     return () => { alive = false; };
   }, [initialTabs, allocateId]);
+
+  // Keep workspace preferences synchronized when updated in SettingsDirectory.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPrefsChanged = (event: Event) => {
+      const detail = (event as CustomEvent<WorkspacePrefs | undefined>).detail;
+      if (detail) setPrefs(parsePrefs(detail));
+    };
+    window.addEventListener('baglib:workspace-prefs-changed', onPrefsChanged);
+    return () => window.removeEventListener('baglib:workspace-prefs-changed', onPrefsChanged);
+  }, []);
 
   // Persist tab state on a 500ms debounce after startup restore completes.
   useEffect(() => {
@@ -1046,6 +1062,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
 
   const tabsValue = useMemo<UseTabsResult>(() => ({
     state,
+    prefs,
     open,
     close,
     activate,
@@ -1056,7 +1073,7 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     reopenClosed,
     closedTabs,
     dispatchTabs: dispatch,
-  }), [state, open, close, activate, navigate, move, go, duplicate, reopenClosed, closedTabs]);
+  }), [state, prefs, open, close, activate, navigate, move, go, duplicate, reopenClosed, closedTabs]);
 
   // Focused scope registry so `useWorkspace()` outside any `<TabScope>` reads the focused tab's scope.
   const [publishedFocus, setPublishedFocus] = useState<{ tabId: string; scope: TabScopeContextType } | null>(null);
@@ -1371,6 +1388,8 @@ export const useTabKeysActive = (): React.RefObject<boolean> => {
   useEffect(() => { active.current = tab?.isFocused ?? true; });
   return active;
 };
+
+export const useTabsOptional = (): UseTabsResult | null => useContext(TabsContext) ?? null;
 
 export const useTabs = (): UseTabsResult => {
   const tabs = useContext(TabsContext);

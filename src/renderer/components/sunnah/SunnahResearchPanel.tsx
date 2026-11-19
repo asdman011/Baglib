@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import type { SunnahResearch, SunnahResearchQuery, SunnahSearchHit } from '../../../shared/types/sunnah';
 import type { SunnahTranslate } from './SunnahChapterView';
 import { collectionKeys } from '../../utils/sunnah-collections';
-import { openSunnahReference, navigateStudyReference } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import type { TranslationKey } from '../../translations';
 import { SunnahNarratorCard, tierKeys } from './SunnahNarratorCard';
 import { PersonalCommentary } from '../knowledge/PersonalCommentary';
@@ -13,13 +14,15 @@ import { SunnahGradingList, SunnahSourcesList } from './SunnahGradingPanel';
 const matchMethodKeys: Record<string, TranslationKey> = { shamela_inline_footnote: 'sunnahMatchInline', exact_hadith_num: 'sunnahMatchNumber', exact_window: 'sunnahMatchWindow', tfidf_window: 'sunnahMatchSimilar', sub_narration_ffill: 'sunnahMatchSubNarration' };
 
 function ResultLinks({ hits, t }: { hits: SunnahSearchHit[]; t: SunnahTranslate }) {
-  return <div className="sunnah-research-results">{hits.slice(0, 30).map(hit => <button type="button" key={hit.hadith.id} onClick={() => openSunnahReference({ collection: hit.chapter.collection, chapter: hit.chapter.number, hadith: hit.hadith.id })}>
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
+  return <div className="sunnah-research-results">{hits.slice(0, 30).map(hit => { const target = `sunnah:${hit.chapter.collection}:${hit.chapter.number}:${hit.hadith.id}`; return <ContextMenu as="div" tabIndex={-1} key={hit.hadith.id} items={linkMenuItems(target)}><button type="button" {...linkHandlers(target)}>
     <span>{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}{hit.similarity !== undefined && <> · {t('sunnahMatnSimilarity', { score: Math.round(hit.similarity * 100) })}</>}</span>
     <span dir="rtl" lang="ar">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 180)}</span>
-  </button>)}</div>;
+  </button></ContextMenu>; })}</div>;
 }
 
 export function SunnahResearchPanel({ id, initialOpen, showGrading, sourceBook, matn, t }: { id: number; initialOpen: boolean; showGrading?: number; sourceBook?: boolean; matn?: string; t: SunnahTranslate }) {
+  const { openLink } = useOpenStudyLink();
   const [open, setOpen] = useState(initialOpen);
   const [data, setData] = useState<SunnahResearch | null>(null);
   const [failed, setFailed] = useState(false);
@@ -55,7 +58,7 @@ export function SunnahResearchPanel({ id, initialOpen, showGrading, sourceBook, 
     finally { setRelatedBusy(false); }
   };
   const openAyah = async (ayah: string) => {
-    try { await navigateStudyReference(`quran:hafs:${ayah}`, [], () => {}, () => {}); }
+    try { await openLink(`quran:hafs:${ayah}`); }
     catch { setFailed(true); }
   };
   const openSource = async (kind: 'commentary' | 'matn') => {

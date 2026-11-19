@@ -6,8 +6,9 @@ import { quranReferenceLabel } from '../../utils/quran-reference-label';
 import React, { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { navigateStudyReference, openSunnahReference } from '../../utils/study-navigation';
 import { collectionKeys } from '../../utils/sunnah-collections';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { SITE_SEARCHES, siteSearchUrl, type SiteSearchId } from '../../../shared/site-search';
 import type { TranslationKey } from '../../translations';
 import type { QuranSearchHit } from '../../../shared/types/quran';
@@ -28,7 +29,8 @@ import { ListContextMenu } from '../lists/PersonalListControls';
 import { ayahListRef, hadithListRef, poemListRef } from '../../../shared/personal-lists';
 
 export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave: () => void }) {
-  const { t, lang, setViewMode, books, openBookForReading } = useWorkspace();
+  const { t, lang, setViewMode } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const [quranScript, setQuranScript] = useState<{ id: string; profile: 'hafs' | 'warsh'; query: string } | null>(null);
   const [found, setFound] = useState<Found>(nothing);
   const [busy, setBusy] = useState(false);
@@ -59,11 +61,6 @@ export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave:
     return () => { alive = false; clearTimeout(timer); };
   }, [text, retry]);
 
-  const go = (target: string, view: 'quran' | 'bayan') => {
-    onLeave();
-    setViewMode(view);
-    void navigateStudyReference(target, books, openBookForReading, () => {}).catch(() => {});
-  };
   const group = <Item,>(title: TranslationKey, items: Item[] | null, row: (item: Item) => React.ReactNode) => <section className="space-y-2">
     <h3 className="text-xs font-bold text-muted">{t(title)}{items && items.length > 0 && <bdi> ({items.length > MAX_COUNTED ? `${MAX_COUNTED}+` : items.length})</bdi>}</h3>
     {items === null ? <div className="space-y-2"><p className="text-xs text-muted">{t('sourcesUnavailable')}</p><button type="button" className="underline text-xs" onClick={() => { onLeave(); setViewMode('settings'); }}>{t('navSettings')}</button></div> : items.length === 0 ? <div className="space-y-2"><p className="text-xs text-muted">{t('noSearchResults')}</p><button type="button" className="underline text-xs" onClick={() => setRetry(value => value + 1)}>{t('lookupRetry')}</button></div> : items.slice(0, SHOWN).map(row)}
@@ -74,10 +71,23 @@ export function StudySourcesSearch({ query, onLeave }: { query: string; onLeave:
   return <div className="space-y-5">
     {text && <div className="space-y-5">
       {(busy || completedQuery !== text) ? <FeedbackSkeleton /> : <>
-      {reference && <button data-quran-reference type="button" className={rowStyle} onClick={() => go(`quran:${quranScript!.profile}:${reference.surah}:${reference.from}`, 'quran')}>{t('quranReferenceJump', { reference: quranReferenceLabel(reference, lang) })}</button>}
-      {group('navQuran', found.quran, hit => <ListContextMenu key={`${hit.source?.id}:${hit.surah}:${hit.ayah}`} item={{ kind: 'ayah', itemRef: ayahListRef(hit.surah, hit.ayah, hit.ayah, quranScript?.profile === 'warsh' ? 'warsh' : 'hafs'), label: `${hit.surah}:${hit.ayah} — ${hit.text}`.slice(0, 300) }}><button type="button" className={rowStyle} onClick={() => go(`quran:${quranScript?.profile || 'hafs'}:${hit.surah}:${hit.ayah}`, 'quran')}><bdi className="text-xs text-muted">{hit.surah}:{hit.ayah}</bdi> <span dir="auto" className="block text-xs text-muted">{hit.source?.title}</span><span dir="auto" className="font-reading">{hit.text}</span></button></ListContextMenu>)}
-      {group('navSunnah', found.sunnah, hit => <ListContextMenu key={hit.hadith.id} item={{ kind: 'hadith', itemRef: hadithListRef(hit.chapter.collection, hit.chapter.number, hit.hadith.id), label: `${t(collectionKeys[hit.chapter.collection])} ${hit.hadith.number} — ${(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 160)}` }}><button type="button" className={rowStyle} onClick={() => { onLeave(); setViewMode('sunnah'); openSunnahReference({ collection: hit.chapter.collection, chapter: hit.chapter.number, hadith: hit.hadith.id }); }}><span className="block text-xs text-muted">{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 180)}</span></button></ListContextMenu>)}
-      {group('navBayan', found.poetry, poem => <ListContextMenu key={poem.id} item={{ kind: 'poem', itemRef: poemListRef(poem.id), label: [poem.title, poem.poetName].filter(Boolean).join(' — ') }}><button type="button" className={rowStyle} onClick={() => { const from = poem.match?.from ?? 0; go(`poetry:ashaar:${poem.id}:${from}:${from + Math.max((poem.match?.lines.length ?? 1) - 1, 0)}`, 'bayan'); }}><span className="block text-xs text-muted" dir="auto">{poem.poetName} · {poem.title}</span><span dir="auto">{poem.match?.lines[0]}</span></button></ListContextMenu>)}
+      {reference && (() => {
+        const refTarget = `quran:${quranScript!.profile}:${reference.surah}:${reference.from}`;
+        return <ContextMenu as="div" tabIndex={-1} items={linkMenuItems(refTarget, { onBeforeOpen: onLeave })}><button data-quran-reference type="button" className={rowStyle} {...linkHandlers(refTarget, { onBeforeOpen: onLeave })}>{t('quranReferenceJump', { reference: quranReferenceLabel(reference, lang) })}</button></ContextMenu>;
+      })()}
+      {group('navQuran', found.quran, hit => {
+        const target = `quran:${quranScript?.profile || 'hafs'}:${hit.surah}:${hit.ayah}`;
+        return <ListContextMenu key={`${hit.source?.id}:${hit.surah}:${hit.ayah}`} item={{ kind: 'ayah', itemRef: ayahListRef(hit.surah, hit.ayah, hit.ayah, quranScript?.profile === 'warsh' ? 'warsh' : 'hafs'), label: `${hit.surah}:${hit.ayah} — ${hit.text}`.slice(0, 300) }} extraItems={linkMenuItems(target, { onBeforeOpen: onLeave })}><button type="button" className={rowStyle} {...linkHandlers(target, { onBeforeOpen: onLeave })}><bdi className="text-xs text-muted">{hit.surah}:{hit.ayah}</bdi> <span dir="auto" className="block text-xs text-muted">{hit.source?.title}</span><span dir="auto" className="font-reading">{hit.text}</span></button></ListContextMenu>;
+      })}
+      {group('navSunnah', found.sunnah, hit => {
+        const target = hadithListRef(hit.chapter.collection, hit.chapter.number, hit.hadith.id);
+        return <ListContextMenu key={hit.hadith.id} item={{ kind: 'hadith', itemRef: target, label: `${t(collectionKeys[hit.chapter.collection])} ${hit.hadith.number} — ${(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 160)}` }} extraItems={linkMenuItems(target, { onBeforeOpen: onLeave })}><button type="button" className={rowStyle} {...linkHandlers(target, { onBeforeOpen: onLeave })}><span className="block text-xs text-muted">{t(collectionKeys[hit.chapter.collection])} · {t('sunnahHadithNumber', { number: hit.hadith.number })}</span><span dir="rtl" lang="ar">{(hit.hadith.text.ar.matn || hit.hadith.text.ar.full).slice(0, 180)}</span></button></ListContextMenu>;
+      })}
+      {group('navBayan', found.poetry, poem => {
+        const from = poem.match?.from ?? 0;
+        const target = `poetry:ashaar:${poem.id}:${from}:${from + Math.max((poem.match?.lines.length ?? 1) - 1, 0)}`;
+        return <ListContextMenu key={poem.id} item={{ kind: 'poem', itemRef: poemListRef(poem.id), label: [poem.title, poem.poetName].filter(Boolean).join(' — ') }} extraItems={linkMenuItems(target, { onBeforeOpen: onLeave })}><button type="button" className={rowStyle} {...linkHandlers(target, { onBeforeOpen: onLeave })}><span className="block text-xs text-muted" dir="auto">{poem.poetName} · {poem.title}</span><span dir="auto">{poem.match?.lines[0]}</span></button></ListContextMenu>;
+      })}
     </>}
     </div>}
     <section className="space-y-3 border-t border-subtle pt-4">

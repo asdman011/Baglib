@@ -52,9 +52,9 @@ import {
 import {
   consumeStudyNote,
   isTabEventTarget,
-  navigateStudyReference,
   STUDY_NOTE_OPEN,
 } from '../../utils/study-navigation';
+import { useOpenStudyLink, type LinkOpenOptions } from '../../utils/use-study-link';
 import {
   DEFAULT_WORD_LAYOUT,
   wordLayout,
@@ -299,20 +299,17 @@ export const NotesOverviewView: React.FC = () => {
     };
   }, [focusParagraph, notes]);
 
+  const { openLink } = useOpenStudyLink();
+
   // Navigate study references
-  const openTarget = async (target: string) => {
+  const openTarget = async (target: string, options?: LinkOpenOptions) => {
     setActionError(false);
     try {
-      await navigateStudyReference(target, books, openBookForReading, (id, paragraph) => {
-        if (!notes.some((n) => n.id === id)) throw new Error('missing-note');
-        setSelectedId(id);
-        setCreatingNew(false);
-        setEditorDraft(null);
-        setQuery('');
-        setAnchor(null);
-        setMobileScreen('editor');
-        setFocusParagraph(paragraph ? { id, anchor: paragraph, at: Date.now() } : null);
-      });
+      if (target.startsWith('note:')) {
+        const noteId = target.slice(5).split('#')[0];
+        if (!notes.some((n) => n.id === noteId)) throw new Error('missing-note');
+      }
+      await openLink(target, options);
     } catch {
       setActionError(true);
     }
@@ -1045,7 +1042,7 @@ export const NotesOverviewView: React.FC = () => {
                 key={activeNote ? activeNote.id : `new-${editorDraft?.key ?? 0}`}
                 note={activeNote}
                 notes={notes}
-                onOpenTarget={(target) => void openTarget(target)}
+                onOpenTarget={(target, options) => void openTarget(target, options)}
                 focusAnchor={activeNote && focusParagraph?.id === activeNote.id ? focusParagraph : null}
                 initialContent={editorDraft?.content}
                 showBack={mobileScreen === 'editor'}

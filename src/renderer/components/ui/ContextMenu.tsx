@@ -8,7 +8,7 @@ export function ContextMenu({ children, items = [], onOpenMenu, as = 'div', ...p
     children?: React.ReactNode;
     items?: MenuItemProps[];
     onOpenMenu?: () => MenuItemProps[];
-    as?: 'div' | 'article' | 'section' | 'tr' | 'li' | 'nav';
+    as?: 'div' | 'article' | 'section' | 'tr' | 'li' | 'nav' | 'span';
     ref?: React.Ref<HTMLElement>;
 }) {
     const [anchor, setAnchor] = useState<{

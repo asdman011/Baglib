@@ -163,6 +163,7 @@ function WorkspaceRestoreSettings() {
       const next: WorkspacePrefs = { ...latest, ...patch };
       if (await window.electronAPI.settings.set(WORKSPACE_PREFS_SETTING, next) !== true) throw new Error();
       setPrefs(next);
+      window.dispatchEvent(new CustomEvent('baglib:workspace-prefs-changed', { detail: next }));
     } catch {
       setFailed(true);
     } finally {
@@ -240,6 +241,38 @@ function WorkspaceRestoreSettings() {
             }`}
           >
             {t('settingWorkspaceShowLastTab')}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-2" role="group" aria-labelledby="workspace-open-links-label">
+        <span id="workspace-open-links-label" className="block text-sm font-semibold leading-loose">
+          {t('settingWorkspaceLinks')}
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-workspace-link-target="new"
+            aria-pressed={prefs.linkTarget === 'new'}
+            disabled={busy}
+            onClick={() => void updatePrefs({ linkTarget: 'new' })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+              prefs.linkTarget === 'new' ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceLinksNewTab')}
+          </button>
+          <button
+            type="button"
+            data-workspace-link-target="same"
+            aria-pressed={prefs.linkTarget === 'same'}
+            disabled={busy}
+            onClick={() => void updatePrefs({ linkTarget: 'same' })}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+              prefs.linkTarget === 'same' ? 'border-primary bg-primary text-primary-contrast' : 'border-subtle bg-canvas text-main'
+            }`}
+          >
+            {t('settingWorkspaceLinksSameTab')}
           </button>
         </div>
       </div>

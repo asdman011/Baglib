@@ -32,6 +32,8 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { SearchResultCard } from './SearchResultCard';
 import { StudySourcesSearch } from './StudySourcesSearch';
 import { ManuscriptSearchHits } from './ManuscriptSearchHits';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 
 export const SearchHubModal: React.FC = () => {
   const {
@@ -46,6 +48,7 @@ export const SearchHubModal: React.FC = () => {
     lang,
     t,
   } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
 
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<SearchScope>('all');
@@ -593,10 +596,10 @@ export const SearchHubModal: React.FC = () => {
           ) : scope === 'fulltext' ? (
             ftsResults.length > 0 ? (
               <div className="space-y-3">
-                {ftsResults.map((r, idx) => (
-                  <div
+                {ftsResults.map((r, idx) => { const target = `book:${r.bookId}#p=${r.pageNumber}`; const onBeforeOpen = () => setSearchHubOpen(false); return (
+                  <ContextMenu
                     key={`${r.bookId}-${r.pageNumber}-${idx}`}
-                    onClick={() => handleOpenFtsResult(r)}
+                    tabIndex={-1} items={linkMenuItems(target, { title: r.bookTitle, onBeforeOpen })} {...linkHandlers(target, { title: r.bookTitle, onBeforeOpen })}
                     className="p-4 rounded-2xl border border-subtle bg-canvas/40 hover:bg-canvas hover:border-pale-sky-500/50 transition-all cursor-pointer shadow-xs hover:shadow-md space-y-2 group"
                   >
                     <div className="flex items-center justify-between">
@@ -631,8 +634,8 @@ export const SearchHubModal: React.FC = () => {
                         ),
                       }}
                     />
-                  </div>
-                ))}
+                  </ContextMenu>
+                ); })}
               </div>
             ) : isSearching ? (
               <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted space-y-3">

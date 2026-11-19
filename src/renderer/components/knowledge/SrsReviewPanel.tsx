@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MISTAKE_CATEGORIES,mistakeKey,type MistakeCategory } from '../../../shared/practice';
 import { PracticeAnswer } from './PracticeAnswer';
 import { SafeCardRenderer, isTemplateHtml } from './SafeCardRenderer';
-import { navigateStudyReference, openStudyNote } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { renderTemplate, contextClozeCardFields, DEFAULT_CONTEXT_CLOZE_TEMPLATE } from '../../../shared/revision/template-engine';
@@ -45,7 +46,8 @@ const playCardTts = async (text: string, ttsLang: string) => {
 };
 
 export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
-  const { t, dir, lang, books, openBookForReading } = useWorkspace();
+  const { t, dir, lang } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const ioStrings = useMemo(() => ({ toggleMasks: t('ioToggleMasks'), noImage: t('ioNoImage') }), [t]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [mistake,setMistake]=useState<MistakeCategory|undefined>();
@@ -182,14 +184,16 @@ export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
       />
       <p dir="auto" className="font-reading text-lg leading-loose whitespace-pre-wrap break-words sr-only">{card.front}</p>
       {card.sourceRef && (
-        <button
-          type="button"
-          data-card-source={card.id}
-          className="rounded border border-subtle p-2 text-sm underline"
-          onClick={() => void navigateStudyReference(card.sourceRef!, books, openBookForReading, (id, anchor) => openStudyNote({ id, anchor })).catch(() => setFailed(true))}
-        >
-          {t('practiceOpenSource')}
-        </button>
+        <ContextMenu as="span" tabIndex={-1} className="inline-block" items={linkMenuItems(card.sourceRef, { onError: () => setFailed(true) })}>
+          <button
+            type="button"
+            data-card-source={card.id}
+            className="rounded border border-subtle p-2 text-sm underline"
+            {...linkHandlers(card.sourceRef, { onError: () => setFailed(true) })}
+          >
+            {t('practiceOpenSource')}
+          </button>
+        </ContextMenu>
       )}
       {card.sourceLabel && <p dir="auto" className="text-xs text-muted">{card.sourceLabel}</p>}
       {(card.questionKind??'recall')!=='recall'&&<PracticeAnswer key={`${card.id}-${card.cardRevision}`} card={card} onRecorded={()=>{setPracticeDone(true);setRevealed(true);}}/>}

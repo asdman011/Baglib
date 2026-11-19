@@ -11,7 +11,8 @@ import { ContextMenu } from '../ui/ContextMenu';
 import { usePersonalLists, useListFilter, useListMembership } from '../../libs/personal-lists';
 import { ListFilterBar, ListItemControls } from '../lists/PersonalListControls';
 import { ayahListRef } from '../../../shared/personal-lists';
-import { isTabEventTarget, navigateStudyReference } from '../../utils/study-navigation';
+import { isTabEventTarget } from '../../utils/study-navigation';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { quranActions } from '../actions/quran-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, CopyCheck, Layers, Play, Pause, X, Maximize2, Minimize2 } from 'lucide-react';
@@ -144,6 +145,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
   // KEY-419: a hidden Quran tab (kept alive) must not turn pages on the focused tab's arrow keys.
   const keysActive = useTabKeysActive();
   const { t, lang, dir } = useWorkspace();
+  const { openLink } = useOpenStudyLink();
   const root = useRef<HTMLElement>(null);
   const [catalog, setCatalog] = useState(emptyCatalog);
   const [selection, setSelection] = useState(emptySelection);
@@ -453,7 +455,7 @@ export function QuranReaderView({ visible = true, navigation }: { visible?: bool
               <button type="button" data-quran-fullscreen={immersive ? 'exit' : 'enter'} aria-label={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} title={t(immersive ? 'quranExitFullscreen' : 'quranEnterFullscreen')} onClick={() => { if (immersive) leaveFullscreen(); else { setImmersive(true); void root.current?.requestFullscreen?.().catch(() => {}); } }} className="p-2">{immersive ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}</button>
         <button type="button" onClick={() => startAudio({surah: page?.surahStart || 1, ayah: page?.ayahStart || 1})}>{t('quranAudioPlay')}</button>
       </div>} />
-    <ListFilterBar kind="ayah" lists={lists} filter={listFilter} className="shrink-0 border-b border-subtle bg-surface px-4 py-2" onOpen={item => { void navigateStudyReference(item.itemRef, [], () => undefined, () => undefined).catch(() => setError('quranReaderError')); }} />
+    <ListFilterBar kind="ayah" lists={lists} filter={listFilter} className="shrink-0 border-b border-subtle bg-surface px-4 py-2" onOpen={(item, options) => { void openLink(item.itemRef, { ...options, title: item.label }).catch(() => setError('quranReaderError')); }} />
     <QuranBookmarks bookmarks={bookmarks} failed={bookmarksFailed} lang={lang} t={t} onNavigate={reference => { setInspected(reference); jumpReference(reference); }} />
     {error && <p role="alert" className="absolute top-16 inset-x-3 mx-auto z-50 w-fit max-w-[90%] rounded-xl bg-surface border border-red-500 p-3 text-sm">{t(error)}<button type="button" aria-label={t('quranClosePanel')} onClick={() => setError(null)} className="ms-2"><X className="size-4" /></button></p>}
     {notice && <p role="status" className="sr-only">{t(notice)}</p>}

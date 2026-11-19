@@ -6,7 +6,9 @@ import { addPlaceToList } from '../lists/PersonalListControls';
 import { lectureListRef } from '../../../shared/personal-lists';
 import { useOptionalTab, useWorkspace } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
-import { isTabEventTarget, openStudyNote } from '../../utils/study-navigation';
+import { isTabEventTarget } from '../../utils/study-navigation';
+import { ContextMenu } from '../ui/ContextMenu';
+import { useOpenStudyLink } from '../../utils/use-study-link';
 import { consumeLecture, LECTURE_OPEN_EVENT, lectureTarget } from '../../utils/lecture-navigation';
 import { studyLinks, studyLinkText, studyNoteHeading } from '../../../shared/study-notes';
 import { passageNote } from '../actions/passage-actions';
@@ -32,6 +34,7 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay, 
   series: LectureSeries | undefined; next: ReturnType<typeof nextSeriesLecture>; onNext: () => void; onProgress: () => Promise<void>; autoplay: boolean;
 }) {
   const { t, dir } = useWorkspace();
+  const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const { notes } = useStudyNotes();
   const media = useRef<HTMLVideoElement>(null);
   const [layout, setLayout] = useState<'overlay' | 'study'>(() => {
@@ -168,10 +171,10 @@ function Player({ lecture, seek, onChanged, next, onNext, onProgress, autoplay, 
         {noteStatus && noteStatus !== 'saving' && <p role={noteStatus === 'failed' ? 'alert' : 'status'} className="text-xs leading-relaxed">{t(noteStatus === 'saved' ? 'notePanelSaved' : 'studyActionFailed')}</p>}
       </form>
       {linked.length === 0 && <p className="text-xs text-muted">{t('lectureNoNotes')}</p>}
-      <ul className="space-y-1">{linked.map(({ note: item, link, seconds }) => <li key={`${item.id}-${link.start}`} className="flex items-center gap-2 text-sm">
+      <ul className="space-y-1">{linked.map(({ note: item, link, seconds }) => { const target = `note:${item.id}`; return <ContextMenu as="li" tabIndex={-1} key={`${item.id}-${link.start}`} className="flex items-center gap-2 text-sm" items={linkMenuItems(target)}>
         <button type="button" className="underline" onClick={() => go(seconds)}><bdi>{clockTime(seconds)}</bdi></button>
-        <button type="button" dir="auto" className="min-w-0 truncate text-start" onClick={() => openStudyNote({ id: item.id })}>{item.title || item.content.replace(/\[\[[^\]]+\]\]/gu, '').trim().slice(0, 80)}</button>
-      </li>)}</ul>
+        <button type="button" dir="auto" className="min-w-0 truncate text-start" {...linkHandlers(target)}>{item.title || item.content.replace(/\[\[[^\]]+\]\]/gu, '').trim().slice(0, 80)}</button>
+      </ContextMenu>; })}</ul>
     </section>
     <section data-lecture-sections className="space-y-2">
       <h3 className="text-sm font-bold">{t('lectureSections')}</h3>

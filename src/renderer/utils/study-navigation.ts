@@ -1,6 +1,8 @@
 import type { SunnahCollectionId } from '../../shared/types/sunnah';
 import type { BookItem } from '../../shared/types/work';
+import { isLectureFormat } from '../../shared/lectures';
 import { parseBookTarget, parseNoteTarget, parseQuranTarget, validStudyTarget } from '../../shared/study-notes';
+import type { WorkspaceView } from '../../shared/workspace-tabs';
 import { openQuranAyah } from './quran-navigation';
 import { openPoetryReference } from './poetry-navigation';
 import { openLecture } from './lecture-navigation';
@@ -41,9 +43,14 @@ export function consumePendingPage(workId: string, tab?: TabEventRef): number | 
   const page = pendingPage.page; pendingPage = null; return page;
 }
 let pendingSunnah: { collection: SunnahCollectionId; chapter: number; hadith: string; tabId?: string } | null = null;
+function dispatchCustomEvent(name: string, detail?: unknown): void {
+  const Ctor = (typeof window !== 'undefined' && (window as unknown as { CustomEvent?: typeof CustomEvent }).CustomEvent) || CustomEvent;
+  window.dispatchEvent(new Ctor(name, { detail }));
+}
+
 export function openStudyNote(target: { id?: string; content?: string; anchor?: string; tabId?: string }): void {
   pendingNote = target;
-  window.dispatchEvent(new CustomEvent(STUDY_NOTE_OPEN, { detail: { tabId: target.tabId } }));
+  dispatchCustomEvent(STUDY_NOTE_OPEN, { tabId: target.tabId });
 }
 export function consumeStudyNote(tab?: TabEventRef) {
   if (!pendingNote) return null;
@@ -52,12 +59,37 @@ export function consumeStudyNote(tab?: TabEventRef) {
 }
 export function openSunnahReference(target: NonNullable<typeof pendingSunnah>): void {
   pendingSunnah = target;
-  window.dispatchEvent(new CustomEvent('baglib:sunnah-open', { detail: target }));
+  dispatchCustomEvent('baglib:sunnah-open', target);
 }
 export function consumeSunnahReference(tab?: TabEventRef) {
   if (!pendingSunnah) return null;
   if (!canConsumePendingTabTarget(pendingSunnah.tabId, tab)) return null;
   const value = pendingSunnah; pendingSunnah = null; return value;
+}
+
+export function studyTargetView(target: string, books: BookItem[] = []): WorkspaceView | null {
+  if (!validStudyTarget(target)) return null;
+  if (target.startsWith('note:')) return 'notes';
+  if (target.startsWith('quran:')) return 'quran';
+  if (target.startsWith('sunnah:')) return 'sunnah';
+  if (target.startsWith('poetry:')) return 'bayan';
+  if (target.startsWith('media:')) return 'lectures';
+  if (target.startsWith('book:')) {
+    const parsed = parseBookTarget(target);
+    const book = parsed ? books.find(item => item.id === parsed.id) : undefined;
+    if (book && book.workType === 'lecture' && book.filePath && isLectureFormat(book.digitalFormat)) return 'lectures';
+    return 'reader';
+  }
+  return null;
+}
+
+export function studyTargetTitle(target: string, books: BookItem[] = []): string {
+  if (target.startsWith('book:')) {
+    const parsed = parseBookTarget(target);
+    const book = parsed ? books.find(item => item.id === parsed.id) : undefined;
+    return book?.title ?? '';
+  }
+  return '';
 }
 
 export async function navigateStudyReference(target: string, books: BookItem[], onBook: (book: BookItem) => void, onNote: (id: string, anchor?: string) => void, tabId?: string): Promise<void> {
