@@ -1,4 +1,4 @@
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, Eye } from 'lucide-react';
 import { transformClassicalGlosses } from '../../libs/reader/typography';
@@ -23,6 +23,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
   onParagraphChange,
 }) => {
   const { t } = useWorkspace();
+  const keysActive = useTabKeysActive();
   const [currentIndex, setCurrentIndex] = useState(
     Math.max(0, Math.min(paragraphs.length - 1, initialIndex))
   );
@@ -81,6 +82,7 @@ export const ParagraphOverlay: React.FC<ParagraphOverlayProps> = ({
   // Keyboard controls: ArrowLeft, ArrowRight, Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!keysActive.current) return;
       if (e.key === 'Escape') {
         onClose();
       } else if (e.key === 'ArrowRight') {

@@ -559,4 +559,38 @@ describe('workspace tabs wired to the providers', () => {
       assert.equal(await openMenu('t2'), null, 'no item in a secondary window');
     } finally { restore(); }
   });
+
+  it('KEY-430: shares one getAllNotes IPC load across all mounted TabScopes', async () => {
+    const { window, root, restore } = setup();
+    try {
+      let getAllNotesCalls = 0;
+      const win = window as unknown as { electronAPI?: unknown };
+      win.electronAPI = {
+        getAllNotes: async () => {
+          getAllNotesCalls += 1;
+          return [{ id: 'n1', bookId: 'b1', pageNumber: 1, content: 'note', createdAt: '2026-01-01' }];
+        },
+      };
+
+      let tabsApi: ReturnType<typeof useTabs> | undefined;
+      const Shell: React.FC = () => {
+        tabsApi = useTabs();
+        return createElement(
+          'main',
+          null,
+          createElement(WorkspaceTabPanels, { render: view => createElement('div', { 'data-view': view }, view) }),
+        );
+      };
+
+      await act(async () => {
+        root.render(createElement(WorkspaceProvider, { initialTabs: threeTabs() }, createElement(Shell)));
+      });
+      await act(async () => { tabsApi?.activate('t2'); });
+      await act(async () => { tabsApi?.activate('t3'); });
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+
+      assert.equal(window.document.querySelectorAll('[data-tab-panel]').length, 3, 'all 3 tabs are mounted');
+      assert.equal(getAllNotesCalls, 1, 'getAllNotes called exactly once across 3 mounted TabScopes');
+    } finally { restore(); }
+  });
 });

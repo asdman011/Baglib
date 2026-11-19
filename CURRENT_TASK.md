@@ -1,4 +1,25 @@
-﻿## KEY-427 (WS-12): secondary window persistence, drag-out, and drag-into-window routing — 2026-11-19 - Agent: Antigravity
+﻿## KEY-430: multi-tab follow-ups (keydown gating, restore race fix, getAllNotes deduplication) — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/notes/BoardsWorkspace.tsx`, `src/renderer/components/knowledge/SrsReviewScreen.tsx`, `src/renderer/components/quran/QuranMushafWorkspace.tsx`, `src/renderer/components/reader/ParagraphOverlay.tsx`: gated window-level `keydown` listeners with `useTabKeysActive()` so hidden tabs ignore keyboard shortcuts.
+- `src/shared/workspace-tabs.ts` & `src/renderer/components/context/WorkspaceContext.tsx`: added `mergeRestoredTabs(saved, current, prefs)` so tabs opened/navigated during startup before `settings.get` resolves are merged with saved tabs instead of skipping restore.
+- `src/renderer/components/context/WorkspaceContext.tsx`: moved `bookNotes`, `getAllNotes()`, and `baglib:notes-changed` from per-tab `TabScope` into `TabsProvider` (`TabsInternalApi`) so `getAllNotes` runs once per window instead of once per mounted tab.
+- `src/renderer/components/layout/TabBar.tsx` & `scripts/tab-window-live/main.cjs`: added viewport-bounds guard in `isDetachedPointer` so in-bar synthetic `sendInputEvent` drags never falsely detach when `screenX/Y` omit `window.screenX/Y`.
+- `tests/ui/workspace-tabs-restore.test.ts` & `tests/ui/workspace-tabs-wiring.test.ts`: added delayed-hydration restore-merge test and `getAllNotes` IPC count test (3 mounted `TabScope`s -> 1 call).
+
+**Tests:**
+- Focused (`workspace-tabs-restore`, `workspace-tabs-wiring`, `workspace-tab-scope`, `workspace-tabs`): 74/74 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,831/2,831 pass (400 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `git diff --check`: clean.
+- Live Electron runs: `node scripts/workspace-tabs-live/run.mjs` PASS (`ar`: 17 tabs, 7 mounted after 8, 0 errors; `en`: 17 tabs, 7 mounted after 8, 0 errors); `node scripts/tab-window-live/run.mjs` PASS (`ar` and `en`, 0 errors, throwaway profiles removed).
+
+**Jira:**
+- Created `KEY-430` under epic `KEY-380` (label `Dashboard`), moved to In Progress (`21`), and moved to Done (`41`) with commit hash after commit+push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-430.md`, `scripts/tab-window-live/main.cjs`, `src/renderer/components/context/WorkspaceContext.tsx`, `src/renderer/components/knowledge/SrsReviewScreen.tsx`, `src/renderer/components/layout/TabBar.tsx`, `src/renderer/components/notes/BoardsWorkspace.tsx`, `src/renderer/components/quran/QuranMushafWorkspace.tsx`, `src/renderer/components/reader/ParagraphOverlay.tsx`, `src/shared/workspace-tabs.ts`, `tests/ui/workspace-tabs-restore.test.ts`, `tests/ui/workspace-tabs-wiring.test.ts`.
+
+## KEY-427 (WS-12): secondary window persistence, drag-out, and drag-into-window routing — 2026-11-19 - Agent: Antigravity
 
 **Done:**
 - `src/shared/workspace-window-transfer.ts`: added `WORKSPACE_WINDOWS_SETTING` (`workspace.tabs.v1.windows`), `WORKSPACE_WINDOW_CHANNELS` (`receiveTab`, `saveWindowTabs`, `appendClosedTabs`), `TabMoveRequest` (optional screen `position`), `SavedSecondaryWindow`, `parseTabMoveRequest`, `isPointInBounds`, `isOutsideWindowBounds`, `parseSavedSecondaryWindows`, and `serializeSavedSecondaryWindows`.

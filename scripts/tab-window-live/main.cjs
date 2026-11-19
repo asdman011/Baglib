@@ -52,8 +52,8 @@ app.on('browser-window-created', (_, win) => {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: cx, clientY: cy, screenX: window.screenX + cx, screenY: window.screenY + cy }));
-    el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, pointerId: 1, clientX: cx + 20, clientY: cy + 50, screenX: ${Math.round(screenX)}, screenY: ${Math.round(screenY)} }));
-    el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: cx + 20, clientY: cy + 50, screenX: ${Math.round(screenX)}, screenY: ${Math.round(screenY)} }));
+    el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, pointerId: 1, clientX: ${Math.round(screenX)} - window.screenX, clientY: ${Math.round(screenY)} - window.screenY, screenX: ${Math.round(screenX)}, screenY: ${Math.round(screenY)} }));
+    el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: ${Math.round(screenX)} - window.screenX, clientY: ${Math.round(screenY)} - window.screenY, screenX: ${Math.round(screenX)}, screenY: ${Math.round(screenY)} }));
     return true;
   })()`);
   const appWindows = () => windows.filter(item => !item.isDestroyed() && item.webContents.getURL().startsWith('http://localhost:3000'));

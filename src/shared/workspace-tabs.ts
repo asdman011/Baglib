@@ -683,6 +683,26 @@ export function startupTabs(saved: TabsState, prefs: WorkspacePrefs, homeId: str
   return withSplit(saved, [...saved.tabs, newTab(homeId, homeLocation(), now)], homeId, undefined);
 }
 
+/**
+ * Merges saved tabs with any tabs created or navigated during startup before settings resolved.
+ * Keeps all saved tabs (when `restoreTabs` is enabled), drops duplicate single-instance views
+ * already present in `current`, appends `current.tabs`, and keeps `current.activeId` focused.
+ */
+export function mergeRestoredTabs(saved: TabsState, current: TabsState, prefs: WorkspacePrefs): TabsState {
+  if (!prefs.restoreTabs || saved.tabs.length === 0) return current;
+  const currentIds = new Set(current.tabs.map(tab => tab.id));
+  const currentSingles = new Set(
+    current.tabs.map(tab => currentLocation(tab).view).filter(view => SINGLE_INSTANCE_VIEWS.includes(view)),
+  );
+  const keptSaved = saved.tabs.filter(tab => !currentIds.has(tab.id) && !currentSingles.has(currentLocation(tab).view));
+  if (keptSaved.length === 0) return current;
+  const tabs = [...keptSaved, ...current.tabs];
+  const groups = [...(saved.groups ?? []), ...(current.groups ?? [])].filter((group, index, all) =>
+    all.findIndex(item => item.id === group.id) === index,
+  );
+  return withSplit({ ...current, groups }, tabs, current.activeId, current.splitId);
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // "Most used" destinations
 // ---------------------------------------------------------------------------------------------------------------

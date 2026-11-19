@@ -3,7 +3,7 @@
 import { shortcutForEvent } from '../actions/shortcuts';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, ArrowLeft, ArrowRight, Sparkles, RotateCw, ExternalLink, MoreHorizontal, AlertTriangle } from 'lucide-react';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { ReviseNextList } from './ReviseNextList';
@@ -73,6 +73,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
   onNavigateSource,
 }) => {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
+  const keysActive = useTabKeysActive();
   const ioStrings = useMemo(() => ({ toggleMasks: t('ioToggleMasks'), noImage: t('ioNoImage') }), [t]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [mistake, setMistake] = useState<MistakeCategory | undefined>();
@@ -275,6 +276,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
   // Global keyboard shortcuts: Space to reveal, 1-4 to rate, Esc to close
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!keysActive.current) return;
       // Don't intercept if user is typing in a text field
       const shortcut = shortcutForEvent(event, 'review');
       const target = event.target as HTMLElement | null;

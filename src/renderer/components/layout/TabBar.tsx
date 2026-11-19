@@ -156,11 +156,22 @@ export const TabBar: React.FC<TabBarProps> = ({
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
+  const isDetachedPointer = (event: React.PointerEvent<HTMLElement>): boolean => {
+    if (typeof window === 'undefined') return false;
+    const inViewport =
+      event.clientX >= 0 &&
+      event.clientX <= window.innerWidth &&
+      event.clientY >= 0 &&
+      event.clientY <= window.innerHeight;
+    if (inViewport) return false;
+    return isOutsideWindowBounds({ screenX: event.screenX, screenY: event.screenY }, window);
+  };
+
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     const current = dragRef.current;
     if (!current) return;
     // Dragged outside the browser window: ready to detach into a new or existing window on release.
-    if (!current.groupId && onDetachTab && typeof window !== 'undefined' && isOutsideWindowBounds({ screenX: event.screenX, screenY: event.screenY }, window)) {
+    if (!current.groupId && onDetachTab && isDetachedPointer(event)) {
       if (!current.out || current.edge !== null) setDragState({ ...current, moved: true, out: true, edge: null });
       return;
     }
@@ -181,7 +192,7 @@ export const TabBar: React.FC<TabBarProps> = ({
     const current = dragRef.current;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     setDragState(null);
-    if (current && !current.groupId && onDetachTab && typeof window !== 'undefined' && isOutsideWindowBounds({ screenX: event.screenX, screenY: event.screenY }, window)) {
+    if (current && !current.groupId && onDetachTab && isDetachedPointer(event)) {
       suppressClick.current = true;
       onDetachTab(current.id, { x: event.screenX, y: event.screenY });
       return;

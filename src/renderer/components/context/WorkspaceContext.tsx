@@ -19,6 +19,7 @@ import {
   DEFAULT_WORKSPACE_PREFS,
   findTab,
   homeLocation,
+  mergeRestoredTabs,
   newTab,
   parseClosed,
   parsePrefs,
@@ -206,6 +207,8 @@ interface TabsInternalApi {
   publishFocusedScope: (tabId: string, scope: TabScopeContextType) => void;
   unpublishFocusedScope: (tabId: string) => void;
   registerTabSnapshot: (tabId: string, handlers: TabSnapshotHandlers | null) => void;
+  bookNotes: PageNote[];
+  setBookNotes: React.Dispatch<React.SetStateAction<PageNote[]>>;
 }
 
 const WorkspaceGlobalContext = createContext<WorkspaceGlobalContextType | undefined>(undefined);
@@ -995,13 +998,14 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
       setClosedTabs(closed);
       const loadedPrefs = parsePrefs(rawPrefs);
       setPrefs(loadedPrefs);
-      if (!userMutatedRef.current) {
-        const saved = parseTabs(rawTabs);
-        const next = startupTabs(saved, loadedPrefs, allocateId(), Date.now());
-        stateRef.current = next;
-        skipNextTabsPersistRef.current = true;
-        dispatch({ type: '__restore', state: next });
-      }
+      const saved = parseTabs(rawTabs);
+      const next = userMutatedRef.current
+        ? mergeRestoredTabs(saved, stateRef.current, loadedPrefs)
+        : startupTabs(saved, loadedPrefs, allocateId(), Date.now());
+      stateRef.current = next;
+      if (!userMutatedRef.current) skipNextTabsPersistRef.current = true;
+      else tabsDirtyRef.current = true;
+      dispatch({ type: '__restore', state: next });
       restoredRef.current = true;
     });
     return () => { alive = false; };
@@ -1239,6 +1243,18 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     setPublishedFocus(prev => (prev && prev.tabId === tabId ? null : prev));
   }, []);
 
+  const [bookNotes, setBookNotes] = useState<PageNote[]>([]);
+  useEffect(() => {
+    const refresh = () => {
+      const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+      if (api?.getAllNotes) void api.getAllNotes().then(notes => { if (Array.isArray(notes)) setBookNotes(notes); }).catch(() => {});
+    };
+    refresh();
+    if (typeof window === 'undefined') return;
+    window.addEventListener('baglib:notes-changed', refresh);
+    return () => window.removeEventListener('baglib:notes-changed', refresh);
+  }, []);
+
   const internalApi = useMemo<TabsInternalApi>(() => ({
     subscribeBookSync,
     notifyBookUpdate,
@@ -1246,7 +1262,9 @@ const TabsProvider: React.FC<TabsProviderProps> = ({
     publishFocusedScope,
     unpublishFocusedScope,
     registerTabSnapshot,
-  }), [subscribeBookSync, notifyBookUpdate, notifyBookDelete, publishFocusedScope, unpublishFocusedScope, registerTabSnapshot]);
+    bookNotes,
+    setBookNotes,
+  }), [subscribeBookSync, notifyBookUpdate, notifyBookDelete, publishFocusedScope, unpublishFocusedScope, registerTabSnapshot, bookNotes]);
 
   const focusedTabId = state.activeId ?? state.tabs[0]?.id ?? 'tab-1';
 
@@ -1309,18 +1327,9 @@ function useTabScopeState(tabId: string): TabScopeContextType {
   const [readingPage, setReadingPage] = useState<number>(1);
   const [totalPages] = useState<number>(100);
   const [splitOrientation, setSplitOrientation] = useState<SplitOrientationMode>('none');
-  const [bookNotes, setBookNotes] = useState<PageNote[]>([]);
+  const bookNotes = internal?.bookNotes ?? [];
+  const setBookNotes = internal?.setBookNotes;
   const [highlights, setHighlights] = useState<{ id: string; pageNumber: number; text: string; color: string }[]>([]);
-
-  useEffect(() => {
-    const refresh = () => {
-      const api = window.electronAPI;
-      if (api?.getAllNotes) void api.getAllNotes().then(notes => { if (Array.isArray(notes)) setBookNotes(notes); }).catch(() => {});
-    };
-    refresh();
-    window.addEventListener('baglib:notes-changed', refresh);
-    return () => window.removeEventListener('baglib:notes-changed', refresh);
-  }, []);
 
   const setIsMobileNavOpen = global?.setIsMobileNavOpen;
   const setIsSidebarCollapsed = global?.setSidebarCollapsed;
@@ -1403,8 +1412,8 @@ function useTabScopeState(tabId: string): TabScopeContextType {
       }
     }
 
-    setBookNotes((prev) => [newNote, ...prev]);
-  }, []);
+    setBookNotes?.((prev) => [newNote, ...prev]);
+  }, [setBookNotes]);
 
   const deletePageNote = useCallback(async (noteId: string) => {
     if (typeof window !== 'undefined' && typeof window.electronAPI?.deleteNote === 'function') {
@@ -1414,8 +1423,8 @@ function useTabScopeState(tabId: string): TabScopeContextType {
         console.error('[baglib/ui] Failed to delete note from SQLite:', err);
       }
     }
-    setBookNotes((prev) => prev.filter((n) => n.id !== noteId));
-  }, []);
+    setBookNotes?.((prev) => prev.filter((n) => n.id !== noteId));
+  }, [setBookNotes]);
 
   const addHighlight = useCallback((pageNumber: number, text: string, color = 'bg-amber-500/30') => {
     if (!text.trim()) return;

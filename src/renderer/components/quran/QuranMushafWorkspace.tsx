@@ -33,6 +33,7 @@ import { useOpenStudyLink } from '../../utils/use-study-link';
 import { groupThemeLabels } from './quran-theme-labels';
 import { quranStudyReferences } from '../../../shared/quran-study-scope';
 import { normalizeArabicText } from '../../../shared/utils/text-normalizer';
+import { useTabKeysActive } from '../context/WorkspaceContext';
 import { usePersonalLists, useListMembership } from '../../libs/personal-lists';
 import { listMenuItems } from '../lists/PersonalListControls';
 import { ayahListRef } from '../../../shared/personal-lists';
@@ -286,6 +287,7 @@ function useAyahListMenu(reference: Reference | null, page: Props['page'], surah
 
 export function QuranMushafWorkspace(props: Props) {
   const { page, t, selection, metadata, studyTarget, onStudyTargetConsumed, onNavigateAyah, onPanelChange } = props;
+  const keysActive = useTabKeysActive();
   const [notesTab, setNotesTab] = useState(false);
   const [compareTafsirs, setCompareTafsirs] = useState(false);
   const [windows, setWindows] = useState<WindowState[]>([]);
@@ -420,10 +422,10 @@ export function QuranMushafWorkspace(props: Props) {
     if (!menu) return;
     const previous = document.activeElement as HTMLElement | null;
     menuElement.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(null); };
+    const close = (event: KeyboardEvent) => { if (keysActive.current && event.key === 'Escape') setMenu(null); };
     window.addEventListener('keydown', close);
     return () => { window.removeEventListener('keydown', close); if (previous?.isConnected) previous.focus(); };
-  }, [menu]);
+  }, [menu, keysActive]);
   const pageStart = { surah: page.surahStart, ayah: page.ayahStart };
   return <div ref={root} className="group/quran relative h-full min-h-0" data-quran-workspace data-page-profile={page.profile} data-tafsir-comparing={compareTafsirs && !notesTab && (!windows[0] || windows[0].tool === 'tafsir') ? '' : undefined}>
     <style>{`

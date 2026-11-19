@@ -30,7 +30,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { useWorkspace } from '../context/WorkspaceContext';
+import { useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
 import {
   BOARD_COLORS,
   freeSpot,
@@ -106,6 +106,7 @@ function BoardCanvas({
   onSaved: (board: Board) => void;
 }) {
   const { t, dir, setViewMode } = useWorkspace();
+  const keysActive = useTabKeysActive();
   const { linkHandlers } = useOpenStudyLink();
   const [board, setBoard] = useState(initial);
   const history = useRef(createBoardHistory(initial));
@@ -376,6 +377,7 @@ function BoardCanvas({
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (!keysActive.current) return;
       if (event.defaultPrevented || event.isComposing) return;
       const target = event.target as HTMLElement;
       if (target?.closest?.('input, textarea, select, [contenteditable=true], [role=menu]')) return;

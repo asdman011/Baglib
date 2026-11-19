@@ -369,4 +369,50 @@ describe('workspace tabs persistence and restore (KEY-423)', () => {
       }
     }
   });
+
+  it('merges saved tabs instead of skipping restore when user opens a tab before settings resolve', async () => {
+    const savedState: TabsState = {
+      tabs: [
+        newTab('saved-1', { view: 'library', title: 'Library' }, 10),
+        newTab('saved-2', { view: 'quran', title: 'Quran' }, 20),
+      ],
+      activeId: 'saved-1',
+    };
+    let resolveTabs!: (value: unknown) => void;
+    const baseSettings = createMockSettings({
+      [WORKSPACE_PREFS_SETTING]: { restoreTabs: true, restoreFocus: 'new', linkTarget: 'new' },
+    });
+    const delayedSettings = {
+      get: (key: string) => {
+        if (key === WORKSPACE_TABS_SETTING) return new Promise(resolve => { resolveTabs = resolve; });
+        return baseSettings.get(key);
+      },
+      set: baseSettings.set,
+    };
+    const { root, restore } = setupDom(delayedSettings);
+    try {
+      await act(async () => {
+        root.render(createElement(WorkspaceProvider, null, createElement(TabsProbe)));
+      });
+      // User opens a tab (e.g., deep link) BEFORE saved tabs finish loading.
+      await act(async () => {
+        probe.tabs?.open({ view: 'sunnah', title: 'Bukhari' });
+      });
+      assert.equal(probe.tabs?.state.tabs.length, 2);
+
+      // Now saved tabs resolve.
+      await act(async () => {
+        resolveTabs(savedState);
+      });
+      await flushMicrotasks();
+
+      const views = probe.tabs?.state.tabs.map(t => t.history[0].view) ?? [];
+      assert.ok(views.includes('library'), 'saved library tab preserved');
+      assert.ok(views.includes('quran'), 'saved quran tab preserved');
+      assert.ok(views.includes('sunnah'), 'user-opened sunnah tab preserved');
+      assert.equal(probe.tabs?.state.tabs.find(t => t.id === probe.tabs?.state.activeId)?.history[0].view, 'sunnah', 'user-opened tab stays focused');
+    } finally {
+      restore();
+    }
+  });
 });
