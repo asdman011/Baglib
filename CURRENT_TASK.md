@@ -1,4 +1,27 @@
-﻿## KEY-427 (WS-12 spike): "Move to new window" — 2026-11-19 - Agent: Antigravity
+﻿## KEY-381: drag passages from readers into a manuscript side by side — 2026-11-19 - Agent: Antigravity
+
+**Done:**
+- `src/renderer/components/sunnah/SunnahChapterView.tsx`: added `data-source-drag-handle="hadith"` drag handle (`<span role="button" tabIndex={0} draggable>`) in each hadith header row (preserving mouse text selection on `<article>`) writing `createHadithPayload(...)` via `writeSourceDrag`.
+- `src/renderer/components/quran/QuranReaderView.tsx` & `src/renderer/components/quran/QuranAyahInspector.tsx`: added `data-source-drag-handle="ayah"` drag handles in each ayah card footer and beside "Send to manuscript" in the inspector, writing `createQuranAyahPayload(...)`.
+- `src/renderer/components/poetry/PoetryReader.tsx`: added `data-source-drag-handle="verse"` inside `data-poetry-line-actions` (already skipped by `onPointerDown` line selection), writing `createPoetryVersePayload(...)` for the selected range or current row.
+- `src/renderer/components/reader/ZenSelectionMenu.tsx` & `src/renderer/components/reader/FullPageBookReader.tsx`: added `onDragSourceStart` and `data-source-drag-handle="book"`, exempting `[data-source-drag-handle]` from `onMouseDown`'s `preventDefault()` so HTML5 drag starts cleanly while keeping `stopPropagation()`.
+- `src/renderer/components/research/ResearchEditorView.tsx`: added `onDragOver` and `onDrop` on `.research-editor-document` calling `host.insertSource(...)` as a pane-level fallback alongside the iframe document drop handler.
+- `src/renderer/translations.ts`: added `dragToManuscript` in `ar` and `en`.
+- `tests/ui/source-drag-handles.test.ts` & `scripts/source-drag-live/`: added UI unit tests and live Electron split-view drag verification in `ar` and `en`.
+
+**Tests:**
+- Focused (`tests/ui/source-drag-handles.test.ts`, `tests/services/manuscript-transfer.test.ts`, `tests/ui/translation-keys.test.ts`, `tests/ui/sunnah.test.ts`): 26/26 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,824/2,824 pass, 0 fail.
+- `npx tsc --noEmit`: 0 errors. `git diff --check`: clean.
+- Live Electron run (`node scripts/source-drag-live/run.mjs`): PASS in `ar` and `en` with real PDFs from `tests/real-files/` in split view (`baglib-book-quote` inserted, 0 renderer errors, throwaway profile removed).
+
+**Jira:**
+- KEY-381 moved to In Progress (21) and then Done (41) after commit+push+tests.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-381.md`, `scripts/source-drag-live/main.cjs`, `scripts/source-drag-live/run.mjs`, `src/renderer/components/poetry/PoetryReader.tsx`, `src/renderer/components/quran/QuranAyahInspector.tsx`, `src/renderer/components/quran/QuranReaderView.tsx`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/reader/ZenSelectionMenu.tsx`, `src/renderer/components/research/ResearchEditorView.tsx`, `src/renderer/components/sunnah/SunnahChapterView.tsx`, `src/renderer/translations.ts`, `tests/ui/source-drag-handles.test.ts`.
+
+## KEY-427 (WS-12 spike): "Move to new window" — 2026-11-19 - Agent: Antigravity
 
 **Done:**
 - `src/shared/workspace-window-transfer.ts`: added `WORKSPACE_WINDOW_CHANNELS`, `TabTransferPayload` (`{ version: 1, history, index }`), `WorkspaceWindowInfo`, `MoveTabResult`, `buildTabTransfer`, `parseTabTransfer` (validated via `sanitizeLocation` and capped to `TAB_LIMITS.maxHistory`), and `transferToTab`.

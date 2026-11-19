@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useEffect, useRef, useState } from 'react';
-import { Focus } from 'lucide-react';
+import { Focus, GripVertical } from 'lucide-react';
 import type { SunnahChapter, SunnahHadith, SunnahLanguage, SunnahPassage, SunnahText } from '../../../shared/types/sunnah';
 import type { TranslationKey } from '../../translations';
 import { isnadTokens, splitSunnahPassage } from '../../libs/sunnah/text';
@@ -18,7 +18,7 @@ import { usePassageHighlightActions, usePassageHighlights } from '../../hooks/us
 import { PASSAGE_HIGHLIGHT_COLORS } from '../../../shared/passage-highlights';
 import { findTextRange, paintTextHighlights } from '../../libs/reader/text-highlights';
 import { colorKeys } from '../reader/ReaderMarkupBar';
-import { createHadithPayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
+import { createHadithPayload, requestSendToManuscript, writeSourceDrag } from '../../../shared/manuscript-transfer';
 import { getSunnahIsnadScope } from '../../utils/corpus-lookup';
 import { SunnahDeckDialog, type SunnahDeckSource } from '../knowledge/SunnahDeckDialog';
 import { useListMembership, type PersonalList } from '../../libs/personal-lists';
@@ -123,6 +123,7 @@ export function SunnahChapterView({ lists = [], onListFilter, calm = false, onSt
       const target = 'sunnah:' + chapter.collection + ':' + chapter.number + ':' + hadith.id;
       const label = chapter.title.ar + ' · ' + hadith.number;
       const reference = formatHadith(chapter, hadith, showEnglish, false, true);
+      const hadithPayload = () => createHadithPayload({ collection: chapter.collection, collectionLabel: collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection, chapterNumber: chapter.number, hadithId: hadith.id, hadithNumber: hadith.number || '', text: formatHadith(chapter, hadith, false, getSunnahIsnadScope() !== 'matn_only', false) });
       const items = contextActions('hadith', {
         copy: () => navigator.clipboard.writeText(reference),
         copyFull: () => navigator.clipboard.writeText(formatHadith(chapter, hadith, showEnglish, true, true)),
@@ -135,7 +136,7 @@ export function SunnahChapterView({ lists = [], onListFilter, calm = false, onSt
           const details = root?.querySelector<HTMLDetailsElement>('details'); if(details){ details.open=true; details.scrollIntoView({block:'nearest'}); }
         } : undefined,
         link: () => linkPassageToNote(target,label),
-        manuscript: () => requestSendToManuscript(createHadithPayload({ collection: chapter.collection, collectionLabel: collectionKeys[chapter.collection] ? t(collectionKeys[chapter.collection]) : chapter.collection, chapterNumber: chapter.number, hadithId: hadith.id, hadithNumber: hadith.number || '', text: formatHadith(chapter, hadith, false, getSunnahIsnadScope() !== 'matn_only', false) })),
+        manuscript: () => requestSendToManuscript(hadithPayload()),
       },t);
       const listItem = { kind: 'hadith' as const, itemRef: target, label: `${collectionName} ${hadith.number || ''} — ${(hadith.text.ar.matn || hadith.text.ar.full || hadith.text.en.matn || '').slice(0, 160)}` };
       items.push(...listMenuItems(listItem, lists, membership[target] ?? [], t));
@@ -160,7 +161,7 @@ export function SunnahChapterView({ lists = [], onListFilter, calm = false, onSt
           english={<h3><NumberedTitle number={section.number} title={section.title} language="en" fallback="" /></h3>} />}
         <article className="sunnah-hadith group relative" aria-label={t('sunnahHadithNumber', { number: hadith.number || '—' })}>
           <div className="flex items-center justify-between gap-3 mb-4 text-xs font-sans text-muted">
-            <span className="inline-flex items-center gap-2"><span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
+            <span className="inline-flex items-center gap-2"><span role="button" tabIndex={0} draggable data-source-drag-handle="hadith" onDragStart={event => writeSourceDrag(event.dataTransfer, hadithPayload())} title={t('dragToManuscript')} aria-label={t('dragToManuscript')} className="inline-flex items-center justify-center rounded p-1 text-muted hover:text-main hover:bg-canvas cursor-grab active:cursor-grabbing"><GripVertical size={15} aria-hidden="true" /></span><span className="font-bold">{t('sunnahHadithNumber', { number: hadith.number || '—' })}</span>
               {!!noteCounts?.get(target) && <NoteMarker count={noteCounts.get(target)!} t={t} onOpen={() => passageNote(target, label)} />}
               {onListFilter && <ListItemControls item={listItem} heldBy={membership[target] ?? []} lists={lists} onFilter={onListFilter} />}</span>
             {!calm && hadith.researchId !== undefined && <button type="button" className="sunnah-button" onClick={event => {

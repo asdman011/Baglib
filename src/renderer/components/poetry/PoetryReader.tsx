@@ -11,7 +11,7 @@ import { ListItemControls, listMenuItems } from '../lists/PersonalListControls';
 import { poemListRef } from '../../../shared/personal-lists';
 import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
 import { addPassageToSrs, passageNote } from '../actions/passage-actions';
-import { createPoetryVersePayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
+import { createPoetryVersePayload, requestSendToManuscript, writeSourceDrag } from '../../../shared/manuscript-transfer';
 import { NoteMarker } from '../notes/NoteMarker';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
 import { useCtrlWheelZoom } from '../../hooks/useCtrlWheelZoom';
@@ -19,7 +19,7 @@ import { poetryRange, poetryRowCount } from '../../../shared/note-targets';
 import { usePassageHighlightActions, usePassageHighlights } from '../../hooks/usePassageHighlights';
 import { PASSAGE_HIGHLIGHT_COLORS } from '../../../shared/passage-highlights';
 import { colorKeys } from '../reader/ReaderMarkupBar';
-import { Copy, Share2, NotebookPen, SquareCheck } from 'lucide-react';
+import { Copy, GripVertical, Share2, NotebookPen, SquareCheck } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { buildPoetryRows, poetryCopyText, poetryHemistichsFit, poetryRhymeLetter, poetryRowLineClass, type PoetryRowModel } from './poetry-layout';
 import { POETRY_LINE_ACTIONS, runPoetryLineAction, type PoetryLineActionHandlers } from './poetry-line-actions';
@@ -236,12 +236,17 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
           if (row.kind === 'single' && !row.sadr.trim()) return <div key={row.index} aria-hidden="true" className="h-6" />;
           const selected = !!selection && row.index >= selection[0] && row.index <= selection[1];
           const number = lineNumber(row);
+          const versePayload = () => {
+            const picked = selected && selection ? rows.slice(selection[0], selection[1] + 1) : [row];
+            const bayts = picked.filter(item => item.sadr.trim() || item.ajuz?.trim());
+            return createPoetryVersePayload({ poemId: poem.id, from: bayts[0]?.sourceFrom ?? row.sourceFrom, to: bayts[bayts.length - 1]?.sourceTo ?? row.sourceTo, poetName: poem.poet_name || '', poemTitle: poem.title || '', verses: bayts.map(item => ({ sadr: item.sadr, ajuz: item.ajuz || '' })) });
+          };
           return <ContextMenu items={[
             ...POETRY_LINE_ACTIONS.map(action => ({ id: action.id, label: t(action.labelKey), icon: React.createElement(lineIcons[action.icon], { size: 14 }), shortcut: shortcutHint('poetry-' + action.id), onClick: () => runPoetryLineAction(action.id, row, lineHandlers) })),
             { id: 'copy-line', label: t('ctxCopyText'), onClick: () => copyRow({ sadr: row.sadr, ajuz: null }) },
             highlightItems(row),
             { id: 'srs', label: t('ctxAddSrs'), onClick: () => addPassageToSrs({ text: poetryCopyText([row], poem), sourceKind: 'poetry', sourceRef: 'poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, sourceLabel: [poem.poet_name, poem.title].filter(Boolean).join(' — '), language: poem.language }) },
-            { id: 'manuscript', label: t('ctxSendToManuscript'), onClick: () => { const picked = selected && selection ? rows.slice(selection[0], selection[1] + 1) : [row]; const bayts = picked.filter(item => item.sadr.trim() || item.ajuz?.trim()); requestSendToManuscript(createPoetryVersePayload({ poemId: poem.id, from: bayts[0]?.sourceFrom ?? row.sourceFrom, to: bayts[bayts.length - 1]?.sourceTo ?? row.sourceTo, poetName: poem.poet_name || '', poemTitle: poem.title || '', verses: bayts.map(item => ({ sadr: item.sadr, ajuz: item.ajuz || '' })) })); } },
+            { id: 'manuscript', label: t('ctxSendToManuscript'), onClick: () => requestSendToManuscript(versePayload()) },
           ]} key={row.index} data-poetry-row data-poetry-row-index={row.index} data-poetry-kind={row.kind} data-actions-open={actionsRow === row.index} data-card-kind="poetry" data-card-ref={`poetry:${poem.id}:${row.index}`} data-card-label={[poem.poet_name, poem.title].filter(Boolean).join(' · ')} data-poetry-source-index={row.sourceFrom} data-poetry-mark={rowMark(row)} aria-selected={selected}
             onPointerDown={event => {
               if (event.pointerType === 'touch' || event.pointerType === 'pen' || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
@@ -274,6 +279,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
               {row.ajuz !== null && <span data-poetry-hemistich="ajuz" aria-label={t('bayanAjuz')} className="block min-w-0 whitespace-pre-wrap break-words px-1 py-0.5" style={halfStyle}>{poetryDisplayText(row.ajuz, diacritics)}</span>}
             </div>
             <div role="group" aria-label={t('bayanLineActions')} data-poetry-line-actions data-open={actionsRow === row.index} className="pointer-events-none absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 rounded-lg border border-subtle bg-surface-raised p-0.5 text-base leading-none opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[open=true]:pointer-events-auto data-[open=true]:opacity-100 max-sm:flex-col">
+              <button type="button" draggable tabIndex={row.index === activeRow ? 0 : -1} data-source-drag-handle="verse" onDragStart={event => writeSourceDrag(event.dataTransfer, versePayload())} title={t('dragToManuscript')} aria-label={t('dragToManuscript')} className="inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-primary-text focus-visible:outline-2 focus-visible:outline-pale-sky-500 cursor-grab active:cursor-grabbing"><GripVertical size={16} aria-hidden="true" /></button>
               {POETRY_LINE_ACTIONS.map(action => { const Icon = lineIcons[action.icon]; return <button key={action.id} type="button" tabIndex={row.index === activeRow ? 0 : -1} title={t(action.labelKey)} aria-label={t(action.labelKey)} aria-pressed={action.id === 'select' ? selected : undefined} onClick={event => { if (action.id === 'select' && event.shiftKey) selectRow(row, true); else runPoetryLineAction(action.id, row, lineHandlers); setActionsRow(null); }} className="inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-primary-text focus-visible:outline-2 focus-visible:outline-pale-sky-500 aria-pressed:bg-primary/15 aria-pressed:text-primary-text"><Icon size={16} aria-hidden="true" /></button>; })}
             </div>
           </ContextMenu>;

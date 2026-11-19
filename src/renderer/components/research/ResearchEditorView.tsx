@@ -28,7 +28,7 @@ import { ResearchImportModal } from './ResearchImportModal';
 import type { BoardSummary } from '../../../shared/boards';
 import { X, Plus } from 'lucide-react';
 import './research-editor.css';
-import { MANUSCRIPT_OPEN_EVENT, consumeOpenManuscriptDocument, setOpenManuscriptDocument } from '../../../shared/manuscript-transfer';
+import { MANUSCRIPT_OPEN_EVENT, SOURCE_DRAG_TYPE, consumeOpenManuscriptDocument, readSourceDrag, setOpenManuscriptDocument } from '../../../shared/manuscript-transfer';
 
 declare global {
   interface Window {
@@ -485,7 +485,19 @@ export function ResearchEditorView() {
       />
 
       {/* Editor Document Area */}
-      <div className="research-editor-document">
+      <div
+        className="research-editor-document"
+        onDragOver={(event) => {
+          if (event.dataTransfer?.types.includes(SOURCE_DRAG_TYPE)) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          const payload = readSourceDrag(event.dataTransfer);
+          if (!payload || !opened || !activeDoc) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void host.insertSource(payload.kind, payload.props as unknown as Record<string, unknown>);
+        }}
+      >
         {/* 2. AFFiNE Top Bar */}
         {opened && activeDoc && (
           <ResearchTopBar

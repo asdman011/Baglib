@@ -176,7 +176,7 @@ import { saveReaderKnowledge } from '../../libs/reader/save-reader-knowledge';
 import { registerCloseGuard } from '../../utils/close-guard';
 import { ExportPdfDialog, SaveCloseDialog } from './FileSaveUi';
 import { Modal } from '../ui/Modal';
-import { createBookQuotePayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
+import { createBookQuotePayload, requestSendToManuscript, writeSourceDrag } from '../../../shared/manuscript-transfer';
 
 const PDF_TEXT_DELAY_MS = 2500;
 
@@ -3236,6 +3236,11 @@ const SourceBookReader: React.FC = () => {
     dictionary: () => { closeAllPanelsExcept();setDictionaryLookupWord(selectedText);setIsDictionaryModalOpen(true); },
     manuscript: activeBook ? () => { const page = pendingSelection?.pageNumber ?? pdfSelectionInfo?.pageNumber ?? readingPage; const epub = isReflowable && activeRange ? selectionStudyLocation(paginatedPages, activeRange, readingPage) : null; requestSendToManuscript(createBookQuotePayload({ book: { id: activeBook.id, title: activeBook.title }, text: selectedText, page: epub ? undefined : Number(page) || undefined, cfi: epub?.cfi, chapter: epub?.chapter })); } : undefined,
   };
+  const onDragSelectionToManuscript = activeBook ? (event: React.DragEvent<HTMLButtonElement>) => {
+    const page = pendingSelection?.pageNumber ?? pdfSelectionInfo?.pageNumber ?? readingPage;
+    const epub = isReflowable && activeRange ? selectionStudyLocation(paginatedPages, activeRange, readingPage) : null;
+    writeSourceDrag(event.dataTransfer, createBookQuotePayload({ book: { id: activeBook.id, title: activeBook.title }, text: selectedText, page: epub ? undefined : Number(page) || undefined, cfi: epub?.cfi, chapter: epub?.chapter }));
+  } : undefined;
   const renderSelectionPopover = () => {
     if (!activeBook || !selectedText || isInstantHighlightMode) return null;
     return (
@@ -3270,6 +3275,7 @@ const SourceBookReader: React.FC = () => {
         onSaveQuestion={(questionText) =>
           handleSaveKnowledge('question', undefined, questionText)
         }
+        onDragSourceStart={onDragSelectionToManuscript}
         onOpenKnowledgeCard={() => {
           const selection = window.getSelection();
           const bounds = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null;

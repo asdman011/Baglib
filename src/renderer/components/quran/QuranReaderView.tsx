@@ -15,7 +15,8 @@ import { isTabEventTarget } from '../../utils/study-navigation';
 import { useOpenStudyLink } from '../../utils/use-study-link';
 import { quranActions } from '../actions/quran-actions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Copy, CopyCheck, Layers, Play, Pause, X, Maximize2, Minimize2 } from 'lucide-react';
+import { BookOpen, Copy, CopyCheck, GripVertical, Layers, Play, Pause, X, Maximize2, Minimize2 } from 'lucide-react';
+import { createQuranAyahPayload, writeSourceDrag } from '../../../shared/manuscript-transfer';
 import type { QuranAyahTheme, QuranCommentary, QuranMushafPage, QuranPassage, QuranReaderCatalog, QuranStructure, QuranSurahIntro } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { useOptionalTab, useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
@@ -116,7 +117,30 @@ export function QuranPassageView({
             <QuranTranslationText translation={ayah.translation} t={t} />
           </div>}
           <div className="flex flex-wrap justify-between items-center gap-3 mt-4 text-sm text-muted">
-            <span dir="ltr">{new Intl.NumberFormat(lang).format(passage.surah)}:{new Intl.NumberFormat(lang).format(ayah.number)}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                draggable
+                data-source-drag-handle="ayah"
+                onDragStart={event => {
+                  const surahEntry = passage.surahs.find(item => item.number === passage.surah);
+                  const surahName = lang === 'ar' ? (surahEntry?.arabic || surahEntry?.name) : (surahEntry?.name || surahEntry?.arabic);
+                  writeSourceDrag(event.dataTransfer, createQuranAyahPayload({
+                    profile: passage.profile === 'warsh' ? 'warsh' : 'hafs',
+                    surah: passage.surah,
+                    ayah: ayah.number,
+                    surahName,
+                    text: ayah.words.filter(word => !word.marker).map(word => word.text).join(' '),
+                  }));
+                }}
+                title={t('dragToManuscript')}
+                aria-label={t('dragToManuscript')}
+                className="inline-flex items-center justify-center rounded-md p-1 text-muted hover:text-main hover:bg-pale-sky-500/10 cursor-grab active:cursor-grabbing"
+              >
+                <GripVertical className="size-4" aria-hidden="true" />
+              </button>
+              <span dir="ltr">{new Intl.NumberFormat(lang).format(passage.surah)}:{new Intl.NumberFormat(lang).format(ayah.number)}</span>
+            </span>
             <div className="flex flex-wrap gap-2">
               {onPlayAyah && <button type="button" onClick={() => onPlayAyah(ayah.number)} title={isAyahPlaying ? t('quranAudioPause') : t('quranAudioPlay')} aria-label={isAyahPlaying ? t('quranAudioPause') : t('quranAudioPlay')} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors ${isAyahPlaying ? 'bg-emerald-600 text-white border-emerald-600' : 'border-subtle hover:bg-pale-sky-500/10'}`}>{isAyahPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}{t(isAyahPlaying ? 'quranAudioPause' : 'quranAudioPlay')}</button>}
               <button type="button" onClick={() => onCopy(quranCopyText(ayah.words.map(word => word.text).join(' ') + (ayah.translation ? `\n\n${ayah.translation.text}` : ''), { surah: passage.surah, ayah: ayah.number }, lang))} className="rounded-lg border border-subtle p-2" title={t('quranCopyAyah')} aria-label={t('quranCopyAyah')}><Copy className="size-4" /></button>

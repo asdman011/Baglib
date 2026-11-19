@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Copy, CopyCheck, ExternalLink, X } from 'lucide-react';
+import { Copy, CopyCheck, ExternalLink, GripVertical, X } from 'lucide-react';
 import type { QuranAyahDetails } from '../../../shared/types/quran';
 import type { TranslationKey } from '../../translations';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { quranCopyText } from '../../utils/quran-reference-label';
 import { passageNote } from '../actions/passage-actions';
-import { createQuranAyahPayload, requestSendToManuscript } from '../../../shared/manuscript-transfer';
+import { createQuranAyahPayload, requestSendToManuscript, writeSourceDrag } from '../../../shared/manuscript-transfer';
 
 export function QuranAyahInspector({ details, reference, surahName, error, t, dir, onClose, onCopy, onStudy, onSimilar, floating = false, commentary, listControls }: {
   details: QuranAyahDetails | null; reference: { surah: number; ayah: number }; surahName: string; error: boolean;
@@ -41,7 +41,10 @@ export function QuranAyahInspector({ details, reference, surahName, error, t, di
       </>}
       <div className="flex flex-wrap gap-2 pt-2">
         {details && <button type="button" onClick={() => passageNote(`quran:${details.profile}:${reference.surah}:${reference.ayah}`, `${surahName} ${reference.surah}:${reference.ayah}`)} className="rounded-xl border border-subtle px-3 py-2 text-sm">{t('studyCaptureReference')}</button>}
-        {details && <button type="button" onClick={() => requestSendToManuscript(createQuranAyahPayload({ profile: details.profile === 'warsh' ? 'warsh' : 'hafs', surah: reference.surah, ayah: reference.ayah, surahName, text: details.canonical }))} className="rounded-xl border border-subtle px-3 py-2 text-sm">{t('ctxSendToManuscript')}</button>}
+        {details && <>
+          <button type="button" onClick={() => requestSendToManuscript(createQuranAyahPayload({ profile: details.profile === 'warsh' ? 'warsh' : 'hafs', surah: reference.surah, ayah: reference.ayah, surahName, text: details.canonical }))} className="rounded-xl border border-subtle px-3 py-2 text-sm">{t('ctxSendToManuscript')}</button>
+          <button type="button" draggable data-source-drag-handle="ayah" onDragStart={event => writeSourceDrag(event.dataTransfer, createQuranAyahPayload({ profile: details.profile === 'warsh' ? 'warsh' : 'hafs', surah: reference.surah, ayah: reference.ayah, surahName, text: details.canonical }))} title={t('dragToManuscript')} aria-label={t('dragToManuscript')} className="inline-flex items-center justify-center rounded-xl border border-subtle px-2.5 py-2 text-sm text-muted hover:text-main cursor-grab active:cursor-grabbing"><GripVertical className="size-4" aria-hidden="true" /></button>
+        </>}
         <button data-quran-study-jump type="button" onClick={onStudy} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 text-white px-4 py-3 text-sm"><ExternalLink className="size-4 rtl:rotate-180" />{t('quranOpenInStudyReader')}</button>
         {onSimilar && <button type="button" onClick={onSimilar} className="inline-flex items-center gap-2 rounded-xl border border-subtle px-4 py-3 text-sm hover:bg-pale-sky-500/10 transition-colors"><CopyCheck className="size-4 text-emerald-600 dark:text-emerald-400" />{t('quranSimilarAyahs')}</button>}
       </div>

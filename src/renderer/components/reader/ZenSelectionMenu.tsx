@@ -14,6 +14,7 @@ import {
   Check,
   Underline,
   Strikethrough,
+  GripVertical,
 } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import { colorKeys } from './ReaderMarkupBar';
@@ -39,6 +40,7 @@ export interface ZenSelectionMenuProps {
   onOpenKnowledgeCard: () => void;
   onOpenAI: () => void;
   onPlayTTS: () => void;
+  onDragSourceStart?: (event: React.DragEvent<HTMLButtonElement>) => void;
   onClose: () => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
@@ -62,6 +64,7 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
   onOpenKnowledgeCard,
   onOpenAI,
   onPlayTTS,
+  onDragSourceStart,
   onClose,
   t,
 }) => {
@@ -112,9 +115,12 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
       role="dialog"
       aria-label={t('readerStudyActions')}
       onMouseDown={(e) => {
-        // Prevent action menu mousedown from bubbling to reader containers and stealing focus/selection
+        // Prevent action menu mousedown from bubbling to reader containers and stealing focus/selection,
+        // except allow native dragstart on the source drag handle.
         e.stopPropagation();
-        e.preventDefault();
+        if (!(e.target as HTMLElement).closest('[data-source-drag-handle]')) {
+          e.preventDefault();
+        }
       }}
       className={`fixed z-50 animate-in fade-in zoom-in-95 duration-150 select-none max-w-lg w-full px-4 ${anchor ? '' : 'top-16 start-1/2 -translate-x-1/2 rtl:translate-x-1/2'}`}
     >
@@ -312,6 +318,23 @@ export const ZenSelectionMenu: React.FC<ZenSelectionMenuProps> = ({
                aria-label={t('copyScholarlyCitation')}>
                 {copiedCitation ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
+
+              {onDragSourceStart && (
+                <button
+                  type="button"
+                  draggable
+                  data-source-drag-handle="book"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onDragStart={onDragSourceStart}
+                  title={t('dragToManuscript')}
+                  aria-label={t('dragToManuscript')}
+                  className="p-1.5 rounded-xl hover:bg-canvas text-muted hover:text-main transition-colors cursor-grab active:cursor-grabbing"
+                >
+                  <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              )}
 
               <div className="h-4 w-px bg-subtle/50 mx-0.5" />
 
