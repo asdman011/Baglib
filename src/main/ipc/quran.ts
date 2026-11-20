@@ -103,9 +103,11 @@ export const runQuranInstaller: QuranInstaller = (request, signal) => new Promis
 
 let ayahReader: ((surah: number, from: number, to: number, options: { profile: 'hafs' | 'warsh' }) => Promise<{ number: number; text: string }[]>) | null = null;
 let quranSourceReader: ((query: AssistantQuranQuery) => Promise<AssistantQuranSource[]>) | null = null;
+let quranCatalogReader: (() => Promise<QuranReaderCatalog>) | null = null;
 let quranFrequencyReader: ((query: QuranFrequencyQuery) => Promise<QuranFrequency>) | null = null;
 let quranRootWordsReader: ((text: string, limit?: number) => Promise<QuranRootWordsResult>) | null = null;
 export const readQuranSources = (query: AssistantQuranQuery) => quranSourceReader ? quranSourceReader(query) : Promise.reject(new Error('invalid-resource'));
+export const readQuranCatalog = () => quranCatalogReader ? quranCatalogReader() : Promise.reject(new Error('invalid-resource'));
 export const readQuranFrequency = (query: QuranFrequencyQuery) => quranFrequencyReader ? quranFrequencyReader(query) : Promise.reject(new Error('invalid-resource'));
 export const readQuranRootWords = (text: string, limit?: number) => quranRootWordsReader ? quranRootWordsReader(text, limit) : Promise.reject(new Error('invalid-resource'));
 /** Read installed text for the requested profile; never substitute Hafs for Warsh. */
@@ -207,6 +209,7 @@ export function registerQuranIpc(): void {
   ipcMain.handle('quran:reader-catalog', event => result(event, () => readRequest({ action: 'catalog' })));
   ayahReader = (surah, from, to, { profile }) => readRequest({ action: 'assistant-ayahs', query: { surah, from, to, profile } });
   quranSourceReader = query => readRequest({ action: 'assistant-sources', query });
+  quranCatalogReader = () => readRequest({ action: 'catalog' });
   quranFrequencyReader = query => readRequest({ action: 'frequency', query });
   quranRootWordsReader = (text, limit) => readRequest({ action: 'root-words', text, limit });
   const khatmahState = () => ({ plans: khatmahService.list(), notificationsSupported: Notification.isSupported() });

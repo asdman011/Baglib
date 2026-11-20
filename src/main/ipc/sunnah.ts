@@ -13,6 +13,14 @@ import { sunnahResearchPaths } from '../services/sunnah/research-paths';
 let hadithReader: ((collection: string, chapter: number, id: string) => Promise<{ text: string; number: string } | null>) | null = null;
 /** One hadith's full Arabic text from the installed corpus, for other main-process features (the study assistant). */
 export const readHadithText = (collection: string, chapter: number, id: string) => hadithReader ? hadithReader(collection, chapter, id) : Promise.resolve(null);
+let hadithSharhReader: ((collection: string, chapter: number, id: string) => Promise<{
+  text: string;
+  number: string;
+  englishText?: string;
+  commentary?: { text: string; title?: string; author?: string; reference?: string };
+} | null>) | null = null;
+/** KEY-437: one hadith's text plus its library sharh/commentary when available. */
+export const readHadithWithSharh = (collection: string, chapter: number, id: string) => hadithSharhReader ? hadithSharhReader(collection, chapter, id) : Promise.resolve(null);
 let chapterReader: ((collection: string, chapter: number) => Promise<{ id: string; number: string; text: string }[]>) | null = null;
 /** KEY-319: every hadith of one chapter with its exact Arabic matn (or full text), for memorization decks. */
 export const readChapterHadiths = (collection: string, chapter: number) => chapterReader ? chapterReader(collection, chapter) : Promise.resolve([]);
@@ -42,6 +50,22 @@ export function registerSunnahIpc(): void {
   hadithReader = async (collection, chapter, id) => {
     const found = (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths.find(hadith => hadith.id === id);
     return found ? { text: found.text.ar.full || found.text.ar.matn, number: String(found.number) } : null;
+  };
+  hadithSharhReader = async (collection, chapter, id) => {
+    const found = (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths.find(hadith => hadith.id === id);
+    if (!found) return null;
+    const text = found.text.ar.full || found.text.ar.matn;
+    const englishText = found.text.en.full || found.text.en.matn || undefined;
+    let commentary: { text: string; title?: string; author?: string; reference?: string } | undefined;
+    if (found.researchId) {
+      const research = await getService().research(found.researchId).catch(() => null);
+      if (research?.commentary?.trim()) {
+        commentary = { text: research.commentary.trim(), title: research.title || undefined, author: research.author || undefined, reference: research.reference || undefined };
+      }
+    } else if (found.comment?.trim()) {
+      commentary = { text: found.comment.trim() };
+    }
+    return { text, number: String(found.number), englishText, commentary };
   };
   syncChapterReader = async (collection, chapter) => {
     const found = await getService().chapter(collection as SunnahCollectionId, chapter).catch(() => null);

@@ -3,6 +3,7 @@ import { useUndoFeedback } from '../../hooks/useUndoFeedback';
 
 import { ContextMenu } from '../ui/ContextMenu';
 import { contextActions } from '../actions/context-actions';
+import { openExplainBack } from '../ai/ExplainBackModal';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText,
@@ -965,6 +966,7 @@ export const NotesOverviewView: React.FC = () => {
                         open: () => handleSelectNote(note.id),
                         copy: () => navigator.clipboard.writeText(note.content),
                         export: () => exportMarkdown([note.id]),
+                        explainBack: () => openExplainBack({ kind: 'note', target: `note:${note.id}`, label: note.title || t('dashScratchpadGeneralNote'), sourceText: note.content }),
                         srs: () => handleMemorizeNote(note),
                         delete: () => { if(window.confirm(t('markDeleteConfirm')))return handleRemoveNote(note); },
                       },t)}

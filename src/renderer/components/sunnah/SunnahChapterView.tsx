@@ -12,6 +12,7 @@ import type { ReaderTab } from '../islamic/reader-chrome';
 import { MoreHorizontal } from 'lucide-react';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { HadithActions, formatHadith } from './HadithActions';
+import { openExplainBack } from '../ai/ExplainBackModal';
 import { formatPassageWithAnnotations } from '../../utils/share-with-annotations';
 import { SunnahResearchPanel } from './SunnahResearchPanel';
 import { NoteMarker } from '../notes/NoteMarker';
@@ -139,6 +140,7 @@ export function SunnahChapterView({ lists = [], onListFilter, calm = false, onSt
           const details = root?.querySelector<HTMLDetailsElement>('details'); if(details){ details.open=true; details.scrollIntoView({block:'nearest'}); }
         } : undefined,
         link: () => linkPassageToNote(target,label),
+        explainBack: () => openExplainBack({ kind: 'hadith', target, label, sourceText: hadith.text.ar.full || hadith.text.ar.matn }),
         manuscript: () => requestSendToManuscript(hadithPayload()),
       },t);
       const listItem = { kind: 'hadith' as const, itemRef: target, label: `${collectionName} ${hadith.number || ''} — ${(hadith.text.ar.matn || hadith.text.ar.full || hadith.text.en.matn || '').slice(0, 160)}` };

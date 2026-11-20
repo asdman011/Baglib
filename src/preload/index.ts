@@ -581,6 +581,14 @@ export const API = {
       ipcRenderer.invoke('ai:research-editor', request),
   },
 
+  // KEY-437 (AI Task 3): Explain it back
+  explainBack: {
+    evaluate: (request: import('../shared/ai-explain-back').ExplainBackRequest): Promise<import('../shared/ai-explain-back').ExplainBackResponse> =>
+      ipcRenderer.invoke('explain-back:evaluate', request),
+    saveNote: (request: import('../shared/ai-explain-back').ExplainBackSaveNoteRequest): Promise<{ ok: true; data: import('../shared/study-notes').StudyNote } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('explain-back:save-note', request),
+  },
+
   // Text-to-Speech (TTS), Audiobook Playback & SMIL Overlays (KEY-145)
   audio: {
     getPairing: (bookId: string) => ipcRenderer.invoke('audio:get-pairing', bookId),

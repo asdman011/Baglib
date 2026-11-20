@@ -1,3 +1,29 @@
+## KEY-437: "Explain it back" (AI Task 3, epic KEY-434) — 2026-11-20T22:29+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/ai-explain-back.ts`: added `ExplainBackRequest`, `ExplainBackFeedback`, `ExplainBackSourceItem`, `validateExplainBackRequest`, `buildExplainBackPrompt` (compares learner explanation against source text + library tafsir/sharh; never rewrites learner text), `parseExplainBackResponse` (verifies quotes against sources with Arabic diacritic/tatweel normalization), and `formatExplainBackNote` (preserves user explanation verbatim under user-authored heading; marks AI feedback as auto-generated).
+- `src/main/services/ai/explain-back.service.ts` & `src/main/ipc/explain-back.ts`: added `ExplainBackCheckService`, `explain-back:evaluate` and `explain-back:save-note` IPC handlers using existing `AIProviderService` + `AIResearchService.getSettings()` + `StudyNotesService`, enforcing `ai.enabled`, `ai.learningMode !== 'off'`, `providerReady`, and KEY-383 `isLocalAi` / `allowRemote` consent. No existing `src/main/services/ai/*` files edited.
+- `src/main/ipc/{quran,sunnah}.ts`, `src/main/index.ts`, `src/preload/index.ts`: exported `readQuranCatalog` and `readHadithWithSharh` (for library tafsir & Sunnah research corpus sharh), registered `registerExplainBackIpc()`, and exposed `window.electronAPI.explainBack`.
+- `src/renderer/components/ai/ExplainBackModal.tsx` & `src/renderer/components/layout/AppLayout.tsx`: added centered `ExplainBackModal` + `ExplainBackHost` using `useRemoteConsent()` (KEY-383), optional Web Speech dictation, no pre-submission answer/tafsir reveal, structured feedback (right, missing/wrong with quoted sources, one follow-up question), and Save as Note.
+- `src/renderer/components/actions/{context-actions,quran-actions}.ts`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/sunnah/{SunnahChapterView,HadithActions}.tsx`, `src/renderer/components/notes/{NotesOverviewView,NoteEditorPane}.tsx`: wired "Explain it back" entry points across book reader selection, Quran ayah, Sunnah hadith, and study note menus.
+- `src/renderer/translations.ts`: added 23 bilingual (`ar` + `en`) keys.
+- `tests/services/ai-explain-back.test.ts` & `scripts/key437-live/{run.mjs,main.cjs}`: unit tests (mocked provider) and live Electron verification in `ar` and `en` with real ayah + real hadith (including Fath al-Bari sharh) using a stubbed local Ollama server.
+
+**Tests:**
+- Focused (`ai-explain-back`, `context-action-icons`, `context-actions`, `translation-keys`): 14/14 pass.
+- `npx tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key437-live/run.mjs`): PASS in `ar` and `en` (`errors: []`, screenshots in `.baglib-data/key437-evidence/`, throwaway profile deleted).
+
+**Jira:**
+- `KEY-437` moved to In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-437.md`, `scripts/key437-live/main.cjs`, `scripts/key437-live/run.mjs`, `src/main/index.ts`, `src/main/ipc/explain-back.ts`, `src/main/ipc/quran.ts`, `src/main/ipc/sunnah.ts`, `src/main/services/ai/explain-back.service.ts`, `src/preload/index.ts`, `src/renderer/components/actions/context-actions.ts`, `src/renderer/components/actions/quran-actions.ts`, `src/renderer/components/ai/ExplainBackModal.tsx`, `src/renderer/components/layout/AppLayout.tsx`, `src/renderer/components/notes/NoteEditorPane.tsx`, `src/renderer/components/notes/NotesOverviewView.tsx`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/sunnah/HadithActions.tsx`, `src/renderer/components/sunnah/SunnahChapterView.tsx`, `src/renderer/translations.ts`, `src/shared/ai-explain-back.ts`, `tests/services/ai-explain-back.test.ts`.
+
+## 2026-11-20T20:11:45.545Z - Agent: Codex - KEY-435 active
+
+KEY-440 pushed 5207a8973996a78b859ba031317afeba1f2e13fe, Jira Done (41), completion comment 10537. KEY-435 transitioned to In Progress (21). Audit covers all AI call sites, legacy reader/translation, study/chat/research/highlight/curriculum/PDF and existing explain-back; concurrent KEY-437 only read, never edited. Small review/generated-marker/no-fatwa fixes planned; larger privacy or architecture work and KEY-436/438/439 remain documented follow-ups. Tests pending.
+
 ## KEY-440 verified - 2026-11-20T20:10:08.383Z - Agent: Codex
 
 Fixed production renderer SRS fallback typing using a render-only Pick and replaced dotAll with equivalent ES2017 multiline matching. Introducing source lines: fc2b8b18e (KEY-390); shared context fallback assignment 532b1a907 (KEY-397). Arabic/English multiline regression passes. AGENTS.md now requires production renderer verification alongside main/root tsc/full tests. No tsconfig, target, dependency or schema changes. UX/layout unchanged; production compilation restored.
@@ -6,6 +32,9 @@ Verified: npm run build:renderer, npm run build:main, node node_modules/typescri
 
 Exact tracked files: `AGENTS.md`, `src/renderer/components/knowledge/SrsReviewPanel.tsx`, `src/renderer/components/knowledge/SrsReviewScreen.tsx`, `src/shared/revision/template-engine.ts`, `tests/services/card-notes.test.ts`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`. Own state hunks only; preserve all concurrent KEY-437 work. Jira In Progress (21); Done pending commit and successful normal push, explicitly authorized by current request.
 
+## 2026-11-20T20:03:04.292Z - Agent: Codex - KEY-440 then KEY-435 active
+
+User explicitly authorizes one owned-file commit and normal push per task. KEY-437 belongs to Antigravity: do not edit its new files or entry points; translations own small hunks only. Read Jira acceptance criteria and epic approved principles. No implementation or tests yet. Starting production renderer reproduction.
 
 ## KEY-433 implemented and verified - 2026-11-20T21:52:17+02:00 - Agent: Codex
 
@@ -13,7 +42,7 @@ Implemented canvas external links using existing system IPC with main http/https
 
 Exact tracked files: `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/features/BlockSuite.md`, `research-editor/app/src/main.ts`, `research-editor/app/src/canvas/links.ts`, `src/main/ipc/system.ts`, `src/main/ipc/external-url.ts`, `src/renderer/components/research/source-search.ts`, `tests/main/external-url.test.ts`, `scripts/key433-live/main.cjs`, `scripts/key433-live/run.mjs`. Local-only board + report `docs/agent-ops/reports/KEY-433.md`; evidence `.baglib-data/key433-evidence/`. No real files modified. Research evidence/limitations in `docs/features/BlockSuite.md`.
 
-Jira: transitioned KEY-433 to In Progress (21), verified response. Commit/push explicitly authorized by current request; pending locked scoped commit and normal push to origin/feature/library-domain. Done/comment after push only.
+Jira: transitioned KEY-433 to In Progress (21), verified response. Commit/push explicitly authorized by current request; PUSHED bb27ecd665981daa224626e16d5f0ceaea0b829a normally to origin/feature/library-domain; ls-remote verified exact hash at 2026-11-20T22:00:28+02:00. Commit contains only 11 owned files; index empty and lock released. Jira completion comment 10536 added with commit/tests/research/limitations; transitioned via 41 to Done (verified response, 2026-11-20T22:01:05+02:00). Post-push state records stay local to honor one commit per task.
 
 ## KEY-243: CodeMirror 6 study-note editor upgrades (Option A) — 2026-11-20 - Agent: Antigravity
 
@@ -9854,3 +9883,7 @@ KEY-350 publication - 2026-11-14T15:24:12.942081+02:00 - Codex key350-root. Comm
 - 2026-11-15 Claude Code: KEY-385 created (task, Notes-Taking, epic KEY-223), pushed as fced5fd, In Review in Jira with a comment.
 - [2026-11-15, Claude Code, user reported a raw 400 error with meta-llama/llama-prompt-guard-2-86m and canopylabs/orpheus-arabic-saudi] KEY-385 follow-up: those are not chat models (a safety classifier; a text-to-speech model that Groq also gates behind terms). Reproduced with the user's key: "text classification models", "model_terms_required", and whisper "does not support chat completions". Now: new error codes provider-model / provider-terms with clear ar/en messages (assistant panel and study dialog), and a warning under the model field in settings when the typed model is not a chat model (same filter as Load models). Files: src/shared/ai-errors.ts, src/renderer/components/ai/{CustomProviderFields,GlobalAssistant}.tsx, src/renderer/components/notes/StudyAssistant.tsx, src/renderer/translations.ts, tests/services/ai-providers.test.ts, scripts/research-ai-live/scenario.cjs. Verified: full suite 2507/2507, tsc clean, eslint 0 errors in changed files, live run scripts/research-ai-live passes with the new warning step (screenshot en-6-settings-not-a-chat-model).
 - 2026-11-15 Claude Code: KEY-385 follow-up pushed as a076cf6; Jira comment added (stays In Review).
+
+KEY-440 2026-11-20T20:03:59.638Z: Jira transitioned to In Progress (21), verified. Reproduced build errors and applied minimal source fixes; tests pending.
+
+KEY-440 committed 5207a8973996a78b859ba031317afeba1f2e13fe, normal push to origin/feature/library-domain succeeded; Jira completion pending.

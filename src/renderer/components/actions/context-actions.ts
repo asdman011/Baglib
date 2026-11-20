@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { Bookmark, BookOpen, Brain, Copy, Download, FilePenLine, FileText, Highlighter, History, Info, Languages, Layers, Lightbulb, MessageSquare, Play, Search, Share2, Trash2, Upload } from 'lucide-react';
+import { Bookmark, BookOpen, Brain, Copy, Download, FilePenLine, FileText, Highlighter, History, Info, Languages, Layers, Lightbulb, MessageSquare, MessageSquareQuote, Play, Search, Share2, Trash2, Upload } from 'lucide-react';
 import type { TranslationKey } from '../../translations';
 import type { MenuItemProps } from '../ui/Menu';
 export interface ContextActionDefinition {
@@ -12,29 +12,30 @@ export const CONTEXT_ACTIONS = {
         { id: 'copy', labelKey: 'ctxCopyText' }, { id: 'copyFull', labelKey: 'ctxCopyIsnad' },
         { id: 'share', labelKey: 'sunnahShare' }, { id: 'comment', labelKey: 'markKindComments' },
         { id: 'srs', labelKey: 'ctxAddSrs' }, { id: 'commentary', labelKey: 'ctxSharh' }, { id: 'link', labelKey: 'ctxLinkExisting' },
-        { id: 'manuscript', labelKey: 'ctxSendToManuscript' },
+        { id: 'explainBack', labelKey: 'explainBackAction' }, { id: 'manuscript', labelKey: 'ctxSendToManuscript' },
     ],
     quran: [
         { id: 'copy', labelKey: 'quranCopyAyah' }, { id: 'copyPlain', labelKey: 'ctxCopyPlain' }, { id: 'copyReference', labelKey: 'ctxCopyReference' },
         { id: 'share', labelKey: 'sunnahShare' }, { id: 'tafsir', labelKey: 'quranCatTafsir' }, { id: 'translation', labelKey: 'quranCatTranslation' },
         { id: 'note', labelKey: 'studyNewNote' }, { id: 'comment', labelKey: 'markKindComments' }, { id: 'srs', labelKey: 'ctxAddSrs' },
         { id: 'bookmark', labelKey: 'ctxBookmark' }, { id: 'play', labelKey: 'quranAudioPlay' }, { id: 'link', labelKey: 'ctxLinkExisting' },
+        { id: 'explainBack', labelKey: 'explainBackAction' },
     ],
     selection: [
-        { id: 'explain', labelKey: 'readerStudyExplain' }, { id: 'practice', labelKey: 'readerStudyPractice' }, { id: 'review', labelKey: 'readerStudyReviewLater' },
+        { id: 'explain', labelKey: 'readerStudyExplain' }, { id: 'explainBack', labelKey: 'explainBackAction' }, { id: 'practice', labelKey: 'readerStudyPractice' }, { id: 'review', labelKey: 'readerStudyReviewLater' },
         { id: 'note', labelKey: 'markKindNote' }, { id: 'colors', labelKey: 'markColor' }, { id: 'copy', labelKey: 'ctxCopyReference' },
         { id: 'search', labelKey: 'ctxSearchLibrary' }, { id: 'dictionary', labelKey: 'ctxDictionary' },
         { id: 'manuscript', labelKey: 'ctxSendToManuscript' },
     ],
     mark: [{ id: 'edit', labelKey: 'ctxEdit' }, { id: 'colors', labelKey: 'markColor' }, { id: 'comment', labelKey: 'markKindComments' }, { id: 'delete', labelKey: 'delete', danger: true }],
-    note: [{ id: 'open', labelKey: 'ctxOpen' }, { id: 'copy', labelKey: 'sunnahCopy' }, { id: 'export', labelKey: 'ctxExport' }, { id: 'srs', labelKey: 'ctxAddSrs' }, { id: 'delete', labelKey: 'delete', danger: true }],
+    note: [{ id: 'open', labelKey: 'ctxOpen' }, { id: 'copy', labelKey: 'sunnahCopy' }, { id: 'export', labelKey: 'ctxExport' }, { id: 'explainBack', labelKey: 'explainBackAction' }, { id: 'srs', labelKey: 'ctxAddSrs' }, { id: 'delete', labelKey: 'delete', danger: true }],
     card: [{ id: 'edit', labelKey: 'ctxEdit' }, { id: 'review', labelKey: 'readerStudyPractice' }, { id: 'srs', labelKey: 'ctxAddSrs' }, { id: 'copy', labelKey: 'sunnahCopy' }, { id: 'delete', labelKey: 'delete', danger: true }],
     board: [{ id: 'open', labelKey: 'ctxOpen' }, { id: 'copy', labelKey: 'sunnahCopy' }, { id: 'edit', labelKey: 'ctxEdit' }, { id: 'delete', labelKey: 'delete', danger: true }],
     empty: [{ id: 'note', labelKey: 'studyNewNote' }, { id: 'card', labelKey: 'newObjectNewCard' }, { id: 'import', labelKey: 'newObjectImportBook' }],
 } as const satisfies Record<string, readonly ContextActionDefinition[]>;
 const ACTION_ICONS = { copy: Copy, copyFull: Copy, copyPlain: Copy, copyReference: Copy, share: Share2, comment: MessageSquare, note: FilePenLine, srs: Bookmark, bookmark: Bookmark, link: FilePenLine, colors: Highlighter, search: Search, dictionary: Languages, tafsir: BookOpen, commentary: BookOpen, translation: Languages, delete: Trash2, open: BookOpen, edit: FilePenLine,
     // KEY-308: these fell back to the placeholder Info icon.
-    manuscript: FileText, explain: Lightbulb, practice: Brain, review: History, play: Play, export: Download, import: Upload, card: Layers };
+    manuscript: FileText, explain: Lightbulb, explainBack: MessageSquareQuote, practice: Brain, review: History, play: Play, export: Download, import: Upload, card: Layers };
 export type ContextSurface = keyof typeof CONTEXT_ACTIONS;
 export type ActionHandler = (() => void | Promise<unknown>) | {
     onClick?: () => void | Promise<unknown>;

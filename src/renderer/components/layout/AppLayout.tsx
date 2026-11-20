@@ -8,6 +8,7 @@ import { ActionOverlays } from '../actions/ActionOverlays';
 import { SendToManuscriptDialog } from '../research/SendToManuscriptDialog';
 import { AssistantProvider } from '../ai/AssistantContext';
 import { GlobalAssistant } from '../ai/GlobalAssistant';
+import { ExplainBackHost } from '../ai/ExplainBackModal';
 import { MANUSCRIPT_OPEN_EVENT } from '../../../shared/manuscript-transfer';
 import { CommandPalette } from './CommandPalette';
 import { KnowledgeCardLayer } from '../knowledge/KnowledgeCardLayer';
@@ -312,6 +313,7 @@ const AppLayoutContent: React.FC = () => {
       <ActionOverlays />
       <SendToManuscriptDialog />
       <GlobalAssistant />
+      <ExplainBackHost />
       <BookRevisionHost />
       <KnowledgeCardLayer />
 

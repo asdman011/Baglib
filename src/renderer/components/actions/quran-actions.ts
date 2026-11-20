@@ -4,6 +4,7 @@ import { contextActions } from './context-actions';
 import { addPassageToSrs, openPassageComment, passageNote, linkPassageToNote, sharePassage } from './passage-actions';
 import { studyLinkText } from '../../../shared/study-notes';
 import { formatPassageWithAnnotations } from '../../utils/share-with-annotations';
+import { openExplainBack } from '../ai/ExplainBackModal';
 export function quranActions(input: {
     reference: {
         surah: number;
@@ -45,5 +46,6 @@ export function quranActions(input: {
         },
         play: input.play,
         link: () => linkPassageToNote(target, label),
+        explainBack: async () => openExplainBack({ kind: 'ayah', target, label, sourceText: await text() }),
     }, t);
 }

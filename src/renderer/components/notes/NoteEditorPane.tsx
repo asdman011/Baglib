@@ -19,7 +19,9 @@ import {
   X,
   Download,
   FileType,
+  MessageSquareQuote,
 } from 'lucide-react';
+import { openExplainBack } from '../ai/ExplainBackModal';
 import { useTabOptional, useWorkspace, type TabSnapshotSaveReason } from '../context/WorkspaceContext';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { Button, IconButton } from '../ui/Button';
@@ -330,6 +332,20 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
             label: t('srsFromNote'),
             icon: <BookOpen className="size-4 text-emerald-600" />,
             onClick: () => onMemorize(note),
+          },
+        ]
+      : []),
+    ...(content.trim()
+      ? [
+          {
+            label: t('explainBackAction'),
+            icon: <MessageSquareQuote className="size-4 text-primary-text" />,
+            onClick: () => openExplainBack({
+              kind: 'note',
+              target: note?.id ? `note:${note.id}` : 'note:draft',
+              label: title.trim() || t('dashScratchpadGeneralNote'),
+              sourceText: content,
+            }),
           },
         ]
       : []),

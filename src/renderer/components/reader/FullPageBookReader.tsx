@@ -106,6 +106,7 @@ import { markHistoryShortcut, readerShortcut } from '../../libs/reader/reader-sh
 import { colorKeys } from './ReaderMarkupBar';
 import { matchesShortcut } from '../actions/shortcuts';
 import { ActionMenu } from '../actions/ActionMenu';
+import { openExplainBack } from '../ai/ExplainBackModal';
 import { isTextEntry } from '../actions/context-actions';
 import { ZenSelectionMenu } from './ZenSelectionMenu';
 import { ZenTocDrawer } from './ZenTocDrawer';
@@ -3229,7 +3230,14 @@ const SourceBookReader: React.FC = () => {
     return () => { cancel(); document.removeEventListener('click', touchClick, true); document.removeEventListener('contextmenu',context);document.removeEventListener('keydown',keyboard);document.removeEventListener('pointerdown',down);document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',cancel);document.removeEventListener('pointercancel',cancel); };
   },[selectedText,knowledgeItems,keysActive]);
   const selectionHandlers = {
-    explain: () => studySelection('explain'), practice: () => studySelection('practice'), review: () => studySelection('review'),
+    explain: () => studySelection('explain'),
+    explainBack: activeBook && selectedText ? () => {
+      const page = pendingSelection?.pageNumber ?? pdfSelectionInfo?.pageNumber ?? readingPage;
+      const target = `book:${activeBook.id}#p=${page}`;
+      const label = `${activeBook.title} · ${t('page')} ${page}`;
+      openExplainBack({ kind: 'passage', target, label, sourceText: selectedText });
+    } : undefined,
+    practice: () => studySelection('practice'), review: () => studySelection('review'),
     note: () => setSelectionEditor(current => ({ key: current.key + 1, tab: 'note' })),
     colors: { children: HIGHLIGHT_COLORS.map(color => ({id:color.id,label:t(colorKeys[color.id]),icon:<span className="inline-block size-3 rounded-full" style={{backgroundColor:color.hex}} />,onClick:()=>handleSaveKnowledge('highlight',color.id)})) },
     copy: () => {
@@ -3264,6 +3272,15 @@ const SourceBookReader: React.FC = () => {
               {t(action === 'explain' ? 'readerStudyExplain' : action === 'practice' ? 'readerStudyPractice' : 'readerStudyReviewLater')}
             </button>
           ))}
+          <button
+            type="button"
+            data-reader-study="explain-back"
+            disabled={reviewBusy}
+            onClick={() => selectionHandlers.explainBack?.()}
+            className="rounded-lg border border-subtle px-3 py-2 leading-loose hover:bg-canvas focus-visible:outline-2 focus-visible:outline-amber-500"
+          >
+            {t('explainBackAction')}
+          </button>
         </div>}
         selectedText={selectedText}
         readingPage={readingPage}
