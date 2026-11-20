@@ -1,4 +1,6 @@
 'use client';
+import { useRemoteConsent } from '../ai/useRemoteConsent';
+import { markAiGenerated } from '../../../shared/ai-principles';
 import { errorMessage } from '../../../shared/errors';
 
 
@@ -60,6 +62,8 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
   const [userQuery, setUserQuery] = useState<string>('');
   const [targetLang, setTargetLang] = useState<string>('ar');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const consent = useRemoteConsent();
+  const [needsConsent, setNeedsConsent] = useState(false);
   const [result, setResult] = useState<AIResearchResult | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isSavedToNotes, setIsSavedToNotes] = useState<boolean>(false);
@@ -89,7 +93,10 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
 
   }
 
-  const handleExecuteTool = async (forceSaveNote = false) => {
+  const handleExecuteTool = async () => {
+    const status = await consent.check().catch(() => ({ local: false, allowed: false }));
+    if (!status.local && !status.allowed) { setNeedsConsent(true); return; }
+    setNeedsConsent(false);
     setIsLoading(true);
     setIsSavedToNotes(false);
     setIsCopied(false);
@@ -107,14 +114,12 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           tool: activeTool,
           userQuery: userQuery || undefined,
           targetLang: activeTool === 'inline_translation' ? targetLang : undefined,
-          saveAsNote: forceSaveNote,
+          saveAsNote: false,
         };
 
         const res: AIResearchResult = await windowAPI.ai.executeTool(payload);
         setResult(res);
-        if (forceSaveNote && res.savedNoteId) {
-          setIsSavedToNotes(true);
-        }
+
       } else {
         // Mock fallback for browser dev mode
         setResult({
@@ -155,7 +160,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           type: 'note',
           locationCfiOrPage: String(currentPage),
           selectedText: selectedText || null,
-          noteContent: result.content,
+          noteContent: markAiGenerated(result.content, t('aiGeneratedMarker')),
           color: '#4f46e5',
           tags: ['AI-Research', activeTool],
         });
@@ -171,7 +176,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
   return (
     <div
       className="fixed inset-y-0 end-0 z-50 w-full max-w-lg bg-white dark:bg-zinc-900 border-s border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col text-start animate-in slide-in-from-right duration-250"
-      dir="auto"
+      dir={typeof document !== 'undefined' && document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}
     >
       {/* Top Header */}
       <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
@@ -326,7 +331,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           {/* Action Trigger Button */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handleExecuteTool(false)}
+              onClick={() => handleExecuteTool()}
               disabled={isLoading}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition disabled:opacity-50"
             >
@@ -338,20 +343,18 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
               <span>{isLoading ? t('aiAnalyzingStatus') : t('aiExecuteActionBtn')}</span>
             </button>
 
-            {activeTool === 'structured_summary' && (
-              <button
-                onClick={() => handleExecuteTool(true)}
-                disabled={isLoading}
-                title={t('aiSaveToNotesBtn')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-indigo-300 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition disabled:opacity-50"
-               aria-label={t('aiSaveToNotesBtn')}>
-                <BookmarkPlus className="w-3.5 h-3.5" />
-                <span>{t('aiSaveToNotesBtn')}</span>
-              </button>
-            )}
+
           </div>
         </div>
 
+        <p data-ai-recall-nudge className="mt-3 text-xs leading-loose text-zinc-500">{t('aiRecallNudge')}</p>
+        {needsConsent && <div data-reader-ai-consent role="alertdialog" className="mt-3 space-y-2 rounded-lg border border-amber-500/50 p-3 text-xs leading-loose">
+          <p>{t('assistantConsentAsk', { provider: consent.customName ?? t(consent.providerLabel) })}</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={async () => { await consent.allow(); setNeedsConsent(false); await handleExecuteTool(); }} className="rounded border border-current px-3 py-1">{t('assistantConsentAllow')}</button>
+            <button type="button" onClick={() => setNeedsConsent(false)} className="rounded border border-current px-3 py-1">{t('assistantConsentCancel')}</button>
+          </div>
+        </div>}
         {/* Results View */}
         {result && (
           <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
@@ -392,6 +395,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
               </div>
             )}
 
+            <p data-ai-principles-notice className="text-xs leading-loose text-zinc-500">{t('aiGeneratedMarker')} · {t('aiPrinciplesNotice')}</p>
             {/* Generated Content Body */}
             <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/30 whitespace-pre-wrap leading-relaxed font-sans text-xs select-text">
               {result.content}

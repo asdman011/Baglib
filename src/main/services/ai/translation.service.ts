@@ -1,4 +1,4 @@
-import { errorMessage } from '../../../shared/errors';
+import { hasRemoteConsent } from '../../../shared/ai-consent';
 /**
  * Baglib — Dedicated & LLM-Powered Translation Service (KEY-143)
  *
@@ -27,7 +27,7 @@ export class TranslationService {
   }
 
   /**
-   * Translates text using the configured provider, falling back to LLM if needed.
+   * Translates text using only the configured provider.
    */
   public async translate(
     options: TranslateOptions,
@@ -58,8 +58,8 @@ export class TranslationService {
           return await this.translateWithLLM(text, targetLang, options.bookTitle, settings);
       }
     } catch (err: unknown) {
-      console.warn(`[baglib:translation] Provider ${provider} failed (${errorMessage(err)}), falling back to LLM.`);
-      return await this.translateWithLLM(text, targetLang, options.bookTitle, settings);
+      // Provider consent does not authorize sending text to a different provider on failure.
+      throw err;
     }
   }
 
@@ -257,6 +257,8 @@ export class TranslationService {
     bookTitle: string | undefined,
     settings: AISettings
   ): Promise<TranslationResult> {
+    if (settings.enabled === false) throw new Error('ai-disabled');
+    if (!hasRemoteConsent(settings)) throw new Error('permission-denied');
     const prompt = buildTranslationPrompt(text, targetLang, bookTitle);
     const aiProvider = AIProviderService.getInstance();
 

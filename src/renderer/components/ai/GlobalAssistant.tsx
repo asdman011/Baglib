@@ -1,4 +1,5 @@
 'use client';
+import { markAiGenerated } from '../../../shared/ai-principles';
 /**
  * KEY-384: the app-wide AI assistant: a floating button on every tab and a chat panel that keeps its conversation
  * while the user moves around. It talks naturally, uses what the user attaches (notes, ayahs, hadith, book pages)
@@ -125,15 +126,15 @@ export function GlobalAssistant() {
 
   const { openLink, linkHandlers, linkMenuItems } = useOpenStudyLink();
   const openSource = (target: string) => void openLink(target).catch(() => {});
-  const asNote = (message: Extract<Message, { role: 'assistant' }>) => [message.text, ...(message.citations.length ? ['', `## ${t('assistantSources')}`, ...message.citations.map(citation => `- [${citation.n}] [[${citation.ref}|${citation.label.replace(/[[\]|\r\n]/gu, ' ')}]]`)] : [])].join('\n') + '\n';
+  const asNote = (message: Extract<Message, { role: 'assistant' }>) => [t('aiGeneratedMarker'), '', message.text, ...(message.citations.length ? ['', `## ${t('assistantSources')}`, ...message.citations.map(citation => `- [${citation.n}] [[${citation.ref}|${citation.label.replace(/[[\]|\r\n]/gu, ' ')}]]`)] : [])].join('\n') + '\n';
   const insert = async (message: Extract<Message, { role: 'assistant' }>) => {
     if (!chapter?.insert) return;
-    await chapter.insert(answerForInsert(message.text, message.citations));
+    await chapter.insert(markAiGenerated(answerForInsert(message.text, message.citations), t('aiGeneratedMarker')));
     setMessages(current => current.map(item => (item.id === message.id && item.role === 'assistant' ? { ...item, inserted: true } : item)));
   };
   const addCard = async (message: CardsMessage, index: number) => {
     const card = message.cards[index];
-    await window.electronAPI.knowledgeCards.save({ front: card.front, back: card.back, sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId: parseBookTarget(card.target)?.id });
+    await window.electronAPI.knowledgeCards.save({ front: card.front, back: markAiGenerated(card.back, t('aiGeneratedMarker')), sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId: parseBookTarget(card.target)?.id });
     window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
     setMessages(current => current.map(item => (item.id === message.id && item.role === 'cards' ? { ...item, state: { ...item.state, [index]: 'added' } } : item)));
   };
@@ -221,6 +222,7 @@ export function GlobalAssistant() {
                   <button type="button" dir="auto" {...linkHandlers(citation.ref, { title: citation.label })} data-research-ai-citation={citation.ref} className="text-start font-medium text-primary-text underline-offset-2 hover:underline">{citation.label}</button>
                 </ContextMenu>)}
               </ol>}
+              <p data-ai-principles-notice className="mt-2 text-[11px] leading-loose text-muted">{t('aiGeneratedMarker')} · {t('aiPrinciplesNotice')}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {chapter?.insert && <button type="button" disabled={message.inserted} onClick={() => void insert(message)} data-research-ai-insert className="inline-flex items-center gap-1 rounded-md border border-subtle px-2 py-1 hover:border-primary/40 disabled:opacity-60"><FilePlus2 className="size-3" />{message.inserted ? t('researchAiInserted') : t('researchAiInsert')}</button>}
                 <button type="button" onClick={() => openStudyNote({ content: asNote(message) })} data-assistant-save-note className="inline-flex items-center gap-1 rounded-md border border-subtle px-2 py-1 hover:border-primary/40"><NotebookPen className="size-3" />{t('assistantSaveNote')}</button>
@@ -233,6 +235,7 @@ export function GlobalAssistant() {
         <div ref={end} />
       </div>
 
+      <p data-ai-recall-nudge className="px-3 py-2 text-[11px] leading-loose text-muted">{t('aiRecallNudge')}</p>
       {/* Composer */}
       <div className="border-t border-subtle bg-surface p-2.5">
         {consentFor && <div data-assistant-consent role="alertdialog" className="mb-2 rounded-xl border border-amber-500/50 bg-amber-500/10 p-2 text-[11px] leading-relaxed">

@@ -94,7 +94,10 @@ for (const language of ['ar', 'en'] as const) {
     assert.equal(document.querySelectorAll('.sunnah-english').length, 0);
     assert.equal(document.querySelectorAll('.sunnah-bilingual').length, 0);
     assert.equal(document.querySelectorAll('article > div button').length, 0);
-    assert.equal(document.querySelectorAll('article footer button').length, 4);
+    // Additional scholarly actions must not remove or duplicate the established controls.
+    for (const key of ['studyCaptureReference', 'sunnahCopy', 'sunnahShare'] as const) {
+      assert.equal([...document.querySelectorAll('article footer button')].filter(button => button.textContent === translations[language][key]).length, 1);
+    }
     assert.ok([...document.querySelectorAll('article footer button')].some(button => button.textContent === translations[language].studyCaptureReference));
     assert.equal(document.querySelector('article footer button[aria-expanded]')?.getAttribute('aria-expanded'), 'false');
     assert.equal(document.querySelector('article footer textarea')?.getAttribute('rows'), '2');

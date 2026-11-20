@@ -1,4 +1,5 @@
 'use client';
+import { markAiGenerated } from '../../../shared/ai-principles';
 import {ExplainBack} from './ExplainBack';
 import {bookStudyTarget} from '../../../shared/study-notes';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -111,7 +112,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const addCard = async (card: AssistantCard, key: string) => {
     try {
       const workId = parseBookTarget(card.target)?.id;
-      await window.electronAPI.knowledgeCards.save({ front: card.front, back: card.back, sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId });
+      await window.electronAPI.knowledgeCards.save({ front: card.front, back: markAiGenerated(card.back, t('aiGeneratedMarker')), sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId });
       window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
       setCards(current => ({ ...current, [key]: 'added' }));
     } catch { setTurns(current => [...current, { id: ++turnId.current, task: 'cards', question: '', error: { code: 'engine-failed' } }]); }
@@ -238,7 +239,8 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
               </div>}
 
               {turn.answer && <article className="max-w-[92%] space-y-3 rounded-2xl rounded-es-md border border-subtle bg-surface px-4 py-3 shadow-sm">
-                <div className="flex items-center gap-2 text-[11px] font-semibold text-muted"><Sparkles size={12} className="text-primary" aria-hidden="true" />{t('researchAiAssistant')}</div>
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-muted"><Sparkles size={12} className="text-primary" aria-hidden="true" />{t('researchAiAssistant')} · {t('aiGeneratedMarker')}</div>
+                <p data-ai-principles-notice className="text-xs leading-loose text-muted">{t('aiPrinciplesNotice')}</p>
                 {turn.answer.abstained && <p data-assistant-abstained className="rounded-lg bg-amber-500/10 p-2 text-sm">{t('assistantAbstained')}</p>}
                 {turn.answer.limited && <p className="text-xs text-muted">{t('assistantLimited')}</p>}
                 {turn.answer.answer && <div data-assistant-answer dir="auto" className="whitespace-pre-wrap text-sm leading-loose">{turn.answer.answer}</div>}
@@ -266,15 +268,16 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
                   </li>; })}</ul>
                 </div>}
                 {!turn.answer.abstained && turn.answer.answer && <div className="flex flex-wrap gap-2 border-t border-subtle pt-2.5 text-xs">
-                  <button type="button" data-assistant-save onClick={() => { onClose(); openStudyNote({ content: answerAsNote(turn.answer!, { sources: t('assistantSources'), question: t('assistantQuestion') }, turn.question) }); }}
+                  <button type="button" data-assistant-save onClick={() => { onClose(); openStudyNote({ content: answerAsNote(turn.answer!, { sources: t('assistantSources'), question: t('assistantQuestion'), generated: t('aiGeneratedMarker') }, turn.question) }); }}
                     className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 hover:border-primary/40"><NotebookPen size={12} />{t('assistantSaveNote')}</button>
-                  <button type="button" onClick={() => void navigator.clipboard?.writeText(answerAsNote(turn.answer!, { sources: t('assistantSources'), question: t('assistantQuestion') }, turn.question))}
+                  <button type="button" onClick={() => void navigator.clipboard?.writeText(answerAsNote(turn.answer!, { sources: t('assistantSources'), question: t('assistantQuestion'), generated: t('aiGeneratedMarker') }, turn.question))}
                     className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 hover:border-primary/40"><Copy size={12} />{t('researchAiCopy')}</button>
                 </div>}
               </article>}
             </div>)}
           </div>
 
+          <p data-ai-recall-nudge className="px-3 py-2 text-xs leading-loose text-muted">{t('aiRecallNudge')}</p>
           {/* Composer */}
           <div className="border-t border-subtle bg-surface p-3">
             {consentFor && <div data-assistant-consent role="alertdialog" aria-live="assertive" className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed">

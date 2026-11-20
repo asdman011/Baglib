@@ -1,3 +1,4 @@
+import { hasRemoteConsent } from '../../../shared/ai-consent';
 /**
  * Baglib — AI Research Assistant Coordinator & Anti-Spoiler RAG Service (KEY-143)
  *
@@ -9,7 +10,6 @@
 import type Database from 'better-sqlite3';
 import { getDatabase } from '../../database/connection';
 import { SqliteSettingsRepository } from '../../database/repositories/settings.repository';
-import { SqliteAnnotationRepository } from '../../database/repositories/annotation.repository';
 import type {
   AISettings,
   AIResearchQueryPayload,
@@ -106,6 +106,9 @@ export class AIResearchService {
     const startTime = Date.now();
     const settings = this.getSettings();
 
+    if (settings.enabled === false) throw new Error('ai-disabled');
+    if (!hasRemoteConsent(settings)) throw new Error('permission-denied');
+
     // 1. Handle Inline Translation Tool directly
     if (payload.tool === 'inline_translation') {
       const transResult = await this.translationService.translate(
@@ -187,33 +190,13 @@ export class AIResearchService {
       settings
     );
 
-    // 5. Optionally save result as a research note in annotations
-    let savedNoteId: string | undefined = undefined;
-    if (payload.saveAsNote && payload.bookId && generatedContent.trim()) {
-      try {
-        const annotRepo = new SqliteAnnotationRepository(this.db);
-        const savedNote = annotRepo.save({
-          bookId: payload.bookId,
-          type: 'note',
-          locationCfiOrPage: String(payload.currentPage),
-          selectedText: payload.selectedText || null,
-          noteContent: generatedContent.trim(),
-          color: '#4f46e5',
-          tags: ['AI-Research', payload.tool],
-        });
-        savedNoteId = savedNote.id;
-      } catch (err) {
-        console.warn('[baglib:ai] Could not save AI summary as annotation note:', err);
-      }
-    }
-
+    // Generation only: the user reviews the returned text before explicitly saving it.
     return {
       content: generatedContent.trim(),
       tool: payload.tool,
       spoilerPrevented: settings.antiSpoilerCeiling !== false,
       providerUsed: settings.provider || 'ollama',
       durationMs: Date.now() - startTime,
-      savedNoteId,
     };
   }
 

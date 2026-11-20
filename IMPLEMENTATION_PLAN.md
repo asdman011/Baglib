@@ -1,3 +1,13 @@
+## KEY-435 implemented and verified - 2026-11-20T20:48:54.111Z - Agent: Codex
+
+Audited 10 AI paths against all six approved KEY-434 principles in docs/features/feature - AI Principles Audit.md. Fixed review-before-save, persistent localized AI markers for accepted notes/cards/manuscript inserts/existing explain-back judgments/curriculum descriptions, recall nudges and uncertainty/no-fatwa notices, central scholarly prompt guidance, stored-provider consent for legacy research/editor/curriculum + LLM translation, reader/curriculum consent UI, and implicit translator-to-LLM fallback. No schema/dependency/download or canonical-name changes. Larger translator privacy/template provenance/PDF parity/retention/semantic citation gaps are documented as proposals for Claude, no new Jira issues. KEY-436/438/439 not implemented here.
+
+Verified: renderer/main builds, root tsc; focused 49/49 plus Sunnah 9/9; full node scripts/test-runner.js --test-concurrency=4: 2874/2874, 404 suites, zero failures. Scoped lint zero errors (8 pre-existing warnings); final changed-test lint clean. Full runner fixed Windows ENAMETOOLONG using identical relative test paths (430 files, 32544→16634 chars). Stale Sunnah footer-count checks now verify existing controls without blocking added actions. Off-screen native real-PDF ar/RTL + en/LTR live PASS, 8 local stub calls, zero renderer errors, six screenshots; profiles deleted and tabs cleared; real files unmodified. Screenshots inspected for readability/mixed text/diacritics. Live limits and existing nonfatal warnings are in the audit/report.
+
+UX: users review generated output before saving; accepted text retains an AI marker. Panels show own-attempt and source-checking reminders; older entry points ask provider consent. Overall panel layout preserved with logical spacing/direction.
+
+Exact commit files: `src/main/ipc/pathways.ts`, `src/main/services/ai/ai-provider.service.ts`, `src/main/services/ai/ai-research.service.ts`, `src/main/services/ai/research-editor-ai.ts`, `src/main/services/ai/translation.service.ts`, `src/main/services/explain-back.ts`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/components/dashboard/PathwaysView.tsx`, `src/renderer/components/notes/StudyAssistant.tsx`, `src/renderer/components/reader/AIResearchAssistantDrawer.tsx`, `src/shared/ai-principles.ts`, `src/shared/research-ai.ts`, `src/shared/study-assistant.ts`, `tests/services/ai-principles.test.ts`, `tests/services/ai.service.test.ts`, `tests/services/research-ai.test.ts`, `scripts/key435-live/main.cjs`, `scripts/key435-live/run.mjs`, `docs/features/feature - AI Principles Audit.md`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `scripts/test-runner.js`, `tests/ui/sunnah.test.ts`. Only owned GlobalAssistant/state hunks staged. Codex 3 ar/en translation keys already landed in parallel KEY-437 commit 70f0c109, so translations.ts is excluded. KEY-439 working hunks preserved. Local report docs/agent-ops/reports/KEY-435.md and evidence .baglib-data/key435-evidence. Jira In Progress (21); commit/push explicitly authorized by current request; Done after successful push.
+
 ## KEY-440 verified - 2026-11-20T20:10:08.383Z - Agent: Codex
 
 Fixed production renderer SRS fallback typing using a render-only Pick and replaced dotAll with equivalent ES2017 multiline matching. Introducing source lines: fc2b8b18e (KEY-390); shared context fallback assignment 532b1a907 (KEY-397). Arabic/English multiline regression passes. AGENTS.md now requires production renderer verification alongside main/root tsc/full tests. No tsconfig, target, dependency or schema changes. UX/layout unchanged; production compilation restored.
@@ -10,6 +20,8 @@ Exact tracked files: `AGENTS.md`, `src/renderer/components/knowledge/SrsReviewPa
 # Implementation Plan
 
 ## Recent Agent Updates
+
+- [2026-11-20T20:48:54.111Z, Agent: Codex KEY-435] VERIFIED AI audit + small fixes; 2874/2874 full tests, renderer/main/root tsc and native ar/en real-file stub live pass. Larger proposals documented, no issues created.
 
 - [2026-11-20T21:24:07+02:00, Agent: Codex KEY-433] VERIFIED focused 12/12, root tsc, editor/main builds, lint 0 errors, vendor integrity and native ar/en canvas+page+BagLib links. Full suite 2,858/2,858 pass (404 suites); scoped commit/push pending. No strings/schema/vendor edits. Production renderer build blocked by existing unrelated SRS template/ES2017 type errors; report KEY-433 records limitations.
 

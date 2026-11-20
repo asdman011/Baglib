@@ -162,7 +162,7 @@ describe('KEY-143 BYOK AI Provider & Research Assistant Services', () => {
       }
     });
 
-    it('persists structured summary directly as a research note when saveAsNote is true', async () => {
+    it('returns a draft without persisting unreviewed output even when a legacy caller requests saveAsNote', async () => {
       const originalGenerate = AIProviderService.getInstance().generateChatCompletion;
       AIProviderService.getInstance().generateChatCompletion = async () => {
         return '📌 الأطروحة المركزية: إصلاح النية قبل العمل.';
@@ -178,22 +178,9 @@ describe('KEY-143 BYOK AI Provider & Research Assistant Services', () => {
           saveAsNote: true,
         });
 
-        assert.ok(result.savedNoteId, 'Should return savedNoteId');
-
-        // Verify note exists in database
-        const row = db
-          .prepare('SELECT * FROM annotations WHERE id = ?')
-          .get(result.savedNoteId) as unknown;
-
-        assert.ok(row, 'Note should be persisted in annotations table');
-        assert.equal(row.book_id, 'work-1');
-        assert.equal(row.type, 'note');
-        assert.equal(row.location_cfi_or_page, '7');
-        assert.ok(row.note_content.includes('الأطروحة المركزية'));
-
-        const tags = JSON.parse(row.tags);
-        assert.ok(tags.includes('AI-Research'));
-        assert.ok(tags.includes('structured_summary'));
+        assert.equal(result.savedNoteId, undefined);
+        assert.ok(result.content.trim());
+        assert.equal(db.prepare('SELECT COUNT(*) AS n FROM annotations').get().n, 0);
       } finally {
         AIProviderService.getInstance().generateChatCompletion = originalGenerate;
       }

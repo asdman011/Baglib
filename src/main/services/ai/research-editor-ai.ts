@@ -1,3 +1,4 @@
+import { hasRemoteConsent } from '../../../shared/ai-consent';
 /**
  * KEY-373 (RE-12): grounded research AI for the manuscript editor. Reads the chapter and the sources it cites
  * (manuscript_link) locally, then calls only the provider the user chose in the BYOK settings.
@@ -39,6 +40,7 @@ export async function runResearchEditorAi(input: unknown, deps: ResearchEditorAi
   const request = validateResearchAiRequest(input);
   if (typeof request === 'string') return { ok: false, error: request };
   if (!providerReady(deps.settings)) return { ok: false, error: 'not-configured' };
+  if (!hasRemoteConsent(deps.settings)) return { ok: false, error: 'permission-denied' };
   const chapter = loadChapterContext(deps.db, request.documentId);
   if (!chapter) return { ok: false, error: 'invalid-request' };
   const { sources } = chapter;

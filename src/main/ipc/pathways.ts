@@ -1,3 +1,4 @@
+import { hasRemoteConsent } from '../../shared/ai-consent';
 import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { writeFile } from 'node:fs/promises';
 import { getDatabase } from '../database/connection';
@@ -67,6 +68,7 @@ export function registerPathwayIpc(): void {
     service(event);
     const settings = new AIResearchService(getDatabase()).getSettings();
     if (!settings.enabled) throw new Error('ai-unavailable');
+    if (!hasRemoteConsent(settings)) throw new Error('permission-denied');
     const outline = await AIProviderService.getInstance().generateChatCompletion(buildCurriculumDraftPrompt(shortText(subject, 300), language === 'ar' ? 'ar' : 'en'), settings);
     const text = outline.replace(/```[a-z]*\s*/giu, '').trim();
     if (!parseOutline(text).length) throw new Error('ai-unavailable');

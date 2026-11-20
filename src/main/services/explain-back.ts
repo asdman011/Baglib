@@ -48,11 +48,11 @@ export class ExplainBackService {
    const attempt=new PracticeService(this.db).judge({id:input.id,result});
    const t=translations[draft.language];
    const clean=(s:string)=>s.replace(/[\r\n[\]|]/gu,' ');
-   const content=[t.explainBackTitle,'',draft.summary,'',t.explainBackJudgment,'',...accepted.flatMap(v=>[
+   const content=[t.explainBackTitle,'',draft.summary,'',t.aiGeneratedMarker,'',t.explainBackJudgment,'',...accepted.flatMap(v=>[
     '- '+t[verdictKey(v.status)]+': '+v.claim,
     '  [['+draft.target+'|'+clean(v.citation.label)+']]: «'+v.citation.quote+'»'
    ])].join('\n');
-   const note=new StudyNotesService(this.settings,this.db).save({title:t.explainBackTitle,content,aliases:[],tags:[]});
+   const note=new StudyNotesService(this.settings,this.db).save({title:t.explainBackTitle,content,aliases:[],tags:['ai-generated']});
    this.settings.delete(PREFIX+input.id);
    return {attempt,note};
   })();

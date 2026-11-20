@@ -180,8 +180,9 @@ export function validateAssistantAnswer(output: string, sources: AssistantSource
  * The answer as a note: the text, then each cited source as a live study link with its quote, so the user can
  * edit it before saving and the links still open the page or note (12.2).
  */
-export function answerAsNote(answer: AssistantAnswer, labels: { sources: string; question?: string }, question = ''): string {
-  const lines = [];
+export function answerAsNote(answer: AssistantAnswer, labels: { sources: string; question?: string; generated?: string }, question = ''): string {
+  const lines: string[] = [];
+  if (labels.generated) lines.push(labels.generated, '');
   if (question) lines.push(`> ${labels.question ? `${labels.question} ` : ''}${question}`, '');
   lines.push(answer.answer.trim(), '', `## ${labels.sources}`);
   const seen = new Set<string>();

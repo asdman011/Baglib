@@ -12,7 +12,8 @@ if (testFiles.length === 0) {
   if (fs.existsSync(testsDir)) {
     testFiles = fs.readdirSync(testsDir, { recursive: true })
       .filter((file) => typeof file === 'string' && file.endsWith('.test.ts'))
-      .map((file) => path.join(testsDir, file));
+      // Keep Windows' child-process command line below its length limit as the suite grows.
+      .map((file) => path.relative(process.cwd(), path.join(testsDir, file)));
   }
 }
 

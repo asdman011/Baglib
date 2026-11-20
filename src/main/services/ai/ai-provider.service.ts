@@ -1,3 +1,4 @@
+import { AI_SCHOLARLY_POLICY } from '../../../shared/ai-principles';
 import { errorMessage } from '../../../shared/errors';
 import { chatModelIds, customProviderSettings, normaliseBaseUrl } from '../../../shared/ai-providers';
 /**
@@ -91,6 +92,7 @@ export class AIProviderService {
     settings: AISettings
   ): Promise<string> {
     const provider = settings.provider || 'ollama';
+    request = { ...request, systemPrompt: request.systemPrompt + '\n\n' + AI_SCHOLARLY_POLICY };
 
     switch (provider) {
       case 'ollama':

@@ -96,7 +96,7 @@ test('runResearchEditorAi reads the chapter and its cited sources, and only call
     snapshot = insertBlockIntoManuscriptSnapshot(snapshot, 'ayah', ayah()).snapshot;
     snapshot = insertBlockIntoManuscriptSnapshot(snapshot, 'note-embed', noteEmbedProps(note)).snapshot;
     repo.save({ id: doc.id, snapshot });
-    const settings = { provider: 'gemini', geminiApiKey: 'test-key', enabled: true } as AISettings;
+    const settings = { provider: 'gemini', geminiApiKey: 'test-key', enabled: true, remoteConsent: 'gemini' } as AISettings;
     const calls: { systemPrompt: string; userPrompt: string }[] = [];
     const result = await runResearchEditorAi({ documentId: doc.id, action: 'summarize', lang: 'ar' }, {
       db, settings, complete: async prompt => { calls.push(prompt); return 'خلاصة [1] و[2] و[7]'; },
