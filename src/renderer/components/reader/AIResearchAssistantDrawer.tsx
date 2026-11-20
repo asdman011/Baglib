@@ -1,7 +1,8 @@
 'use client';
+import { AiPrivacyControls } from '../ai/AiPrivacyControls';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
-import { markAiGenerated } from '../../../shared/ai-principles';
 import { useLearningMode } from '../ai/useLearningMode';
+import { markAiGenerated } from '../../../shared/ai-principles';
 import { aiErrorText } from '../ai/ai-error-text';
 
 
@@ -70,11 +71,11 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
   const [result, setResult] = useState<AIResearchResult | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isSavedToNotes, setIsSavedToNotes] = useState<boolean>(false);
-
   const { modeFor } = useLearningMode();
   const learningMode = modeFor('reader');
   const [attempt, setAttempt] = useState('');
   const [revealedFull, setRevealedFull] = useState(false);
+
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
   const resetInputs1 = [initialTool];
   if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
@@ -127,10 +128,10 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           userQuery: userQuery || undefined,
           targetLang: activeTool === 'inline_translation' ? targetLang : undefined,
           saveAsNote: false,
-        };
           module: 'reader',
           revealFullAnswer: options?.revealFullAnswer,
           attempt: options?.attemptText,
+        };
 
         const res: AIResearchResult = await windowAPI.ai.executeTool(payload);
         setResult(res.error ? { ...res, content: aiErrorText(res.error, t) } : res);
@@ -344,12 +345,12 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           )}
 
           {/* Action Trigger Button */}
-          <div className="flex items-center gap-2">
           {activeTool !== 'inline_translation' && learningMode === 'off' && (
             <p data-reader-learning-mode-off className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-200">
               {t('aiLearningModeOffNotice')}
             </p>
           )}
+          <div className="flex items-center gap-2">
             <button
               onClick={() => { setRevealedFull(false); void handleExecuteTool(); }}
               disabled={isLoading || (activeTool !== 'inline_translation' && learningMode === 'off')}
@@ -392,7 +393,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
               </button>
             )}
           </div>
-        </div>}
+        )}
         {/* Results View */}
         {result && (
           <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800 space-y-3">

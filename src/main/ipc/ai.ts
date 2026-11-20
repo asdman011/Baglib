@@ -1,10 +1,10 @@
 import { translationErrorCode } from '../../shared/translation-privacy';
-import { errorMessage } from '../../shared/errors';
+import { AiOperationError, aiOperationErrorCode } from '../../shared/ai-errors';
 /**
  * Baglib — AI Research Assistant & Translation IPC Handlers (KEY-143)
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getDatabase } from '../database/connection';
 import { AIResearchService } from '../services/ai/ai-research.service';
 import { TranslationService } from '../services/ai/translation.service';
@@ -29,10 +29,17 @@ function getTranslationService(): TranslationService {
   return translationServiceInstance;
 }
 
+export function authorizeAiSender(event: IpcMainInvokeEvent): void {
+ const frame=event.senderFrame;
+ if (!frame || frame!==event.sender.mainFrame) throw new AiOperationError('invalid-request');
+ const url=new URL(frame.url);
+ if (url.username || url.password || !(url.protocol==='app:' && url.hostname==='-' || url.protocol==='file:' && !url.hostname || url.origin==='http://localhost:3000')) throw new AiOperationError('invalid-request');
+}
 export function registerAIIpc(): void {
   // Retrieve AI & BYOK settings
-  ipcMain.handle('ai:get-settings', async () => {
+  ipcMain.handle('ai:get-settings', async (event) => {
     try {
+      authorizeAiSender(event);
       const service = getAIService();
       return service.getSettings();
     } catch (err) {
@@ -42,8 +49,9 @@ export function registerAIIpc(): void {
   });
 
   // Save AI settings
-  ipcMain.handle('ai:save-settings', async (_, newSettings: Partial<AISettings>) => {
+  ipcMain.handle('ai:save-settings', async (event, newSettings: Partial<AISettings>) => {
     try {
+      authorizeAiSender(event);
       const service = getAIService();
       return service.saveSettings(newSettings);
     } catch (err) {
@@ -53,28 +61,32 @@ export function registerAIIpc(): void {
   });
 
   // KEY-385: the chat models an OpenAI-compatible service offers, for the settings model list.
-  ipcMain.handle('ai:list-models', async (_, draft?: AISettings) => {
+  ipcMain.handle('ai:list-models', async (event, draft?: AISettings) => {
+    authorizeAiSender(event);
     const settings = { ...getAIService().getSettings(), ...(draft && typeof draft === 'object' ? draft : {}) } as AISettings;
     return AIProviderService.getInstance().listModels(settings);
   });
 
   // Test provider connection
-  ipcMain.handle('ai:test-connection', async (_, customSettings?: AISettings) => {
+  ipcMain.handle('ai:test-connection', async (event, customSettings?: AISettings) => {
     try {
+      authorizeAiSender(event);
       const service = getAIService();
-      return await service.testConnection(customSettings);
+      const result = await service.testConnection(customSettings);
+      return result.success ? { success: true } : { success: false, error: aiOperationErrorCode(new Error(result.message)) };
     } catch (err: unknown) {
-      console.warn('[IPC:ai:test-connection] Error:', err);
+
       return {
         success: false,
-        message: errorMessage(err) || 'Connection test failed',
+        error: aiOperationErrorCode(err),
       };
     }
   });
 
   // Execute academic research tool / anti-spoiler inquiry
-  ipcMain.handle('ai:execute-tool', async (_, payload: AIResearchQueryPayload) => {
+  ipcMain.handle('ai:execute-tool', async (event, payload: AIResearchQueryPayload) => {
     try {
+      authorizeAiSender(event);
       const service = getAIService();
       return await service.executeTool(payload);
     } catch (err: unknown) {
@@ -82,7 +94,7 @@ export function registerAIIpc(): void {
       return {
         content: '',
         error: translationErrorCode(err),
-        tool: payload?.tool || 'chat',
+        tool: 'chat' as const,
         spoilerPrevented: false,
         providerUsed: 'error',
         durationMs: 0,
@@ -91,7 +103,8 @@ export function registerAIIpc(): void {
   });
 
   // KEY-373 (RE-12): grounded research AI for the manuscript editor (chapter + cited sources only).
-  ipcMain.handle('ai:research-editor', async (_, request: unknown) => {
+  ipcMain.handle('ai:research-editor', async (event, request: unknown) => {
+    try { authorizeAiSender(event); } catch { return { ok: false, error: 'invalid-request' }; }
     const provider = AIProviderService.getInstance();
     return runResearchEditorAi(request, {
       db: getDatabase(),
@@ -101,8 +114,9 @@ export function registerAIIpc(): void {
   });
 
   // Dedicated or LLM translation
-  ipcMain.handle('ai:translate', async (_, options: unknown) => {
+  ipcMain.handle('ai:translate', async (event, options: unknown) => {
     try {
+      authorizeAiSender(event);
       const service = getAIService();
       const settings = service.getSettings();
       const transService = getTranslationService();

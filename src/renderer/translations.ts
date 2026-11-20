@@ -1,6 +1,7 @@
 import { researchEditorTranslations } from '../shared/research-editor-i18n';
 export const translations = {
   ar: {
+    aiPrivacyConnectionOk: "تم الاتصال بالمزوّد بنجاح.",
     aiTranslationPublicGoogle: "السماح بخدمة Google العامة عند عدم وجود مفتاح API. يُرسل النص إلى translate.googleapis.com بعد موافقتك؛ لا يُستخدم بديل تلقائي عند فشل خدمة أخرى.",
     aiTranslationConsentNotice: "تتطلب الترجمة موافقتك على المزوّد والعنوان المعروضين قبل إرسال النص. يمكنك إلغاء الموافقة هنا.",
     aiPrivacyConsentRequired: "وافِق على المزوّد الحالي قبل إرسال النص.",
@@ -6401,7 +6402,6 @@ export const translations = {
     revisionSelectAll: "تحديد الكل",
     ctxOpenInNewTab: "فتح في علامة تبويب جديدة",
     ctxOpenHere: "فتح هنا",
-  },
     aiLearningModeTitle: "وضع التعلّم",
     aiLearningModeDesc: "حدّد مقدار مساعدة الذكاء الاصطناعي في كل قسم. تتوقف المساعدة افتراضياً في المراجعة والاختبارات.",
     aiLearningModeOff: "إيقاف",
@@ -6419,7 +6419,9 @@ export const translations = {
     aiAttemptPlaceholder: "اكتب محاولتك أولاً لإتاحة الإجابة الكاملة…",
     aiShowFullAnswer: "إظهار الإجابة الكاملة",
     aiFullAnswerLabel: "الإجابة الكاملة",
+  },
   en: {
+    aiPrivacyConnectionOk: "Provider connection succeeded.",
     aiTranslationPublicGoogle: "Allow public Google translation when no API key is set. Text goes to translate.googleapis.com after consent; it is never used automatically after another service fails.",
     aiTranslationConsentNotice: "Translation asks for consent to the displayed provider and endpoint before sending text. You can revoke consent here.",
     aiPrivacyConsentRequired: "Allow the current provider before sending text.",
@@ -12820,8 +12822,6 @@ export const translations = {
     revisionSelectAll: "Select all",
     ctxOpenInNewTab: "Open in new tab",
     ctxOpenHere: "Open here",
-  }
-};
     aiLearningModeTitle: "Learning mode",
     aiLearningModeDesc: "Choose how much help AI may give per module. AI stays off by default in revision sessions and tests.",
     aiLearningModeOff: "Off",
@@ -12839,5 +12839,7 @@ export const translations = {
     aiAttemptPlaceholder: "Type your attempt first to unlock the full answer…",
     aiShowFullAnswer: "Show full answer",
     aiFullAnswerLabel: "Full answer",
+  }
+};
 
 export type TranslationKey = keyof typeof translations.ar;

@@ -78,7 +78,7 @@ test('parseAnswerCitations normalises Arabic digits, drops invented numbers, ord
 test('providerReady needs a key except for Ollama', () => {
   assert.equal(providerReady({ provider: 'ollama' }), true);
   assert.equal(providerReady({ provider: 'gemini' }), false);
-  assert.equal(providerReady({ provider: 'gemini', geminiApiKey: 'k' }), true);
+  assert.equal(providerReady({ enabled: true, remoteConsent: 'gemini', provider: 'gemini', geminiApiKey: 'k' }), true);
   assert.equal(providerReady({ provider: 'openai', apiKey: 'k', enabled: false }), false);
 });
 
@@ -96,7 +96,7 @@ test('runResearchEditorAi reads the chapter and its cited sources, and only call
     snapshot = insertBlockIntoManuscriptSnapshot(snapshot, 'ayah', ayah()).snapshot;
     snapshot = insertBlockIntoManuscriptSnapshot(snapshot, 'note-embed', noteEmbedProps(note)).snapshot;
     repo.save({ id: doc.id, snapshot });
-    const settings = { provider: 'gemini', geminiApiKey: 'test-key', enabled: true, remoteConsent: 'gemini' } as AISettings;
+    const settings = { enabled: true, remoteConsent: 'gemini', provider: 'gemini', geminiApiKey: 'test-key', enabled: true, remoteConsent: 'gemini' } as AISettings;
     const calls: { systemPrompt: string; userPrompt: string }[] = [];
     const result = await runResearchEditorAi({ documentId: doc.id, action: 'summarize', lang: 'ar' }, {
       db, settings, complete: async prompt => { calls.push(prompt); return 'خلاصة [1] و[2] و[7]'; },
@@ -129,7 +129,7 @@ test('Gemini calls send the key in the x-goog-api-key header, never in the URL, 
   }) as typeof fetch;
   try {
     const service = AIProviderService.getInstance();
-    const settings = { provider: 'gemini', geminiApiKey: 'secret-key', geminiModel: 'gemini-1.5-flash' } as AISettings;
+    const settings = { enabled: true, remoteConsent: 'gemini', provider: 'gemini', geminiApiKey: 'secret-key', geminiModel: 'gemini-1.5-flash' } as AISettings;
     await service.generateChatCompletion({ systemPrompt: 's', userPrompt: 'u' }, settings);
     await service.healthCheck(settings);
     assert.equal(seen.length, 2);
@@ -158,7 +158,7 @@ test('Gemini falls back to the lite models when the chosen one is overloaded, sk
   }) as typeof fetch;
   try {
     const service = AIProviderService.getInstance();
-    const settings = { provider: 'gemini', geminiApiKey: 'k', geminiModel: 'gemini-busy-model' } as AISettings;
+    const settings = { enabled: true, remoteConsent: 'gemini', provider: 'gemini', geminiApiKey: 'k', geminiModel: 'gemini-busy-model' } as AISettings;
     assert.equal(await service.generateChatCompletion({ systemPrompt: 's', userPrompt: 'u' }, settings), 'الجواب');
     assert.deepEqual(models, ['gemini-busy-model', 'gemini-flash-lite-latest']);
     // The failed model cools down: the next request goes straight to the fallback.
@@ -166,10 +166,10 @@ test('Gemini falls back to the lite models when the chosen one is overloaded, sk
     await service.generateChatCompletion({ systemPrompt: 's', userPrompt: 'u' }, settings);
     assert.deepEqual(models, ['gemini-flash-lite-latest']);
     mode = 'all-quota';
-    await assert.rejects(service.generateChatCompletion({ systemPrompt: 's', userPrompt: 'u' }, { ...settings, geminiModel: 'gemini-other' } as AISettings), /gemini-other: HTTP 429: You exceeded your current quota \| gemini-flash-lite-latest: HTTP 429/);
+    await assert.rejects(service.generateChatCompletion({ systemPrompt: 's', userPrompt: 'u' }, { ...settings, geminiModel: 'gemini-other' } as AISettings), /provider-quota/);
     mode = 'bad-request';
     models.length = 0;
-    await assert.rejects(service.generateChatCompletion({ systemPrompt: 's', userPrompt: 'u' }, { ...settings, geminiModel: 'gemini-third' } as AISettings), /HTTP 400: Invalid argument/);
+    await assert.rejects(service.generateChatCompletion({ systemPrompt: 's', userPrompt: 'u' }, { ...settings, geminiModel: 'gemini-third' } as AISettings), /provider-error/);
     assert.deepEqual(models, ['gemini-third'], 'a request error is not retried on other models');
   } finally {
     globalThis.fetch = original;

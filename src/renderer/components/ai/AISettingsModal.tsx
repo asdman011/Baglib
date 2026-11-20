@@ -1,5 +1,6 @@
 'use client';
-import { errorMessage } from '../../../shared/errors';
+import { aiErrorText } from './ai-error-text';
+import type { AiOperationErrorCode } from '../../../shared/ai-errors';
 import { Modal } from '../ui/Modal';
 
 
@@ -19,7 +20,6 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import type { AISettings, AIProviderId, TranslationProviderId } from '../../../shared/types/ai';
-import { translationDestination } from '../../../shared/translation-privacy';
 import {
   AI_LEARNING_MODES,
   AI_LEARNING_MODULES,
@@ -27,6 +27,7 @@ import {
   type AiLearningMode,
   type AiLearningModule,
 } from '../../../shared/ai-learning-mode';
+import { translationDestination } from '../../../shared/translation-privacy';
 import { TranslationKey } from '../../translations';
 import { CustomProviderFields } from './CustomProviderFields';
 
@@ -53,12 +54,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     claudeModel: 'claude-3-5-sonnet-20241022',
     translationProvider: 'llm',
     targetLanguage: 'ar',
-  });
     learningModes: normalizeLearningModes(),
+  });
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isTesting, setIsTesting] = useState<boolean>(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; message?: string; error?: AiOperationErrorCode } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
   const [previousAISettingsVisibility, setPreviousAISettingsVisibility] = useState<readonly unknown[] | null>(null);
@@ -87,14 +88,14 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         setTestResult(res);
       } else {
         setTestResult({
-          success: true,
-          message: 'Mock Connection OK (Browser preview mode)',
+          success: false,
+          error: 'provider-error',
         });
       }
-    } catch (err: unknown) {
+    } catch {
       setTestResult({
         success: false,
-        message: errorMessage(err) || 'Connection test failed',
+        error: 'provider-error',
       });
     } finally {
       setIsTesting(false);
@@ -412,7 +413,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             {settings.translationProvider === 'google' && <label className="flex items-start gap-2"><input data-google-public type="checkbox" checked={settings.googlePublicTranslation === true} onChange={event => setSettings({ ...settings, googlePublicTranslation: event.target.checked, translationConsent: undefined })} />{t('aiTranslationPublicGoogle')}</label>}
             {translationDestination(settings) && <><p dir="auto">{translationDestination(settings)!.provider} · {translationDestination(settings)!.endpoint}</p><p>{t('aiTranslationConsentNotice')}</p>{settings.translationConsent && <button data-translation-revoke type="button" className="underline" onClick={async () => { const saved = await window.electronAPI.ai.saveSettings({ translationConsent: undefined }); setSettings(current => ({ ...current, translationConsent: saved.translationConsent })); window.dispatchEvent(new Event('baglib:ai-settings-changed')); }}>{t('assistantConsentRevoke')}</button>}</>}
           </div>
-          {/* Test Connection Banner */}
           {/* Learning Mode per Module (KEY-436) */}
           <div
             data-learning-modes-section
@@ -472,6 +472,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </div>
 
+          {/* Test Connection Banner */}
           {testResult && (
             <div
               className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs ${
@@ -486,8 +487,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               )}
               <div className="flex-1">
-                <span className="font-semibold">{testResult.success ? 'Success: ' : 'Failed: '}</span>
-                <span>{testResult.message}</span>
+                <span>{testResult.success ? t('aiPrivacyConnectionOk') : aiErrorText(testResult.error ?? 'provider-error', t)}</span>
               </div>
             </div>
           )}

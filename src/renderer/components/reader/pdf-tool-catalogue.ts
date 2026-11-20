@@ -131,6 +131,7 @@ export const PDF_TOOL_CATALOGUE: PdfToolDefinition[] = [
   },
 
   { id: 'review', section: 'annotate', nameKey: 'pdfSuiteReview', descriptionKey: 'pdfToolReviewDesc', resultHint: 'inspect', iconName: 'FileSearch', mode: 'view' },
+  { id: 'summarize', section: 'annotate', nameKey: 'pdfSuiteSummary', descriptionKey: 'pdfAiEvidence', resultHint: 'inspect', iconName: 'Sparkles', mode: 'view' },
 
   // 2. Organize pages
   {

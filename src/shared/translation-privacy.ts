@@ -1,8 +1,8 @@
 import type { AISettings } from './types/ai';
 import { hasRemoteConsent } from './ai-consent';
-import { providerErrorCode, type ProviderErrorCode } from './ai-errors';
+import { aiOperationErrorCode, type AiOperationErrorCode } from './ai-errors';
 
-export type TranslationErrorCode = 'ai-disabled' | 'permission-denied' | 'invalid-request' | 'not-configured' | ProviderErrorCode;
+export type TranslationErrorCode = AiOperationErrorCode;
 export class TranslationError extends Error {
   constructor(public readonly code: TranslationErrorCode) { super(code); }
 }
@@ -44,5 +44,5 @@ export function validateTranslationInput(value: unknown): TranslationInput {
 }
 /** Never expose provider bodies, URLs with query text, keys, or arbitrary exception text. */
 export function translationErrorCode(error: unknown): TranslationErrorCode {
-  return error instanceof TranslationError ? error.code : providerErrorCode(error instanceof Error ? error.message : '');
+  return error instanceof TranslationError ? error.code : aiOperationErrorCode(error);
 }

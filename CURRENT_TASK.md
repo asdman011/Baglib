@@ -1,3 +1,25 @@
+## KEY-442: One shared privacy and error surface for older AI paths and PDF AI (AI Task 7, epic KEY-434) — 2026-11-20T23:48+02:00 - Agent: Antigravity (continuing Codex)
+
+**Done:**
+- Finished Codex's uncommitted `KEY-442` work and integrated `KEY-436` per-module Learning mode (`reader`: `off` / `hints` / `full`) into PDF AI (`pdf-collab:ask` and `PdfReviewPanel.tsx`).
+- `src/shared/ai-consent.ts` & `src/shared/translation-privacy.ts`: unified `isLocalAi()` via `isLocalAddress()` so custom loopback endpoints (`127.0.0.1`, `localhost`, `[::1]`) are treated as local alongside Ollama; added `aiPrivacyError(settings, allowRemote)` and secret-free `aiConsentEndpoint(settings)`.
+- `src/shared/ai-errors.ts` & `src/renderer/components/ai/ai-error-text.ts`: added `AiOperationError` and `aiOperationErrorCode()` covering `ai-disabled`, `permission-denied`, `not-configured`, `invalid-request`, `learning-mode-off`, and provider error codes; mapped `'learning-mode-off'` to `aiLearningModeOffNotice`.
+- `src/main/ipc/ai.ts`, `src/main/ipc/pdf-collaboration.ts`, `src/main/services/ai/ai-provider.service.ts`, `src/main/services/ai/ai-research.service.ts`, `src/shared/ai-research-input.ts`, `src/shared/types/pdf-collaboration.ts`: added `authorizeAiSender(event)` on `ai:*` IPC handlers, `validateAiResearchInput()`, `aiPrivacyError` + `redirect: 'error'` in `AIProviderService.generateChatCompletion()`, and `resolveLearningMode(settings, 'reader')` + `applyHintsPrompt()` + `validatePdfAnswerOptions()` (`revealFullAnswer`, `attempt`) in `pdf-collab:ask`.
+- `src/renderer/components/ai/AiPrivacyControls.tsx`, `useRemoteConsent.ts`, `AISettingsModal.tsx`, `src/renderer/components/reader/{AIResearchAssistantDrawer,PdfReviewPanel}.tsx`, `pdf-tool-catalogue.ts`, `src/renderer/translations.ts`, `src/shared/types/pdf-editor.ts`: shared consent display & revocation UI (`AiPrivacyControls`), sanitized connection feedback, and `useLearningMode()` (`modeFor('reader')`) in `PdfReviewPanel`.
+- `tests/services/{ai-privacy-parity,assistant-chat,research-ai}.test.ts` & `scripts/key442-live/{main.cjs,run.mjs}`: unit tests and live Electron verification in `ar` and `en` with real Arabic & English PDFs and a stubbed local OpenAI-compatible server.
+
+**Tests:**
+- Focused (`ai-privacy-parity`, `assistant-chat`, `research-ai`, `ai-principles`, `ai-learning-mode`): 33/33 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,893/2,893 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key442-live/run.mjs`): PASS in `ar` and `en` (`errors: []`, `stubCallsCount: 2`, screenshots in `.baglib-data/key442-evidence/`, throwaway profile deleted).
+
+**Jira:**
+- `KEY-442` In Progress (`21`); Done (`41`) after commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/agent-ops/reports/KEY-442.md`, `scripts/key442-live/main.cjs`, `scripts/key442-live/run.mjs`, `src/main/ipc/ai.ts`, `src/main/ipc/pdf-collaboration.ts`, `src/main/services/ai/ai-provider.service.ts`, `src/main/services/ai/ai-research.service.ts`, `src/renderer/components/ai/AISettingsModal.tsx`, `src/renderer/components/ai/AiPrivacyControls.tsx`, `src/renderer/components/ai/ai-error-text.ts`, `src/renderer/components/ai/useRemoteConsent.ts`, `src/renderer/components/reader/AIResearchAssistantDrawer.tsx`, `src/renderer/components/reader/PdfReviewPanel.tsx`, `src/renderer/components/reader/pdf-tool-catalogue.ts`, `src/renderer/translations.ts`, `src/shared/ai-consent.ts`, `src/shared/ai-errors.ts`, `src/shared/ai-research-input.ts`, `src/shared/translation-privacy.ts`, `src/shared/types/pdf-collaboration.ts`, `src/shared/types/pdf-editor.ts`, `tests/services/ai-privacy-parity.test.ts`, `tests/services/assistant-chat.test.ts`, `tests/services/research-ai.test.ts`.
+
 ## KEY-436: "Learning mode" setting per module (AI Task 2, epic KEY-434) — 2026-11-20T23:31+02:00 - Agent: Antigravity
 
 **Done:**

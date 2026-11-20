@@ -1,3 +1,5 @@
+import { aiPrivacyError } from '../../../shared/ai-consent';
+import { AiOperationError, aiOperationErrorCode } from '../../../shared/ai-errors';
 import { AI_SCHOLARLY_POLICY } from '../../../shared/ai-principles';
 import { errorMessage } from '../../../shared/errors';
 import { chatModelIds, customProviderSettings, normaliseBaseUrl } from '../../../shared/ai-providers';
@@ -92,8 +94,11 @@ export class AIProviderService {
     settings: AISettings
   ): Promise<string> {
     const provider = settings.provider || 'ollama';
-    request = { ...request, systemPrompt: request.systemPrompt + '\n\n' + AI_SCHOLARLY_POLICY };
+    const privacyError = aiPrivacyError(settings);
+    if (privacyError) throw new AiOperationError(privacyError);
+    request = { ...request, preventRedirect: true, systemPrompt: request.systemPrompt + '\n\n' + AI_SCHOLARLY_POLICY };
 
+    try {
     switch (provider) {
       case 'ollama':
         return await this.callOllama(request, settings);
@@ -107,6 +112,7 @@ export class AIProviderService {
       default:
         return await this.callOpenAI(request, settings);
     }
+    } catch (error) { throw new AiOperationError(aiOperationErrorCode(error)); }
   }
 
   /**
@@ -192,7 +198,7 @@ export class AIProviderService {
     try {
       const res = await fetch(`${endpoint}/api/chat`, {
         method: 'POST',
-        redirect: request.preventRedirect ? 'error' : 'follow',
+        redirect: 'error',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
@@ -285,6 +291,7 @@ export class AIProviderService {
     try {
       const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
@@ -402,7 +409,7 @@ export class AIProviderService {
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: 'POST',
-          redirect: request.preventRedirect ? 'error' : 'follow',
+          redirect: 'error',
           // KEY-373: the key goes in the x-goog-api-key header, never in the URL (URLs end up in logs).
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           signal: controller.signal,
@@ -460,6 +467,7 @@ export class AIProviderService {
       // Light healthcheck ping
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
@@ -508,6 +516,7 @@ export class AIProviderService {
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',

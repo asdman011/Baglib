@@ -1,6 +1,7 @@
 import type { TranslationKey } from '../../translations';
 import type { TranslationErrorCode } from '../../../shared/translation-privacy';
 const keys: Record<TranslationErrorCode, TranslationKey> = {
+ 'learning-mode-off': 'aiLearningModeOffNotice',
  'ai-disabled': 'assistantErrorDisabled', 'permission-denied': 'aiPrivacyConsentRequired', 'invalid-request': 'aiPrivacyInvalidRequest', 'not-configured': 'researchAiNotConfigured',
  'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge', 'provider-model': 'aiErrorModel', 'provider-terms': 'aiErrorTerms', 'provider-error': 'assistantErrorEngine',
 };

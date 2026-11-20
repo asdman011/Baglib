@@ -87,7 +87,7 @@ export const PDF_ENGINE_OPERATIONS = [
 export type PdfOperation = typeof PDF_ENGINE_OPERATIONS[number];
 export type PdfOutputFormat = 'pdf' | 'docx' | 'odt' | 'xlsx' | 'pptx' | 'ppt' | 'odp' | 'html' | 'json' | 'txt' | 'md' | 'csv' | 'zip' | 'xml' | 'rtf' | 'png' | 'jpg';
 export interface PdfOutput { filename: string; format: PdfOutputFormat; bytes: number; sha256: string }
-export type PdfError = 'invalid-request' | 'invalid-source' | 'source-required' | 'source-changed' | 'encrypted' | 'permission-denied' | 'unsupported' | 'busy' | 'cancelled' | 'storage' | 'engine-missing' | 'engine-failed' | 'signed-document-locked' | 'text-does-not-fit' | 'owner-password-required' | 'no-tables' | 'no-text' | 'no-bookmarks' | 'redaction-unverified' | 'no-redactions' | 'certificate-invalid' | 'invalid-output' | 'document-too-large' | 'no-output';
+export type PdfError = import('../ai-errors').AiOperationErrorCode | 'invalid-request' | 'invalid-source' | 'source-required' | 'source-changed' | 'encrypted' | 'permission-denied' | 'unsupported' | 'busy' | 'cancelled' | 'storage' | 'engine-missing' | 'engine-failed' | 'signed-document-locked' | 'text-does-not-fit' | 'owner-password-required' | 'no-tables' | 'no-text' | 'no-bookmarks' | 'redaction-unverified' | 'no-redactions' | 'certificate-invalid' | 'invalid-output' | 'document-too-large' | 'no-output';
 export type PdfResult<T> = { ok: true; data: T } | { ok: false; error: PdfError };
 export interface PdfCapability { feature: PdfFeature; available: boolean; reason?: 'engine-missing' | 'text-only' | 'credentials-required' }
 export type StirlingEngineStatus = 'stopped' | 'starting' | 'ready' | 'processing' | 'error';

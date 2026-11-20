@@ -4,12 +4,12 @@
  * local or already allowed, and remembers or withdraws the user's yes in the settings.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { hasRemoteConsent, remoteConsentKey } from '../../../shared/ai-consent';
+import { hasRemoteConsent, remoteConsentKey, aiConsentEndpoint } from '../../../shared/ai-consent';
 import { translationDestination, translationReady, hasTranslationConsent } from '../../../shared/translation-privacy';
 import { providerReady } from '../../../shared/research-ai';
 import { customProviderName } from '../../../shared/ai-providers';
 import type { AISettings } from '../../../shared/types/ai';
-import type { TranslationKey } from '../../translations';
+import { translations, type TranslationKey } from '../../translations';
 
 const providerKeys: Record<string, TranslationKey> = {
   ollama: 'aiProviderOllama', openai: 'aiProviderOpenAI', custom: 'aiProviderCustom', gemini: 'aiProviderGemini', claude: 'aiProviderClaude',
@@ -48,7 +48,8 @@ export function useRemoteConsent(mode: 'ai' | 'translation' = 'ai') {
     allowed,
     providerLabel: (providerKeys[settings?.provider ?? 'ollama'] ?? 'aiProviderOpenAI') as TranslationKey,
     /** KEY-385: the service's own name (Groq, LM Studio…) for the custom provider. */
-    customName: destination ? destination.provider + ' · ' + destination.endpoint : settings?.provider === 'custom' ? customProviderName(settings) : undefined,
+    customName: destination ? destination.provider + ' · ' + destination.endpoint : settings && !local ?
+      (settings.provider === 'custom' ? customProviderName(settings) : translations[typeof document !== 'undefined' && document.documentElement.lang === 'ar' ? 'ar' : 'en'][providerKeys[settings.provider] ?? 'aiProviderOpenAI']) + ' · ' + aiConsentEndpoint(settings) : undefined,
     allow: async () => {
       const fresh = await window.electronAPI.ai.getSettings() as AISettings | null;
       const currentKey = fresh ? (mode === 'translation' ? translationDestination(fresh)?.key : null) ?? remoteConsentKey(fresh) : undefined;

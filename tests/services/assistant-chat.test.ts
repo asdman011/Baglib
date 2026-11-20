@@ -49,7 +49,7 @@ test('runAssistantChat reads sources and the chapter itself, honours consent, an
     const ms = repo.create('بحث', 'research');
     const doc = repo.createDocument(ms.id, 'الفصل الأول');
     repo.save({ id: doc.id, snapshot: insertBlockIntoManuscriptSnapshot(repo.document(doc.id).snapshot, 'ayah', { ...emptySourceProps(), url: 'quran:hafs:2:255', label: 'البقرة ٢٥٥', text: 'اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ' }).snapshot });
-    const settings = { enabled: true, provider: 'gemini', geminiApiKey: 'k' } as AISettings;
+    const settings = { enabled: true, remoteConsent: 'gemini', provider: 'gemini', geminiApiKey: 'k' } as AISettings;
     const resolved: string[] = [];
     const prompts: string[] = [];
     const deps = {

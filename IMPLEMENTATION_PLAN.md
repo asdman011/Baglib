@@ -60,6 +60,8 @@ User explicitly authorizes one owned-file commit and normal push per task. KEY-4
 
 ## Recent Agent Updates
 
+- [2026-11-20T23:48+02:00, Agent: Antigravity (continuing Codex) KEY-442] VERIFIED shared AI privacy/consent/error surface (`isLocalAi` custom loopback parity, `AiPrivacyControls`, `AiOperationError`, `authorizeAiSender`, `pdf-collab:ask` + `PdfReviewPanel` KEY-436 learning mode integration). 33/33 focused, 2,893/2,893 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass, live Electron `ar`/`en` PASS (`stubCallsCount: 2`, 0 errors).
+
 - [2026-11-20T23:31+02:00, Agent: Antigravity KEY-436] VERIFIED per-module AI Learning mode (`off` / `hints` / `full`; `revision` defaults `off`, all others `hints`) stored in `ai_settings`, shared resolver `src/shared/ai-learning-mode.ts`, Settings UI, and all AI entry points (PDF AI deferred to Codex KEY-442). 9/9 focused, 2,892/2,892 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass, live Electron `ar`/`en` PASS (`stubCallsCount: 12`, 0 errors).
 
 - [2026-11-20T20:48:54.111Z, Agent: Codex KEY-435] AI audit + small policy/review/provenance/consent fixes VERIFIED; 2874/2874 full tests, renderer/main/tsc, ar/en stubbed real-file live pass; owned-file commit/push pending, larger proposals in audit.

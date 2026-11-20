@@ -6,6 +6,7 @@ export type ProviderErrorCode = 'provider-quota' | 'provider-busy' | 'provider-a
 export const PROVIDER_ERROR_CODES: readonly ProviderErrorCode[] = ['provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'provider-model', 'provider-terms', 'provider-error'];
 
 export function providerErrorCode(message: string): ProviderErrorCode {
+  if (PROVIDER_ERROR_CODES.includes(message as ProviderErrorCode)) return message as ProviderErrorCode;
   // KEY-385: a model that cannot chat (classifier, speech, transcription) or that the service does not offer.
   if (/text classification|does not support chat|not a chat model|model_not_found|model .{0,80} does not exist|unknown model|invalid model/i.test(message)) return 'provider-model';
   if (/terms acceptance|model_terms_required|accept the terms/i.test(message)) return 'provider-terms';
@@ -19,5 +20,18 @@ export function providerErrorCode(message: string): ProviderErrorCode {
 
 /** A short provider message for display, with anything that looks like a key removed. */
 export function providerErrorDetail(message: string): string {
+  if (PROVIDER_ERROR_CODES.includes(message as ProviderErrorCode)) return '';
   return message.replace(/(key=|api[-_ ]?key[:= ]+)[^\s&|]+/gi, '$1…').replace(/\bAQ\.[\w-]{10,}|\bAIza[\w-]{20,}|\bsk-[\w-]{10,}|\bgsk_\w{10,}/g, '…').slice(0, 300);
+}
+
+/** Stable IPC errors; renderer copy is chosen from centralized translations, never provider prose. */
+export type AiOperationErrorCode = ProviderErrorCode | 'ai-disabled' | 'permission-denied' | 'not-configured' | 'invalid-request' | 'learning-mode-off';
+export class AiOperationError extends Error {
+  constructor(public readonly code: AiOperationErrorCode) { super(code); }
+}
+export function aiOperationErrorCode(error: unknown): AiOperationErrorCode {
+  const message = error instanceof Error ? error.message : '';
+  if (error instanceof AiOperationError) return error.code;
+  if ([...PROVIDER_ERROR_CODES, 'ai-disabled', 'permission-denied', 'not-configured', 'invalid-request', 'learning-mode-off'].includes(message)) return message as AiOperationErrorCode;
+  return providerErrorCode(message);
 }
