@@ -12,6 +12,7 @@ import { Check, Sparkles, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
+import { useLearningMode } from '../ai/useLearningMode';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import type { BookQuestionSuggestion } from '../../../shared/book-questions';
 import type { TranslationKey } from '../../translations';
@@ -21,6 +22,7 @@ type Choice = 'accept' | 'reject' | null;
 const ERRORS: Record<string, TranslationKey> = {
   'no-annotations': 'bookQuestionsNoAnnotations',
   'ai-disabled': 'bookQuestionsAiDisabled',
+  'learning-mode-off': 'aiLearningModeOffNotice',
   'permission-denied': 'bookQuestionsNeedConsent',
   'invalid-output': 'bookQuestionsBadOutput',
   busy: 'bookQuestionsBusy',
@@ -29,6 +31,8 @@ const ERRORS: Record<string, TranslationKey> = {
 export function BookQuestionsDialog({ workId, title, onClose }: { workId: string; title: string; onClose: () => void }) {
   const { t, dir, lang } = useWorkspace();
   const consent = useRemoteConsent();
+  const { modeFor } = useLearningMode();
+  const learningMode = modeFor('reader');
   const [allowRemote, setAllowRemote] = useState<boolean | null>(null);
   const [kinds, setKinds] = useState<Array<'qa' | 'choice'>>(['qa', 'choice']);
   const [available, setAvailable] = useState<number | null>(null);
@@ -118,7 +122,12 @@ export function BookQuestionsDialog({ workId, title, onClose }: { workId: string
             {t('assistantAllowRemote')}
           </label>
         )}
-        <Button type="button" disabled={busy || !kinds.length || !available} data-book-questions-generate onClick={() => void generate()} icon={<Sparkles className="size-4" />}>
+        {learningMode === 'off' && (
+          <p data-book-questions-learning-mode-off className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed">
+            {t('aiLearningModeOffNotice')}
+          </p>
+        )}
+        <Button type="button" disabled={busy || learningMode === 'off' || !kinds.length || !available} data-book-questions-generate onClick={() => void generate()} icon={<Sparkles className="size-4" />}>
           {busy && !suggestions.length ? t('bookQuestionsGenerating') : t('bookQuestionsGenerate')}
         </Button>
 

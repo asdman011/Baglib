@@ -1,6 +1,7 @@
 'use client';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
 import { markAiGenerated } from '../../../shared/ai-principles';
+import { useLearningMode } from '../ai/useLearningMode';
 import { aiErrorText } from '../ai/ai-error-text';
 
 
@@ -70,6 +71,10 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isSavedToNotes, setIsSavedToNotes] = useState<boolean>(false);
 
+  const { modeFor } = useLearningMode();
+  const learningMode = modeFor('reader');
+  const [attempt, setAttempt] = useState('');
+  const [revealedFull, setRevealedFull] = useState(false);
   const [previousResetInputs1, setPreviousResetInputs1] = useState<readonly unknown[] | null>(null);
   const resetInputs1 = [initialTool];
   if (previousResetInputs1 === null || resetInputs1.some((value, index) => !Object.is(value, previousResetInputs1[index]))) {
@@ -95,7 +100,11 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
 
   }
 
-  const handleExecuteTool = async () => {
+  const handleExecuteTool = async (options?: { revealFullAnswer?: boolean; attemptText?: string }) => {
+    if (activeTool !== 'inline_translation' && learningMode === 'off') {
+      setResult({ content: t('aiLearningModeOffNotice'), tool: activeTool, spoilerPrevented: false, providerUsed: 'error', durationMs: 0 });
+      return;
+    }
     const status = await consent.check().catch(() => ({ local: false, allowed: false }));
     if ('ready' in status && !status.ready) { setResult({ content: t('researchAiNotConfigured'), tool: activeTool, spoilerPrevented: false, providerUsed: 'error', durationMs: 0 }); return; }
     if (!status.local && !status.allowed) { setNeedsConsent(true); return; }
@@ -119,6 +128,9 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           targetLang: activeTool === 'inline_translation' ? targetLang : undefined,
           saveAsNote: false,
         };
+          module: 'reader',
+          revealFullAnswer: options?.revealFullAnswer,
+          attempt: options?.attemptText,
 
         const res: AIResearchResult = await windowAPI.ai.executeTool(payload);
         setResult(res.error ? { ...res, content: aiErrorText(res.error, t) } : res);
@@ -333,9 +345,14 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
 
           {/* Action Trigger Button */}
           <div className="flex items-center gap-2">
+          {activeTool !== 'inline_translation' && learningMode === 'off' && (
+            <p data-reader-learning-mode-off className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-200">
+              {t('aiLearningModeOffNotice')}
+            </p>
+          )}
             <button
-              onClick={() => handleExecuteTool()}
-              disabled={isLoading}
+              onClick={() => { setRevealedFull(false); void handleExecuteTool(); }}
+              disabled={isLoading || (activeTool !== 'inline_translation' && learningMode === 'off')}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition disabled:opacity-50"
             >
               {isLoading ? (
@@ -351,11 +368,29 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
         </div>
 
         <p data-ai-recall-nudge className="mt-3 text-xs leading-loose text-zinc-500">{t('aiRecallNudge')}</p>
-        {needsConsent && <div data-reader-ai-consent role="alertdialog" className="mt-3 space-y-2 rounded-lg border border-amber-500/50 p-3 text-xs leading-loose">
-          <p>{t('assistantConsentAsk', { provider: consent.customName ?? t(consent.providerLabel) })}</p>
-          <div className="flex gap-2">
-            <button type="button" onClick={async () => { await consent.allow(); setNeedsConsent(false); await handleExecuteTool(); }} className="rounded border border-current px-3 py-1">{t('assistantConsentAllow')}</button>
-            <button type="button" onClick={() => setNeedsConsent(false)} className="rounded border border-current px-3 py-1">{t('assistantConsentCancel')}</button>
+        <AiPrivacyControls consent={consent} t={t} pending={needsConsent} onAllow={() => { void (async () => { await consent.allow(); setNeedsConsent(false); await handleExecuteTool(); })(); }} onCancel={() => setNeedsConsent(false)} />
+        {activeTool !== 'inline_translation' && learningMode === 'hints' && result && result.providerUsed !== 'error' && !revealedFull && (
+          <div className="mt-3 space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-2.5" data-reader-attempt-box>
+            <input
+              type="text"
+              dir="auto"
+              value={attempt}
+              onChange={(e) => setAttempt(e.target.value)}
+              placeholder={t('aiAttemptPlaceholder')}
+              aria-label={t('aiAttemptPlaceholder')}
+              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            {attempt.trim().length > 0 && (
+              <button
+                type="button"
+                disabled={isLoading}
+                data-reader-show-full-answer
+                onClick={() => { setRevealedFull(true); void handleExecuteTool({ revealFullAnswer: true, attemptText: attempt.trim() }); }}
+                className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 disabled:opacity-50"
+              >
+                {t('aiShowFullAnswer')}
+              </button>
+            )}
           </div>
         </div>}
         {/* Results View */}

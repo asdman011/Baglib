@@ -1,3 +1,11 @@
+## 2026-11-20T21:19:27.801Z - Agent: Codex - KEY-442 checkpoint
+
+Jira KEY-442 In Progress (21). Implemented shared custom-loopback/local classification, persisted-consent/revocation guard before PDF/legacy source reads, direct provider guard, typed PDF/legacy errors, shared PDF/reader consent UI, sender/input validation, and sanitized connection feedback. Default useRemoteConsent contract preserved; remote display now carries safe endpoint everywhere without editing protected assistant files. First focused 42/45 pass: three old remote provider tests omitted enabled/stored consent; updating those explicit fixtures to new guard contract. Tests/builds/live pending. No KEY-439 file edits.
+
+## 2026-11-20T21:14:49.772Z — Agent: Codex — KEY-441 pushed/Done; KEY-442 active
+
+KEY-441 committed/pushed 0e7efbee492c78e2c39c0ea5bba84557cad716bd; exact origin/feature/library-domain hash verified. Jira completion comment 10542, transition 41 returned Done. Full 2886/2886, builds/tsc/focused/native ar/en pass. Reports/audit updated, source PDFs unchanged and profiles deleted. KEY-442 now implementing shared local classification, privacy/consent revocation and typed localized legacy/PDF errors; Jira transition metadata read, In Progress pending. Preserve Antigravity KEY-436 overlaps and all KEY-439 files.
+
 ## KEY-441 implemented and verified — 2026-11-20T21:13:24.078Z — Agent: Codex
 
 Dedicated DeepL/Google/Yandex translation now requires consent for identity + exact endpoint before content requests. Public Google is explicitly opt-in/default false, distinct from official Google, never a failure fallback. Disabled/configuration/consent checks and bounded IPC validation fail closed; redirects rejected; typed localized secret-free errors. Translator switches (including DeepL free/paid) invalidate stored consent. Existing settings JSON only; no DB schema/dependency/download.
@@ -10,6 +18,18 @@ Exact commit paths: `src/shared/translation-privacy.ts`, `src/shared/types/ai.ts
 
 Audit updated with superseding KEY-441 findings. Local report docs/agent-ops/reports/KEY-441.md. Jira In Progress (21), recorded here; commit+normal push authorized by current user request; Done after successful push. KEY-442 next.
 
+## 2026-11-20T21:03:24.895Z - Agent: Codex - KEY-441 checkpoint
+
+Jira KEY-441 transitioned to In Progress (21); KEY-442 remains To Do. Focused 20/20, root tsc, main and renderer builds PASS (existing five CSS highlight warnings). Native live first run found an obsolete harness toolbar selector; corrected to current reader overflow menu, no product failure. Full suite and corrected live run in progress; no completion/commit/push yet.
+
+## 2026-11-20T20:55:15.985Z - Agent: Codex - KEY-441 then KEY-442 active
+
+User explicitly authorizes one scoped commit/push per task to origin/feature/library-domain. KEY-441: translator identity/endpoint consent, opt-in public Google, disabled/IPC/error/redirect guards and stubbed + ar/en live verification. KEY-442 follows with shared local-model/privacy/error parity. Preserve all KEY-439 files and shared assistant hunks; own translation keys only. Jira KEY-441/442 and approved epic KEY-434 read. Implementation/tests pending.
+
+## KEY-435 pushed and Jira Done - 2026-11-20T20:50:40.344Z - Agent: Codex
+
+PUSHED 5775306422e3ccc090536f1d967ca193ad3ed469 normally to origin/feature/library-domain; exact remote hash verified. Jira completion comment 10539 added and transition 41 returned Done. KEY-440 already pushed 5207a8973996a78b859ba031317afeba1f2e13fe; Jira Done, comment 10537. Final tests: 2874/2874 full suite, renderer/main/root tsc, focused 49/49 + Sunnah 9/9, native off-screen ar/en real-PDF stub live PASS. Audit and both local reports complete; larger gaps explicitly documented for Claude, no new Jira tasks created. Exact file list and verification limits are in the KEY-435 implemented-and-verified handoff below. Shared KEY-439 work preserved unstaged; three Codex translation keys had landed via parallel KEY-437 commit. No further Codex code work pending. Post-push state records remain local to keep one commit per task.
+
 ## KEY-435 implemented and verified - 2026-11-20T20:48:54.111Z - Agent: Codex
 
 Audited 10 AI paths against all six approved KEY-434 principles in docs/features/feature - AI Principles Audit.md. Fixed review-before-save, persistent localized AI markers for accepted notes/cards/manuscript inserts/existing explain-back judgments/curriculum descriptions, recall nudges and uncertainty/no-fatwa notices, central scholarly prompt guidance, stored-provider consent for legacy research/editor/curriculum + LLM translation, reader/curriculum consent UI, and implicit translator-to-LLM fallback. No schema/dependency/download or canonical-name changes. Larger translator privacy/template provenance/PDF parity/retention/semantic citation gaps are documented as proposals for Claude, no new Jira issues. KEY-436/438/439 not implemented here.
@@ -20,6 +40,10 @@ UX: users review generated output before saving; accepted text retains an AI mar
 
 Exact commit files: `src/main/ipc/pathways.ts`, `src/main/services/ai/ai-provider.service.ts`, `src/main/services/ai/ai-research.service.ts`, `src/main/services/ai/research-editor-ai.ts`, `src/main/services/ai/translation.service.ts`, `src/main/services/explain-back.ts`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/components/dashboard/PathwaysView.tsx`, `src/renderer/components/notes/StudyAssistant.tsx`, `src/renderer/components/reader/AIResearchAssistantDrawer.tsx`, `src/shared/ai-principles.ts`, `src/shared/research-ai.ts`, `src/shared/study-assistant.ts`, `tests/services/ai-principles.test.ts`, `tests/services/ai.service.test.ts`, `tests/services/research-ai.test.ts`, `scripts/key435-live/main.cjs`, `scripts/key435-live/run.mjs`, `docs/features/feature - AI Principles Audit.md`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `scripts/test-runner.js`, `tests/ui/sunnah.test.ts`. Only owned GlobalAssistant/state hunks staged. Codex 3 ar/en translation keys already landed in parallel KEY-437 commit 70f0c109, so translations.ts is excluded. KEY-439 working hunks preserved. Local report docs/agent-ops/reports/KEY-435.md and evidence .baglib-data/key435-evidence. Jira In Progress (21); commit/push explicitly authorized by current request; Done after successful push.
 
+## 2026-11-20T20:11:45.545Z - Agent: Codex - KEY-435 active
+
+KEY-440 pushed 5207a8973996a78b859ba031317afeba1f2e13fe, Jira Done (41), completion comment 10537. KEY-435 transitioned to In Progress (21). Audit covers all AI call sites, legacy reader/translation, study/chat/research/highlight/curriculum/PDF and existing explain-back; concurrent KEY-437 only read, never edited. Small review/generated-marker/no-fatwa fixes planned; larger privacy or architecture work and KEY-436/438/439 remain documented follow-ups. Tests pending.
+
 ## KEY-440 verified - 2026-11-20T20:10:08.383Z - Agent: Codex
 
 Fixed production renderer SRS fallback typing using a render-only Pick and replaced dotAll with equivalent ES2017 multiline matching. Introducing source lines: fc2b8b18e (KEY-390); shared context fallback assignment 532b1a907 (KEY-397). Arabic/English multiline regression passes. AGENTS.md now requires production renderer verification alongside main/root tsc/full tests. No tsconfig, target, dependency or schema changes. UX/layout unchanged; production compilation restored.
@@ -28,14 +52,19 @@ Verified: npm run build:renderer, npm run build:main, node node_modules/typescri
 
 Exact tracked files: `AGENTS.md`, `src/renderer/components/knowledge/SrsReviewPanel.tsx`, `src/renderer/components/knowledge/SrsReviewScreen.tsx`, `src/shared/revision/template-engine.ts`, `tests/services/card-notes.test.ts`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`. Own state hunks only; preserve all concurrent KEY-437 work. Jira In Progress (21); Done pending commit and successful normal push, explicitly authorized by current request.
 
+## 2026-11-20T20:03:04.292Z - Agent: Codex - KEY-440 then KEY-435 active
+
+User explicitly authorizes one owned-file commit and normal push per task. KEY-437 belongs to Antigravity: do not edit its new files or entry points; translations own small hunks only. Read Jira acceptance criteria and epic approved principles. No implementation or tests yet. Starting production renderer reproduction.
 
 # Implementation Plan
 
 ## Recent Agent Updates
 
-- [2026-11-20T20:48:54.111Z, Agent: Codex KEY-435] VERIFIED AI audit + small fixes; 2874/2874 full tests, renderer/main/root tsc and native ar/en real-file stub live pass. Larger proposals documented, no issues created.
+- [2026-11-20T23:31+02:00, Agent: Antigravity KEY-436] VERIFIED per-module AI Learning mode (`off` / `hints` / `full`; `revision` defaults `off`, all others `hints`) stored in `ai_settings`, shared resolver `src/shared/ai-learning-mode.ts`, Settings UI, and all AI entry points (PDF AI deferred to Codex KEY-442). 9/9 focused, 2,892/2,892 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass, live Electron `ar`/`en` PASS (`stubCallsCount: 12`, 0 errors).
 
-- [2026-11-20T21:24:07+02:00, Agent: Codex KEY-433] VERIFIED focused 12/12, root tsc, editor/main builds, lint 0 errors, vendor integrity and native ar/en canvas+page+BagLib links. Full suite 2,858/2,858 pass (404 suites); scoped commit/push pending. No strings/schema/vendor edits. Production renderer build blocked by existing unrelated SRS template/ES2017 type errors; report KEY-433 records limitations.
+- [2026-11-20T20:48:54.111Z, Agent: Codex KEY-435] AI audit + small policy/review/provenance/consent fixes VERIFIED; 2874/2874 full tests, renderer/main/tsc, ar/en stubbed real-file live pass; owned-file commit/push pending, larger proposals in audit.
+
+- [2026-11-20T21:24:07+02:00, Agent: Codex KEY-433] VERIFIED focused 12/12, root tsc, editor/main builds, lint 0 errors, vendor integrity and native ar/en canvas+page+BagLib links. Full suite 2,858/2,858 pass (404 suites); PUSHED bb27ecd665981daa224626e16d5f0ceaea0b829a normally to origin/feature/library-domain, remote hash verified; Jira Done via 41, completion comment 10536 recorded in CURRENT_TASK.md. No strings/schema/vendor edits. Production renderer build blocked by existing unrelated SRS template/ES2017 type errors; report KEY-433 records limitations.
 
 - [2026-11-19T22:53:00+02:00, Agent: Antigravity KEY-395] VERIFIED Revision Browser & Deck Manager on existing SRS tables and `settings` (`revision.savedSearches.v1`, no new DB tables/fields or dependencies). Supports source type, science (categories + tags), KEY-386 lists (`any`/`all`), Arabic-normalised search, sorting (`due`, `retrievability`, `difficulty`, `lapses`, `created`, `source`), saved searches → filtered decks, and bulk actions (`suspend`, `unsuspend`, `reschedule`, `moveDeck`, `tag`, `delete`). Full suite 2,837/2,837 pass, 6,000-card unit test pass, `tsc --noEmit` 0 errors, `git diff --check` clean, live Electron `ar`/`en` PASS (`scripts/revision-browser-live/run.mjs`). Report in `docs/agent-ops/reports/KEY-395.md`.
 
@@ -1301,3 +1330,11 @@ Historical completion claims below came from earlier agent handoffs and are not 
 - [ ] Lazy database attachment for secondary packs.
 - [ ] Automated integration benchmarks and packaging tests.
 - **Status:** Pending.
+
+## Coordination 2026-11-20T20:37:41.681Z - Codex KEY-435 / Antigravity KEY-439
+
+KEY-439 has now added GlobalAssistant integration while KEY-435 owns that file. Codex will preserve its live working edits and stage ONLY the KEY-435 transformations atop HEAD, not the whole shared file. Please defer further overlapping GlobalAssistant writes until KEY-435 pushes if possible. Codex will not touch any KEY-439 new files.
+
+The 3 Codex bilingual keys aiGeneratedMarker/aiPrinciplesNotice/aiRecallNudge landed in the parallel KEY-437 commit 70f0c109 (whole translations file staged by that agent). They are already in HEAD. Codex will exclude translations.ts entirely from its commit so no KEY-439 keys are staged. No history rewrite.
+
+KEY-435 2026-11-20T20:48:54.111Z: PUSHED 5775306422e3ccc090536f1d967ca193ad3ed469 normally, remote hash verified; Jira completion pending.

@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { markAiGenerated } from '../../../../shared/ai-principles';
 import { isLocalAi } from '../../../../shared/ai-consent';
+import { resolveLearningMode } from '../../../../shared/ai-learning-mode';
 import { providerReady } from '../../../../shared/research-ai';
 import { parseBookTarget, parseNoteTarget } from '../../../../shared/study-notes';
 import type { AISettings } from '../../../../shared/types/ai';
@@ -93,14 +94,15 @@ export class AiActionsService {
 
   constructor(private deps: AiActionsServiceDeps) {}
 
-  private isLearningModeOff(aiSettings: AISettings): boolean {
-    const inlineMode = (aiSettings as AISettings & { learningMode?: unknown }).learningMode;
-    if (inlineMode === 'off') return true;
+  private isLearningModeOff(aiSettings: AISettings, target?: string): boolean {
+    let legacyMode: unknown;
     try {
-      return this.deps.settingsRepo.get<unknown>('ai.learningMode') === 'off';
+      legacyMode = this.deps.settingsRepo.get<unknown>('ai.learningMode');
     } catch {
-      return false;
+      legacyMode = undefined;
     }
+    const module = target?.startsWith('quran:') ? 'quran' : target?.startsWith('sunnah:') ? 'sunnah' : target?.startsWith('book:') ? 'reader' : 'notes';
+    return resolveLearningMode(aiSettings as AISettings & { learningMode?: unknown }, module, { legacyMode }) === 'off';
   }
 
   public async planFromInstruction(request: AiActionPlanRequest): Promise<AiActionPlanResponse> {
@@ -111,7 +113,7 @@ export class AiActionsService {
     const language: 'ar' | 'en' = request.language === 'ar' ? 'ar' : 'en';
     const settings = this.deps.getAiSettings();
     if (settings.enabled === false) return { ok: false, error: 'ai-disabled' };
-    if (this.isLearningModeOff(settings)) return { ok: false, error: 'learning-mode-off' };
+    if (this.isLearningModeOff(settings, request.context?.activeTarget)) return { ok: false, error: 'learning-mode-off' };
     if (!providerReady(settings)) return { ok: false, error: 'not-configured' };
     if (!isLocalAi(settings) && !request.allowRemote) return { ok: false, error: 'consent-required' };
 

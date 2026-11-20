@@ -7,6 +7,7 @@ import { SafeCardRenderer, isTemplateHtml } from './SafeCardRenderer';
 import { ContextMenu } from '../ui/ContextMenu';
 import { useOpenStudyLink } from '../../utils/use-study-link';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useRegisterRevisionContext } from '../ai/AssistantContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { renderTemplate, contextClozeCardFields, DEFAULT_CONTEXT_CLOZE_TEMPLATE } from '../../../shared/revision/template-engine';
 import type { CardNote, CardNoteType, CardNoteTemplate } from '../../../shared/types/card-notes';
@@ -47,6 +48,7 @@ const playCardTts = async (text: string, ttsLang: string) => {
 
 export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
   const { t, dir, lang } = useWorkspace();
+  useRegisterRevisionContext(true);
   const { linkHandlers, linkMenuItems } = useOpenStudyLink();
   const ioStrings = useMemo(() => ({ toggleMasks: t('ioToggleMasks'), noImage: t('ioNoImage') }), [t]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);

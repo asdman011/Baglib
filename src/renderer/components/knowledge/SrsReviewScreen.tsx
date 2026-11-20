@@ -4,6 +4,7 @@ import { shortcutForEvent } from '../actions/shortcuts';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, ArrowLeft, ArrowRight, Sparkles, RotateCw, ExternalLink, MoreHorizontal, AlertTriangle } from 'lucide-react';
 import { useTabKeysActive, useWorkspace } from '../context/WorkspaceContext';
+import { useRegisterRevisionContext } from '../ai/AssistantContext';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { ReviseNextList } from './ReviseNextList';
@@ -73,6 +74,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
   onNavigateSource,
 }) => {
   const { t, dir, lang, books, openBookForReading } = useWorkspace();
+  useRegisterRevisionContext(true);
   const keysActive = useTabKeysActive();
   const ioStrings = useMemo(() => ({ toggleMasks: t('ioToggleMasks'), noImage: t('ioNoImage') }), [t]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);

@@ -6,7 +6,8 @@
 import type Database from 'better-sqlite3';
 import { errorMessage } from '../../../shared/errors';
 import { providerErrorCode, providerErrorDetail } from '../../../shared/ai-errors';
-import { isLocalAi } from '../../../shared/ai-consent';
+import { aiPrivacyError } from '../../../shared/ai-consent';
+import { moduleFromStudyTarget, resolveLearningMode } from '../../../shared/ai-learning-mode';
 import { providerReady } from '../../../shared/research-ai';
 import { parseQuranTarget, studyLinks } from '../../../shared/study-notes';
 import type { AISettings } from '../../../shared/types/ai';
@@ -41,15 +42,15 @@ const MAX_SOURCE_CHARS = 60_000;
 export class ExplainBackCheckService {
   constructor(private deps: ExplainBackServiceDeps) {}
 
-  private isLearningModeOff(aiSettings: AISettings): boolean {
-    const inlineMode = (aiSettings as AISettings & { learningMode?: unknown }).learningMode;
-    if (inlineMode === 'off') return true;
+  private isLearningModeOff(aiSettings: AISettings, target?: string): boolean {
+    let legacyMode: unknown;
     try {
-      const storedMode = this.deps.settingsRepo.get<unknown>('ai.learningMode');
-      return storedMode === 'off';
+      legacyMode = this.deps.settingsRepo.get<unknown>('ai.learningMode');
     } catch {
-      return false;
+      legacyMode = undefined;
     }
+    const module = moduleFromStudyTarget(target) ?? 'notes';
+    return resolveLearningMode(aiSettings as AISettings & { learningMode?: unknown }, module, { legacyMode }) === 'off';
   }
 
   private async resolveSources(request: ExplainBackRequest): Promise<ExplainBackSourceItem[]> {
@@ -133,9 +134,9 @@ export class ExplainBackCheckService {
 
     const aiSettings = this.deps.getAiSettings();
     if (aiSettings.enabled === false) return { ok: false, error: 'ai-disabled' };
-    if (this.isLearningModeOff(aiSettings)) return { ok: false, error: 'learning-mode-off' };
+    if (this.isLearningModeOff(aiSettings, request.target)) return { ok: false, error: 'learning-mode-off' };
     if (!providerReady(aiSettings)) return { ok: false, error: 'not-configured' };
-    if (!isLocalAi(aiSettings) && !request.allowRemote) return { ok: false, error: 'permission-denied' };
+    if (aiPrivacyError(aiSettings, request.allowRemote)) return { ok: false, error: 'permission-denied' };
 
     let sources: ExplainBackSourceItem[];
     try {

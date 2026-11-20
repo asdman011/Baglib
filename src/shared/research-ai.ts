@@ -18,10 +18,12 @@ export interface ResearchAiRequest {
   selection?: string;
   lang: 'ar' | 'en';
   targetLang?: 'ar' | 'en';
+  revealFullAnswer?: boolean;
+  inRevisionOrTest?: boolean;
 }
 export interface ResearchAiSource { n: number; ref: string; label: string; text: string }
 export interface ResearchAiCitation { n: number; ref: string; label: string }
-export type ResearchAiError = 'permission-denied' | 'not-configured' | 'needs-selection' | 'needs-question' | 'invalid-request' | import('./ai-errors').ProviderErrorCode;
+export type ResearchAiError = 'permission-denied' | 'learning-mode-off' | 'not-configured' | 'needs-selection' | 'needs-question' | 'invalid-request' | import('./ai-errors').ProviderErrorCode;
 export type ResearchAiResponse =
   | { ok: true; text: string; citations: ResearchAiCitation[]; sourceCount: number; provider: string }
   | { ok: false; error: ResearchAiError; message?: string };
@@ -56,6 +58,8 @@ export function validateResearchAiRequest(input: unknown): ResearchAiRequest | R
     question: text(question, LIMITS.question),
     selection: text(selection, LIMITS.selection),
     targetLang: targetLang as 'ar' | 'en' | undefined,
+    ...(input.revealFullAnswer === true ? { revealFullAnswer: true } : {}),
+    ...(input.inRevisionOrTest === true ? { inRevisionOrTest: true } : {}),
   };
   if (clean.action === 'ask' && !clean.question) return 'needs-question';
   if (clean.action === 'rewrite' && !clean.selection) return 'needs-selection';

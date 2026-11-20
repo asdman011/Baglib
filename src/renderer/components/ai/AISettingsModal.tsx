@@ -20,6 +20,13 @@ import {
 } from 'lucide-react';
 import type { AISettings, AIProviderId, TranslationProviderId } from '../../../shared/types/ai';
 import { translationDestination } from '../../../shared/translation-privacy';
+import {
+  AI_LEARNING_MODES,
+  AI_LEARNING_MODULES,
+  normalizeLearningModes,
+  type AiLearningMode,
+  type AiLearningModule,
+} from '../../../shared/ai-learning-mode';
 import { TranslationKey } from '../../translations';
 import { CustomProviderFields } from './CustomProviderFields';
 
@@ -47,6 +54,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     translationProvider: 'llm',
     targetLanguage: 'ar',
   });
+    learningModes: normalizeLearningModes(),
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isTesting, setIsTesting] = useState<boolean>(false);
@@ -405,6 +413,65 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             {translationDestination(settings) && <><p dir="auto">{translationDestination(settings)!.provider} · {translationDestination(settings)!.endpoint}</p><p>{t('aiTranslationConsentNotice')}</p>{settings.translationConsent && <button data-translation-revoke type="button" className="underline" onClick={async () => { const saved = await window.electronAPI.ai.saveSettings({ translationConsent: undefined }); setSettings(current => ({ ...current, translationConsent: saved.translationConsent })); window.dispatchEvent(new Event('baglib:ai-settings-changed')); }}>{t('assistantConsentRevoke')}</button>}</>}
           </div>
           {/* Test Connection Banner */}
+          {/* Learning Mode per Module (KEY-436) */}
+          <div
+            data-learning-modes-section
+            className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/30 space-y-3"
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                {t('aiLearningModeTitle')}
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                {t('aiLearningModeDesc')}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {AI_LEARNING_MODULES.map((mod) => {
+                const labelKeys: Record<AiLearningModule, TranslationKey> = {
+                  revision: 'aiLearningModuleRevision',
+                  reader: 'aiLearningModuleReader',
+                  quran: 'aiLearningModuleQuran',
+                  sunnah: 'aiLearningModuleSunnah',
+                  notes: 'aiLearningModuleNotes',
+                  researchEditor: 'aiLearningModuleResearchEditor',
+                };
+                const modes = normalizeLearningModes(settings.learningModes);
+                return (
+                  <label
+                    key={mod}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-xs"
+                  >
+                    <span className="font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                      {t(labelKeys[mod])}
+                    </span>
+                    <select
+                      data-learning-mode-select={mod}
+                      value={modes[mod]}
+                      onChange={(e) => {
+                        const nextMode = e.target.value as AiLearningMode;
+                        setSettings((current) => ({
+                          ...current,
+                          learningModes: {
+                            ...normalizeLearningModes(current.learningModes),
+                            [mod]: nextMode,
+                          },
+                        }));
+                      }}
+                      className="px-2 py-1 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 shrink-0"
+                    >
+                      {AI_LEARNING_MODES.map((m) => (
+                        <option key={m} value={m}>
+                          {t(m === 'off' ? 'aiLearningModeOff' : m === 'hints' ? 'aiLearningModeHints' : 'aiLearningModeFull')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           {testResult && (
             <div
               className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs ${

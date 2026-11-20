@@ -10,12 +10,13 @@ import { createDeckSyncService } from '../services/deck-sync-readers';
 import { BookRevisionService, FINISHED_PROMPT_SETTING, finishesBook } from '../services/book-revision';
 import { AIResearchService } from '../services/ai/ai-research.service';
 import { AIProviderService } from '../services/ai/ai-provider.service';
-import { isLocalAi } from '../../shared/ai-consent';
+import { aiPrivacyError } from '../../shared/ai-consent';
+import { resolveLearningMode } from '../../shared/ai-learning-mode';
 import { providerErrorCode, providerErrorDetail } from '../../shared/ai-errors';
 import { validateAcceptQuestions, validateGenerateQuestions } from '../../shared/book-questions';
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/u;
-const KNOWN = ['invalid-request', 'permission-denied', 'invalid-output', 'busy', 'ai-disabled', 'no-annotations', 'no-books', 'source-not-found'];
+const KNOWN = ['invalid-request', 'permission-denied', 'learning-mode-off', 'invalid-output', 'busy', 'ai-disabled', 'no-annotations', 'no-books', 'source-not-found'];
 
 const authorize = (event: IpcMainInvokeEvent) => {
   const frame = event.senderFrame;
@@ -27,7 +28,7 @@ const authorize = (event: IpcMainInvokeEvent) => {
 const failure = (error: unknown) => {
   const message = (error as Error)?.message ?? String(error);
   if (KNOWN.includes(message)) return { ok: false as const, error: message };
-  if (/Gemini|OpenAI|Claude|Ollama|HTTP \d{3}|fetch failed|aborted|no answer within|API key/iu.test(message)) return { ok: false as const, error: providerErrorCode(message), detail: providerErrorDetail(message) };
+  if (/^provider-|Gemini|OpenAI|Claude|Ollama|HTTP \d{3}|fetch failed|aborted|no answer within|API key/iu.test(message)) return { ok: false as const, error: providerErrorCode(message), detail: providerErrorDetail(message) };
   return { ok: false as const, error: 'engine-failed', detail: providerErrorDetail(message) };
 };
 
@@ -87,7 +88,8 @@ export function registerBookRevisionIpc(): void {
       const request = validateGenerateQuestions(input);
       const settings = AIResearchService.getInstance().getSettings();
       if (!settings.enabled) throw new Error('ai-disabled');
-      if (!isLocalAi(settings) && !request.allowRemote) throw new Error('permission-denied');
+      if (resolveLearningMode(settings, 'reader', { legacyMode: settingsRepository.get('ai.learningMode') }) === 'off') throw new Error('learning-mode-off');
+      if (aiPrivacyError(settings, request.allowRemote)) throw new Error('permission-denied');
       if (running) throw new Error('busy');
       running = true;
       owned = true;

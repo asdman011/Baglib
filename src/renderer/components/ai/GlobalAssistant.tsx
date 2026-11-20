@@ -11,6 +11,8 @@ import { BookOpenText, Bot, Check, Copy, FilePlus2, FileText, Loader2, NotebookP
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAssistant, type AssistantMessage } from './AssistantContext';
 import { useRemoteConsent } from './useRemoteConsent';
+import { useLearningMode } from './useLearningMode';
+import { moduleFromWorkspaceView } from '../../../shared/ai-learning-mode';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { answerForInsert } from '../../../shared/research-ai';
 import { cardSourceKind, passageKind, type AssistantCard } from '../../../shared/study-assistant';
@@ -41,10 +43,13 @@ export function GlobalAssistant() {
   const messages = assistant.messages as Message[];
   const setMessages = assistant.setMessages as React.Dispatch<React.SetStateAction<Message[]>>;
   const consent = useRemoteConsent();
+  const { modeFor } = useLearningMode();
   const { notes } = useStudyNotes();
   const [busy, setBusy] = useState(false);
   const [usePage, setUsePage] = useState(true);
-  const [consentFor, setConsentFor] = useState<{ text: string; action?: QuickAction; label: string } | null>(null);
+  const [consentFor, setConsentFor] = useState<{ text: string; action?: QuickAction; label: string; revealFullAnswer?: boolean; attempt?: string; hintMessageId?: number } | null>(null);
+  const [attempts, setAttempts] = useState<Record<number, string>>({});
+  const [hintMeta, setHintMeta] = useState<Record<number, { question: string; action?: QuickAction; label?: string; revealed?: boolean }>>({});
   const [picker, setPicker] = useState(false);
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<{ query: string; items: CorpusOption[] }>({ query: '', items: [] });
@@ -56,6 +61,8 @@ export function GlobalAssistant() {
   const nextId = useRef(0);
   const chapter = usePage && page?.chapterId ? page : null;
   const actions = chapter ? chapterActions : studyActions;
+  const activeModule = assistant.inRevisionOrTest ? 'revision' : chapter ? 'researchEditor' : moduleFromWorkspaceView(viewMode);
+  const learningMode = modeFor(activeModule, assistant.inRevisionOrTest);
 
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages, busy, open]);
   useEffect(() => {
@@ -72,7 +79,7 @@ export function GlobalAssistant() {
   const id = () => ++nextId.current;
   const errorText = (code: string, detail?: string) => {
     const keys: Record<string, TranslationKey> = {
-      'not-configured': 'researchAiNotConfigured', 'needs-selection': 'researchAiNeedsSelection', 'ai-disabled': 'assistantErrorDisabled', busy: 'assistantErrorBusy',
+      'not-configured': 'researchAiNotConfigured', 'needs-selection': 'researchAiNeedsSelection', 'ai-disabled': 'assistantErrorDisabled', 'learning-mode-off': 'aiLearningModeOffNotice', busy: 'assistantErrorBusy',
       'provider-quota': 'aiErrorQuota', 'provider-busy': 'aiErrorBusy', 'provider-auth': 'aiErrorAuth', 'provider-too-large': 'aiErrorTooLarge', 'provider-model': 'aiErrorModel', 'provider-terms': 'aiErrorTerms', 'no-sources': 'assistantCardsNeedSources', 'invalid-output': 'assistantErrorUnchecked',
     };
     const base = keys[code] ? t(keys[code]) : t('researchAiProviderError').replace('{message}', detail || code);
@@ -80,30 +87,37 @@ export function GlobalAssistant() {
   };
 
   /** Sends a message or a quick action; the provider is checked first and a remote one is asked about once. */
-  const send = async (text: string, action?: QuickAction, label?: string) => {
+  const send = async (text: string, action?: QuickAction, label?: string, options?: { revealFullAnswer?: boolean; attempt?: string; hintMessageId?: number }) => {
+    if (learningMode === 'off') return;
     if (busy || (!action && !text.trim())) return;
     const status = await consent.check().catch(() => ({ local: false, allowed: false, ready: false }));
     if (!status.ready) { push({ id: id(), role: 'error', text: t('researchAiNotConfigured'), settings: true }); return; }
-    if (!status.local && !status.allowed) { setConsentFor({ text, action, label: label ?? text }); return; }
+    if (!status.local && !status.allowed) { setConsentFor({ text, action, label: label ?? text, ...options }); return; }
     setConsentFor(null);
-    void run(text, action, label ?? text, status.allowed);
+    void run(text, action, label ?? text, status.allowed, options);
   };
   const allowAndSend = async () => {
     if (!consentFor) return;
     const pending = consentFor;
     await consent.allow();
     setConsentFor(null);
-    void run(pending.text, pending.action, pending.label, true);
+    void run(pending.text, pending.action, pending.label, true, {
+      revealFullAnswer: pending.revealFullAnswer,
+      attempt: pending.attempt,
+      hintMessageId: pending.hintMessageId,
+    });
   };
 
-  const run = async (text: string, action: QuickAction | undefined, label: string, allowRemote: boolean) => {
+  const run = async (text: string, action: QuickAction | undefined, label: string, allowRemote: boolean, options?: { revealFullAnswer?: boolean; attempt?: string; hintMessageId?: number }) => {
     const selection = chapter?.selectedText?.() || undefined;
-    push({ id: id(), role: 'user', text: action ? (text.trim() ? `${label}\n${text.trim()}` : label) + (selection && action !== 'outline' ? `\n«${selection.length > 140 ? selection.slice(0, 140) + '…' : selection}»` : '') : text.trim() });
-    if (!action) setDraft('');
+    if (!options?.revealFullAnswer) {
+      push({ id: id(), role: 'user', text: action ? (text.trim() ? `${label}\n${text.trim()}` : label) + (selection && action !== 'outline' ? `\n«${selection.length > 140 ? selection.slice(0, 140) + '…' : selection}»` : '') : text.trim() });
+    }
+    if (!action && !options?.revealFullAnswer) setDraft('');
     setBusy(true);
     try {
       await chapter?.flush?.();
-      if (!action && actionsMode) {
+      if (!action && actionsMode && !options?.revealFullAnswer) {
         const res = await window.electronAPI.aiActions.plan({
           instruction: text.trim(),
           language: lang === 'ar' ? 'ar' : 'en',
@@ -120,7 +134,10 @@ export function GlobalAssistant() {
         const passages = sources.filter(ref => !ref.target.startsWith('note:') && passageKind(ref.target)).map(ref => ({ target: ref.target, label: ref.label }));
         const noteIds = sources.filter(ref => ref.target.startsWith('note:')).map(ref => ref.target.slice(5).split('#')[0]);
         if (!noteIds.length && !passages.length) { push({ id: id(), role: 'error', text: t('assistantCardsNeedSources') }); return; }
-        const result = await window.electronAPI.studyAssistant.ask({ task: 'cards', question: text.trim(), language: lang === 'ar' ? 'ar' : 'en', allowRemote, notes: noteIds, books: [], passages });
+        const result = await window.electronAPI.studyAssistant.ask({
+          task: 'cards', question: text.trim(), language: lang === 'ar' ? 'ar' : 'en', allowRemote, notes: noteIds, books: [], passages,
+          module: activeModule, inRevisionOrTest: assistant.inRevisionOrTest,
+        });
         if (result.ok && result.data.cards.length) push({ id: id(), role: 'cards', cards: result.data.cards, state: {} });
         else push({ id: id(), role: 'error', text: result.ok ? t('assistantErrorUnchecked') : errorText(result.error, result.detail) });
         return;
@@ -129,9 +146,19 @@ export function GlobalAssistant() {
       const result = await window.electronAPI.studyAssistant.chat({
         messages: [...history, ...(text.trim() ? [{ role: 'user' as const, text: text.trim() }] : [])],
         sources, chapterId: chapter?.chapterId, selection, action, lang: lang === 'ar' ? 'ar' : 'en', allowRemote,
+        module: activeModule, inRevisionOrTest: assistant.inRevisionOrTest, revealFullAnswer: options?.revealFullAnswer, attempt: options?.attempt,
       });
-      if (result.ok) push({ id: id(), role: 'assistant', text: result.text, citations: result.citations, sourceCount: result.sourceCount });
-      else push({ id: id(), role: 'error', text: errorText(result.error, result.detail), settings: ['not-configured', 'provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'provider-model', 'provider-terms', 'ai-disabled'].includes(result.error) });
+      if (result.ok) {
+        const msgId = id();
+        push({ id: msgId, role: 'assistant', text: result.text, citations: result.citations, sourceCount: result.sourceCount });
+        if (options?.hintMessageId) {
+          setHintMeta(current => ({ ...current, [options.hintMessageId!]: { ...current[options.hintMessageId!], revealed: true } }));
+        } else if (learningMode === 'hints' && !options?.revealFullAnswer) {
+          setHintMeta(current => ({ ...current, [msgId]: { question: text, action, label } }));
+        }
+      } else {
+        push({ id: id(), role: 'error', text: errorText(result.error, result.detail), settings: ['not-configured', 'provider-quota', 'provider-busy', 'provider-auth', 'provider-too-large', 'provider-model', 'provider-terms', 'ai-disabled', 'learning-mode-off'].includes(result.error) });
+      }
     } catch (error) {
       push({ id: id(), role: 'error', text: errorText('engine-failed', error instanceof Error ? error.message : String(error)) });
     } finally {
@@ -195,7 +222,12 @@ export function GlobalAssistant() {
       <header className="flex items-center gap-2.5 border-b border-subtle px-4 py-3">
         <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-white"><Sparkles className="size-4" /></span>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold leading-tight">{t('researchAiTitle')}</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold leading-tight">{t('researchAiTitle')}</h3>
+            <span data-assistant-learning-mode={learningMode} className="rounded-full border border-subtle bg-canvas px-1.5 py-0.5 text-[10px] font-medium text-muted">
+              {t(learningMode === 'off' ? 'aiLearningModeOff' : learningMode === 'hints' ? 'aiLearningModeHintsBadge' : 'aiLearningModeFullBadge')}
+            </span>
+          </div>
           <p className="truncate text-[10px] text-muted">{t('researchAiSubtitle')}</p>
         </div>
         <div className="ms-auto flex items-center gap-0.5">
@@ -274,6 +306,40 @@ export function GlobalAssistant() {
                 <button type="button" onClick={() => openStudyNote({ content: asNote(message) })} data-assistant-save-note className="inline-flex items-center gap-1 rounded-md border border-subtle px-2 py-1 hover:border-primary/40"><NotebookPen className="size-3" />{t('assistantSaveNote')}</button>
                 <button type="button" onClick={() => void navigator.clipboard?.writeText(answerForInsert(message.text, message.citations))} className="inline-flex items-center gap-1 rounded-md border border-subtle px-2 py-1 hover:border-primary/40"><Copy className="size-3" />{t('researchAiCopy')}</button>
               </div>
+              {learningMode === 'hints' && hintMeta[message.id] && !hintMeta[message.id].revealed && (
+                <div className="mt-2 space-y-1.5 border-t border-subtle pt-2" data-assistant-attempt-box>
+                  <input
+                    type="text"
+                    dir="auto"
+                    data-assistant-attempt-input={message.id}
+                    value={attempts[message.id] ?? ''}
+                    onChange={e => setAttempts(current => ({ ...current, [message.id]: e.target.value }))}
+                    placeholder={t('aiAttemptPlaceholder')}
+                    aria-label={t('aiAttemptPlaceholder')}
+                    className="w-full rounded-lg border border-subtle bg-surface px-2.5 py-1 text-[11px] focus:border-primary focus:outline-none"
+                  />
+                  {(attempts[message.id] ?? '').trim().length > 0 && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      data-assistant-show-full-answer={message.id}
+                      onClick={() => {
+                        const meta = hintMeta[message.id];
+                        const attempt = (attempts[message.id] ?? '').trim();
+                        if (!meta || !attempt) return;
+                        void send(meta.question, meta.action, meta.label, {
+                          revealFullAnswer: true,
+                          attempt,
+                          hintMessageId: message.id,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary-text hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      {t('aiShowFullAnswer')}
+                    </button>
+                  )}
+                </div>
+              )}
             </>}
           </div>;
         })}
@@ -284,6 +350,14 @@ export function GlobalAssistant() {
       <p data-ai-recall-nudge className="px-3 py-2 text-[11px] leading-loose text-muted">{t('aiRecallNudge')}</p>
       {/* Composer */}
       <div className="border-t border-subtle bg-surface p-2.5">
+        {learningMode === 'off' && (
+          <div data-assistant-learning-mode-off className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed">
+            <span>{t('aiLearningModeOffNotice')}</span>
+            <button type="button" onClick={() => setSettingsOpen(true)} className="shrink-0 rounded-md border border-subtle bg-surface px-2 py-1 font-medium hover:border-primary/40">
+              {t('researchAiOpenSettings')}
+            </button>
+          </div>
+        )}
         {consentFor && <div data-assistant-consent role="alertdialog" className="mb-2 rounded-xl border border-amber-500/50 bg-amber-500/10 p-2 text-[11px] leading-relaxed">
           <p dir="auto">{t('assistantConsentAsk', { provider: (consent.customName ?? t(consent.providerLabel)) })}</p>
           <div className="mt-1.5 flex gap-1.5">
@@ -292,17 +366,17 @@ export function GlobalAssistant() {
           </div>
         </div>}
         <div className="mb-1.5 flex flex-wrap gap-1" role="group" aria-label={t('researchAiQuickActions')}>
-          <button type="button" data-assistant-actions-mode aria-pressed={actionsMode} onClick={() => setActionsMode(v => !v)} title={t('aiActionsModeHint')}
-            className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${actionsMode ? 'border-primary bg-primary/15 font-semibold text-primary-text' : 'border-subtle bg-canvas hover:border-primary/50 hover:text-primary-text'}`}>{t('aiActionsMode')}</button>
-          {actions.map(([key, labelKey]) => <button key={key} type="button" disabled={busy} onMouseDown={event => event.preventDefault()} onClick={() => void send(draft, key, t(labelKey))} data-research-ai-action={key}
+          <button type="button" disabled={learningMode === 'off'} data-assistant-actions-mode aria-pressed={actionsMode} onClick={() => setActionsMode(v => !v)} title={t('aiActionsModeHint')}
+            className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors disabled:opacity-40 ${actionsMode ? 'border-primary bg-primary/15 font-semibold text-primary-text' : 'border-subtle bg-canvas hover:border-primary/50 hover:text-primary-text'}`}>{t('aiActionsMode')}</button>
+          {actions.map(([key, labelKey]) => <button key={key} type="button" disabled={busy || learningMode === 'off'} onMouseDown={event => event.preventDefault()} onClick={() => void send(draft, key, t(labelKey))} data-research-ai-action={key}
             className="rounded-full border border-subtle bg-canvas px-2.5 py-0.5 text-[11px] transition-colors hover:border-primary/50 hover:text-primary-text disabled:opacity-40">{t(labelKey)}</button>)}
         </div>
         <form onSubmit={event => { event.preventDefault(); void send(draft); }} className="flex items-end gap-2 rounded-xl border border-subtle bg-canvas p-1.5 focus-within:border-primary">
-          <textarea rows={1} dir="auto" value={draft} onChange={event => setDraft(event.target.value)} data-research-ai-input
+          <textarea rows={1} dir="auto" disabled={learningMode === 'off'} value={draft} onChange={event => setDraft(event.target.value)} data-research-ai-input
             onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(draft); } }}
-            placeholder={t('researchAiPlaceholder')} aria-label={t('researchAiPlaceholder')}
-            className="max-h-32 min-h-8 flex-1 resize-none bg-transparent px-1.5 py-1 text-xs leading-relaxed placeholder:text-muted focus:outline-none" />
-          <button type="submit" disabled={!draft.trim() || busy} aria-label={t('researchAiSend')} className="shrink-0 rounded-lg bg-primary p-2 text-white disabled:opacity-40"><Send className="size-3.5 rtl:-scale-x-100" /></button>
+            placeholder={learningMode === 'off' ? t('aiLearningModeOffNotice') : t('researchAiPlaceholder')} aria-label={t('researchAiPlaceholder')}
+            className="max-h-32 min-h-8 flex-1 resize-none bg-transparent px-1.5 py-1 text-xs leading-relaxed placeholder:text-muted focus:outline-none disabled:opacity-50" />
+          <button type="submit" disabled={!draft.trim() || busy || learningMode === 'off'} aria-label={t('researchAiSend')} className="shrink-0 rounded-lg bg-primary p-2 text-white disabled:opacity-40"><Send className="size-3.5 rtl:-scale-x-100" /></button>
         </form>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-muted">
           {consent.ready && <span data-assistant-provider className="inline-flex min-w-0 items-center gap-1">

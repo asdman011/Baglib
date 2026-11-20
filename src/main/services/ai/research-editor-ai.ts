@@ -1,4 +1,5 @@
 import { hasRemoteConsent } from '../../../shared/ai-consent';
+import { applyHintsPrompt, resolveLearningMode } from '../../../shared/ai-learning-mode';
 /**
  * KEY-373 (RE-12): grounded research AI for the manuscript editor. Reads the chapter and the sources it cites
  * (manuscript_link) locally, then calls only the provider the user chose in the BYOK settings.
@@ -41,13 +42,16 @@ export async function runResearchEditorAi(input: unknown, deps: ResearchEditorAi
   if (typeof request === 'string') return { ok: false, error: request };
   if (!providerReady(deps.settings)) return { ok: false, error: 'not-configured' };
   if (!hasRemoteConsent(deps.settings)) return { ok: false, error: 'permission-denied' };
+  const learningMode = resolveLearningMode(deps.settings, 'researchEditor', { inRevisionOrTest: request.inRevisionOrTest });
+  if (learningMode === 'off') return { ok: false, error: 'learning-mode-off' };
   const chapter = loadChapterContext(deps.db, request.documentId);
   if (!chapter) return { ok: false, error: 'invalid-request' };
   const { sources } = chapter;
   const prompt = buildResearchAiPrompt({ request, chapterTitle: chapter.title, chapterText: chapter.text, sources });
+  const systemPrompt = applyHintsPrompt(prompt.systemPrompt, learningMode, { revealFullAnswer: request.revealFullAnswer });
   const temperature = request.action === 'translate' || request.action === 'rewrite' ? 0.3 : deps.settings.temperature ?? 0.5;
   try {
-    const answer = await deps.complete({ ...prompt, temperature }, deps.settings);
+    const answer = await deps.complete({ ...prompt, systemPrompt, temperature }, deps.settings);
     const parsed = parseAnswerCitations(answer, sources);
     if (!parsed.text) return { ok: false, error: 'provider-error', message: 'empty-answer' };
     return { ok: true, text: parsed.text, citations: parsed.citations, sourceCount: sources.length, provider: deps.settings.provider || 'ollama' };

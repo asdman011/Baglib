@@ -6,6 +6,7 @@
  */
 import type { ResearchAiCitation, ResearchAiSource } from './research-ai';
 import type { ProviderErrorCode } from './ai-errors';
+import { isAiLearningModule, type AiLearningModule } from './ai-learning-mode';
 
 export type ChatAction = 'summarize' | 'explain' | 'guide' | 'questions' | 'terms' | 'outline' | 'rewrite' | 'translate' | 'review';
 export const CHAT_ACTIONS: readonly ChatAction[] = ['summarize', 'explain', 'guide', 'questions', 'terms', 'outline', 'rewrite', 'translate', 'review'];
@@ -21,8 +22,12 @@ export interface ChatRequest {
   action?: ChatAction;
   lang: 'ar' | 'en';
   allowRemote: boolean;
+  module?: AiLearningModule;
+  inRevisionOrTest?: boolean;
+  revealFullAnswer?: boolean;
+  attempt?: string;
 }
-export type ChatError = 'invalid-request' | 'ai-disabled' | 'permission-denied' | 'busy' | 'not-configured' | 'needs-selection' | 'missing-source' | ProviderErrorCode;
+export type ChatError = 'invalid-request' | 'ai-disabled' | 'learning-mode-off' | 'permission-denied' | 'busy' | 'not-configured' | 'needs-selection' | 'missing-source' | ProviderErrorCode;
 export type ChatResponse = { ok: true; text: string; citations: ResearchAiCitation[]; sourceCount: number } | { ok: false; error: ChatError; detail?: string };
 
 export const CHAT_LIMITS = { turns: 12, turn: 4000, sources: 20, selection: 8000, chapter: 20000, sourceText: 4000, total: 60000 };
@@ -53,6 +58,10 @@ export function validateChatRequest(input: unknown): ChatRequest | 'invalid-requ
     ...(typeof chapterId === 'string' && chapterId ? { chapterId } : {}),
     ...(typeof selection === 'string' && selection.trim() ? { selection: clip(selection.trim(), CHAT_LIMITS.selection) } : {}),
     ...(action ? { action: action as ChatAction } : {}),
+    ...(isAiLearningModule(input.module) ? { module: input.module } : {}),
+    ...(input.inRevisionOrTest === true ? { inRevisionOrTest: true } : {}),
+    ...(input.revealFullAnswer === true ? { revealFullAnswer: true } : {}),
+    ...(typeof input.attempt === 'string' && input.attempt.trim() ? { attempt: clip(input.attempt.trim(), CHAT_LIMITS.turn) } : {}),
   };
   const last = clean.messages[clean.messages.length - 1];
   if (!clean.action && (!last || last.role !== 'user')) return 'invalid-request';
@@ -101,6 +110,9 @@ export function buildChatPrompt(input: { request: ChatRequest; sources: Research
   } else {
     ask = request.messages[request.messages.length - 1].text;
     if (request.selection) ask += `\n\n(Selected text: "${request.selection}")`;
+  }
+  if (request.attempt) {
+    ask += `\n\n(Learner's attempt: "${request.attempt}")`;
   }
   return { systemPrompt, userPrompt: `${transcript}User: ${ask}` };
 }

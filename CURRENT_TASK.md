@@ -1,3 +1,34 @@
+## KEY-436: "Learning mode" setting per module (AI Task 2, epic KEY-434) — 2026-11-20T23:31+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/ai-learning-mode.ts`: added `AI_LEARNING_MODULES` (`revision`, `reader`, `quran`, `sunnah`, `notes`, `researchEditor`), `AI_LEARNING_MODES` (`off`, `hints`, `full`), `defaultLearningMode` (`revision` = `'off'`, all others = `'hints'`), `normalizeLearningModes`, `resolveLearningMode` (enforces `'revision'` when `inRevisionOrTest` is true, ignoring legacy `ai.learningMode`), `moduleFromWorkspaceView`, `moduleFromStudyTarget`, and `applyHintsPrompt`.
+- `src/shared/types/ai.ts`, `src/main/services/ai/ai-research.service.ts`, `src/renderer/components/ai/AISettingsModal.tsx`: added per-module `learningModes` stored in existing `ai_settings` JSON (no new DB table/field) and added the Learning mode settings section (`data-learning-modes-section`).
+- `src/renderer/components/ai/useLearningMode.ts`, `AssistantContext.tsx`, `SrsReviewScreen.tsx`, `SrsReviewPanel.tsx`: added `useLearningMode()` hook and `useRegisterRevisionContext(true)` so revision/test sessions resolve against `'revision'`.
+- Main & UI enforcement across AI entry points: `GlobalAssistant.tsx` + `assistant-chat.ts` (`src/shared/` & `src/main/services/ai/`), `StudyAssistant.tsx` + `src/shared/study-assistant.ts` + `src/main/ipc/study-assistant.ts` (`study-assistant:ask`, `assistant:chat`, `study-assistant:explain-back`), `src/shared/research-ai.ts` + `src/main/services/ai/research-editor-ai.ts`, `AIResearchAssistantDrawer.tsx` + `ai-research.service.ts`, `BookQuestionsDialog.tsx` + `src/main/ipc/book-revision.ts`, `PathwaysView.tsx` + `src/main/ipc/pathways.ts`, `ExplainBackModal.tsx` + `explain-back.service.ts`, and `tool-executor.ts`. In `'off'` mode, entries are disabled with localized reason; in `'hints'` mode, prompts ask for hints/guiding questions and UI reveals "Show full answer" only after the user types an attempt.
+- PDF AI (`src/main/ipc/pdf-collaboration.ts`, `src/main/services/pdf-editor/cited-answer.ts`) left untouched because Codex owns them for `KEY-441/KEY-442` (recorded in `docs/agent-ops/reports/KEY-436.md`).
+- `src/renderer/translations.ts`: added 17 bilingual (`ar` + `en`) keys; logical CSS throughout.
+- `tests/services/ai-learning-mode.test.ts` & `scripts/key436-live/{main.cjs,run.mjs}`: unit tests and live Electron verification in `ar` and `en` with real Arabic/English PDFs and stubbed local Ollama.
+
+**Tests:**
+- Focused (`ai-learning-mode`, `translation-keys`): 9/9 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,892/2,892 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key436-live/run.mjs`): PASS in `ar` and `en` (`errors: []`, `stubCallsCount: 12`, screenshots in `.baglib-data/key436-evidence/`, throwaway profile deleted).
+
+**Jira:**
+- `KEY-436` moved to In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/agent-ops/reports/KEY-436.md`, `scripts/key436-live/main.cjs`, `scripts/key436-live/run.mjs`, `src/main/ipc/book-revision.ts`, `src/main/ipc/pathways.ts`, `src/main/ipc/study-assistant.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/main/services/ai/ai-research.service.ts`, `src/main/services/ai/assistant-chat.ts`, `src/main/services/ai/explain-back.service.ts`, `src/main/services/ai/research-editor-ai.ts`, `src/renderer/components/ai/AISettingsModal.tsx`, `src/renderer/components/ai/AssistantContext.tsx`, `src/renderer/components/ai/ExplainBackModal.tsx`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/components/ai/useLearningMode.ts`, `src/renderer/components/dashboard/PathwaysView.tsx`, `src/renderer/components/knowledge/BookQuestionsDialog.tsx`, `src/renderer/components/knowledge/SrsReviewPanel.tsx`, `src/renderer/components/knowledge/SrsReviewScreen.tsx`, `src/renderer/components/notes/StudyAssistant.tsx`, `src/renderer/components/reader/AIResearchAssistantDrawer.tsx`, `src/renderer/translations.ts`, `src/shared/ai-learning-mode.ts`, `src/shared/assistant-chat.ts`, `src/shared/research-ai.ts`, `src/shared/study-assistant.ts`, `src/shared/types/ai.ts`, `tests/services/ai-learning-mode.test.ts`.
+
+## 2026-11-20T21:19:27.801Z - Agent: Codex - KEY-442 checkpoint
+
+Jira KEY-442 In Progress (21). Implemented shared custom-loopback/local classification, persisted-consent/revocation guard before PDF/legacy source reads, direct provider guard, typed PDF/legacy errors, shared PDF/reader consent UI, sender/input validation, and sanitized connection feedback. Default useRemoteConsent contract preserved; remote display now carries safe endpoint everywhere without editing protected assistant files. First focused 42/45 pass: three old remote provider tests omitted enabled/stored consent; updating those explicit fixtures to new guard contract. Tests/builds/live pending. No KEY-439 file edits.
+
+## 2026-11-20T21:14:49.772Z — Agent: Codex — KEY-441 pushed/Done; KEY-442 active
+
+KEY-441 committed/pushed 0e7efbee492c78e2c39c0ea5bba84557cad716bd; exact origin/feature/library-domain hash verified. Jira completion comment 10542, transition 41 returned Done. Full 2886/2886, builds/tsc/focused/native ar/en pass. Reports/audit updated, source PDFs unchanged and profiles deleted. KEY-442 now implementing shared local classification, privacy/consent revocation and typed localized legacy/PDF errors; Jira transition metadata read, In Progress pending. Preserve Antigravity KEY-436 overlaps and all KEY-439 files.
+
 ## KEY-441 implemented and verified — 2026-11-20T21:13:24.078Z — Agent: Codex
 
 Dedicated DeepL/Google/Yandex translation now requires consent for identity + exact endpoint before content requests. Public Google is explicitly opt-in/default false, distinct from official Google, never a failure fallback. Disabled/configuration/consent checks and bounded IPC validation fail closed; redirects rejected; typed localized secret-free errors. Translator switches (including DeepL free/paid) invalidate stored consent. Existing settings JSON only; no DB schema/dependency/download.
@@ -9,6 +40,14 @@ Verified: focused 20/20; full node scripts/test-runner.js --test-concurrency=4 2
 Exact commit paths: `src/shared/translation-privacy.ts`, `src/shared/types/ai.ts`, `src/main/services/ai/translation.service.ts`, `src/main/services/ai/ai-research.service.ts`, `src/main/ipc/ai.ts`, `src/renderer/components/ai/useRemoteConsent.ts`, `src/renderer/components/ai/ai-error-text.ts`, `src/renderer/components/ai/AISettingsModal.tsx`, `src/renderer/components/reader/AIResearchAssistantDrawer.tsx`, `src/renderer/translations.ts`, `tests/services/translation-privacy.test.ts`, `tests/services/ai-principles.test.ts`, `tests/services/ai.service.test.ts`, `scripts/key441-live/main.cjs`, `scripts/key441-live/run.mjs`, `docs/features/feature - AI Principles Audit.md`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`.
 
 Audit updated with superseding KEY-441 findings. Local report docs/agent-ops/reports/KEY-441.md. Jira In Progress (21), recorded here; commit+normal push authorized by current user request; Done after successful push. KEY-442 next.
+
+## 2026-11-20T21:03:24.895Z - Agent: Codex - KEY-441 checkpoint
+
+Jira KEY-441 transitioned to In Progress (21); KEY-442 remains To Do. Focused 20/20, root tsc, main and renderer builds PASS (existing five CSS highlight warnings). Native live first run found an obsolete harness toolbar selector; corrected to current reader overflow menu, no product failure. Full suite and corrected live run in progress; no completion/commit/push yet.
+
+## 2026-11-20T20:55:15.985Z - Agent: Codex - KEY-441 then KEY-442 active
+
+User explicitly authorizes one scoped commit/push per task to origin/feature/library-domain. KEY-441: translator identity/endpoint consent, opt-in public Google, disabled/IPC/error/redirect guards and stubbed + ar/en live verification. KEY-442 follows with shared local-model/privacy/error parity. Preserve all KEY-439 files and shared assistant hunks; own translation keys only. Jira KEY-441/442 and approved epic KEY-434 read. Implementation/tests pending.
 
 ## KEY-439 (Phase 1): AI actions with preview, confirm & undo (AI Task 5, epic KEY-434) — 2026-11-20T22:56+02:00 - Agent: Antigravity
 

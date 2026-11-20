@@ -9,6 +9,9 @@ import { BookOpen, CheckCircle2, HelpCircle, Mic, MicOff, Save, Sparkles } from 
 import { Modal } from '../ui/Modal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useRemoteConsent } from './useRemoteConsent';
+import { useLearningMode } from './useLearningMode';
+import { useAssistant } from './AssistantContext';
+import { moduleFromStudyTarget } from '../../../shared/ai-learning-mode';
 import type {
   ExplainBackErrorCode,
   ExplainBackFeedback,
@@ -85,6 +88,9 @@ export function ExplainBackModal({
 }) {
   const { t, lang, dir } = useWorkspace();
   const consent = useRemoteConsent();
+  const { modeFor } = useLearningMode();
+  const { inRevisionOrTest } = useAssistant();
+  const learningMode = modeFor(inRevisionOrTest ? 'revision' : (moduleFromStudyTarget(trigger.target) ?? 'notes'), inRevisionOrTest);
   const [explanation, setExplanation] = useState('');
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -287,12 +293,17 @@ export function ExplainBackModal({
             />
           </div>
 
+          {learningMode === 'off' && (
+            <p data-explain-back-learning-mode-off className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed">
+              {t('aiLearningModeOffNotice')}
+            </p>
+          )}
           {!feedback && (
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 data-explain-back-submit
-                disabled={busy || !explanation.trim()}
+                disabled={busy || learningMode === 'off' || !explanation.trim()}
                 onClick={() => void handleSubmit()}
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
               >

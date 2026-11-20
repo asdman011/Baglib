@@ -41,6 +41,8 @@ export interface AISettings {
   /** Public Google web translation is explicitly opt-in; never a fallback after an API error. */
   googlePublicTranslation?: boolean;
   targetLanguage: string;
+  /** KEY-436: Per-module learning mode ('off' | 'hints' | 'full') stored in ai_settings JSON. */
+  learningModes?: Partial<Record<import('../ai-learning-mode').AiLearningModule, import('../ai-learning-mode').AiLearningMode>>;
 }
 
 export interface BookPassage {
@@ -67,6 +69,10 @@ export interface AIResearchQueryPayload {
   userQuery?: string;
   targetLang?: string;
   saveAsNote?: boolean;
+  module?: import('../ai-learning-mode').AiLearningModule;
+  inRevisionOrTest?: boolean;
+  revealFullAnswer?: boolean;
+  attempt?: string;
 }
 
 export interface AIResearchResult {

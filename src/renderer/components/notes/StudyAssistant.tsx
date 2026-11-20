@@ -16,12 +16,15 @@ import { openStudyNote } from '../../utils/study-navigation';
 import { useOpenStudyLink } from '../../utils/use-study-link';
 import { Modal } from '../ui/Modal';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
+import { useLearningMode } from '../ai/useLearningMode';
+import { useAssistant } from '../ai/AssistantContext';
+import { moduleFromStudyTarget } from '../../../shared/ai-learning-mode';
 
 const taskKeys: Record<AssistantTask, TranslationKey> = {
   qa: 'assistantTaskQa', guide: 'assistantTaskGuide', questions: 'assistantTaskQuestions', terms: 'assistantTaskTerms', organise: 'assistantTaskOrganise', cards: 'assistantTaskCards',
 };
 const errorKeys: Record<string, TranslationKey> = {
-  'ai-disabled': 'assistantErrorDisabled', 'permission-denied': 'assistantErrorRemote', 'invalid-output': 'assistantErrorUnchecked',
+  'ai-disabled': 'assistantErrorDisabled', 'learning-mode-off': 'aiLearningModeOffNotice', 'permission-denied': 'assistantErrorRemote', 'invalid-output': 'assistantErrorUnchecked',
   'warsh-not-installed': 'assistantWarshMissing', 'invalid-resource': 'assistantInvalidResource', 'ambiguous-alignment': 'assistantAlignmentFailed',
   'missing-source': 'assistantMissingBookSource', 'missing-page': 'assistantMissingBookPage', 'no-text-layer': 'assistantNoTextLayer',
   busy: 'assistantErrorBusy', 'no-sources': 'assistantErrorNoSources', 'invalid-request': 'assistantErrorRequest',
@@ -29,7 +32,7 @@ const errorKeys: Record<string, TranslationKey> = {
 };
 
 /** One exchange in the conversation: what was asked, and the checked answer or the reason it failed. */
-interface Turn { id: number; task: AssistantTask; question: string; answer?: AssistantAnswer; error?: { code: string; detail?: string; ocrTarget?: string } }
+interface Turn { id: number; task: AssistantTask; question: string; answer?: AssistantAnswer; error?: { code: string; detail?: string; ocrTarget?: string }; isHint?: boolean; revealed?: boolean }
 
 /**
  * The grounded study assistant (Wave 12), laid out as an AI chat: sources are ticked in the side panel, the
@@ -47,7 +50,12 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   // KEY-383: no mode step and no consent tick each time. Typing and Enter asks a question; the other study modes
   // are one-click suggestions; sending to a remote provider is allowed once and remembered for that provider.
   const consent = useRemoteConsent();
-  const [consentFor, setConsentFor] = useState<AssistantTask | null>(null);
+  const { modeFor } = useLearningMode();
+  const { inRevisionOrTest } = useAssistant();
+  const activeModule = inRevisionOrTest ? 'revision' : (moduleFromStudyTarget(readerSource?.target) ?? 'notes');
+  const learningMode = modeFor(activeModule, inRevisionOrTest);
+  const [consentFor, setConsentFor] = useState<{ task: AssistantTask; revealFullAnswer?: boolean; attempt?: string; hintTurnId?: number } | null>(null);
+  const [attempts, setAttempts] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [cards, setCards] = useState<Record<string, 'added' | 'skipped'>>({});
@@ -74,37 +82,55 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const toggle = (id: string) => setPicked(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const hasSources = Boolean(readerSource) || picked.size > 0 || Boolean(book) || passages.length > 0;
   const sourceCount = (readerSource ? 1 : 0) + picked.size + (book ? 1 : 0) + passages.length;
-  const canAsk = !busy && hasSources && Boolean(question.trim());
-  const canSuggest = !busy && hasSources;
+  const canAsk = !busy && learningMode !== 'off' && hasSources && Boolean(question.trim());
+  const canSuggest = !busy && learningMode !== 'off' && hasSources;
 
   /** Ask in a mode: a question by default; remote providers are asked about once, then remembered. */
-  const send = async (task: AssistantTask) => {
-    if (busy || !hasSources || (task === 'qa' && !question.trim())) return;
+  const send = async (task: AssistantTask, options?: { revealFullAnswer?: boolean; attempt?: string; hintTurnId?: number; overrideQuestion?: string }) => {
+    if (learningMode === 'off') return;
+    if (busy || !hasSources || (task === 'qa' && !(options?.overrideQuestion ?? question).trim())) return;
     const status = await consent.check().catch(() => ({ local: false, allowed: false }));
-    if (!status.local && !status.allowed) { setConsentFor(task); return; }
+    if (!status.local && !status.allowed) { setConsentFor({ task, ...options }); return; }
     setConsentFor(null);
-    void ask(task, status.allowed);
+    void ask(task, status.allowed, options);
   };
   const allowAndSend = async () => {
-    const task = consentFor;
-    if (!task) return;
+    const pending = consentFor;
+    if (!pending) return;
     await consent.allow();
     setConsentFor(null);
-    void ask(task, true);
+    void ask(pending.task, true, pending);
   };
 
   const turnId = useRef(0);
-  const ask = async (task: AssistantTask, allowRemote: boolean) => {
+  const ask = async (task: AssistantTask, allowRemote: boolean, options?: { revealFullAnswer?: boolean; attempt?: string; hintTurnId?: number; overrideQuestion?: string }) => {
     const id = ++turnId.current;
-    const asked = question.trim();
-    setTurns(current => [...current, { id, task, question: asked }]);
+    const asked = (options?.overrideQuestion ?? question).trim();
+    const isHint = learningMode === 'hints' && !options?.revealFullAnswer;
+    setTurns(current => [...current, { id, task, question: options?.revealFullAnswer ? `${asked} (${t('aiFullAnswerLabel')})` : asked, isHint }]);
     setBusy(true);
     const finish = (patch: Partial<Turn>) => setTurns(current => current.map(turn => turn.id === id ? { ...turn, ...patch } : turn));
     try {
-      const result = await window.electronAPI.studyAssistant.ask({ task, question, language: lang === 'ar' ? 'ar' : 'en', allowRemote, notes: [...picked], books: book ? [{ id: book, sourceId: pdfBooks.find(entry => entry.id === book)?.sourceId, from, to: Math.max(from, Math.min(to, from + 49)) }] : [], passages, readerSource: readerSource ? { target: readerSource.target, label: readerSource.label } : undefined });
+      const result = await window.electronAPI.studyAssistant.ask({
+        task, question: asked, language: lang === 'ar' ? 'ar' : 'en', allowRemote,
+        notes: [...picked],
+        books: book ? [{ id: book, sourceId: pdfBooks.find(entry => entry.id === book)?.sourceId, from, to: Math.max(from, Math.min(to, from + 49)) }] : [],
+        passages,
+        readerSource: readerSource ? { target: readerSource.target, label: readerSource.label } : undefined,
+        module: activeModule,
+        inRevisionOrTest,
+        revealFullAnswer: options?.revealFullAnswer,
+        attempt: options?.attempt,
+      });
       // The question stays in the composer so it can be refined and asked again.
-      if (result.ok) finish({ answer: result.data });
-      else finish({ error: { code: result.error, detail: result.detail, ocrTarget: result.error === 'no-text-layer' ? result.target : undefined } });
+      if (result.ok) {
+        finish({ answer: result.data });
+        if (options?.hintTurnId) {
+          setTurns(current => current.map(turn => (turn.id === options.hintTurnId ? { ...turn, revealed: true } : turn)));
+        }
+      } else {
+        finish({ error: { code: result.error, detail: result.detail, ocrTarget: result.error === 'no-text-layer' ? result.target : undefined } });
+      }
     } catch { finish({ error: { code: 'engine-failed' } }); } finally { setBusy(false); }
   };
   const { openLink } = useOpenStudyLink();
@@ -131,7 +157,12 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
       <header className="flex items-center gap-3 border-b border-subtle bg-surface px-4 py-3">
         <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-sm"><Sparkles size={16} aria-hidden="true" /></span>
         <div className="min-w-0">
-          <h2 id="assistant-title" className="text-sm font-bold leading-tight">{t('assistantTitle')}</h2>
+          <div className="flex items-center gap-2">
+            <h2 id="assistant-title" className="text-sm font-bold leading-tight">{t('assistantTitle')}</h2>
+            <span data-assistant-learning-mode={learningMode} className="rounded-full border border-subtle bg-canvas px-2 py-0.5 text-[10px] font-medium text-muted">
+              {t(learningMode === 'off' ? 'aiLearningModeOff' : learningMode === 'hints' ? 'aiLearningModeHintsBadge' : 'aiLearningModeFullBadge')}
+            </span>
+          </div>
           <p className="truncate text-[11px] text-muted">{t('assistantIntro')}</p>
         </div>
         <button type="button" autoFocus={Boolean(readerSource)} aria-label={t('close')} title={t('close')} onClick={onClose} className="ms-auto rounded-lg p-1.5 text-muted hover:bg-canvas hover:text-main"><X size={16} /></button>
@@ -273,6 +304,35 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
                   <button type="button" onClick={() => void navigator.clipboard?.writeText(answerAsNote(turn.answer!, { sources: t('assistantSources'), question: t('assistantQuestion'), generated: t('aiGeneratedMarker') }, turn.question))}
                     className="inline-flex items-center gap-1 rounded-lg border border-subtle px-2.5 py-1.5 hover:border-primary/40"><Copy size={12} />{t('researchAiCopy')}</button>
                 </div>}
+                {learningMode === 'hints' && turn.isHint && !turn.revealed && (
+                  <div className="space-y-2 border-t border-subtle pt-2.5" data-assistant-attempt-box>
+                    <input
+                      type="text"
+                      dir="auto"
+                      data-assistant-attempt-input={turn.id}
+                      value={attempts[turn.id] ?? ''}
+                      onChange={e => setAttempts(current => ({ ...current, [turn.id]: e.target.value }))}
+                      placeholder={t('aiAttemptPlaceholder')}
+                      aria-label={t('aiAttemptPlaceholder')}
+                      className="w-full rounded-lg border border-subtle bg-canvas px-3 py-1.5 text-xs focus:border-primary focus:outline-none"
+                    />
+                    {(attempts[turn.id] ?? '').trim().length > 0 && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        data-assistant-show-full-answer={turn.id}
+                        onClick={() => {
+                          const attempt = (attempts[turn.id] ?? '').trim();
+                          if (!attempt) return;
+                          void send(turn.task, { revealFullAnswer: true, attempt, hintTurnId: turn.id, overrideQuestion: turn.question });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary-text hover:bg-primary/20 disabled:opacity-50"
+                      >
+                        {t('aiShowFullAnswer')}
+                      </button>
+                    )}
+                  </div>
+                )}
               </article>}
             </div>)}
           </div>
@@ -280,6 +340,11 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
           <p data-ai-recall-nudge className="px-3 py-2 text-xs leading-loose text-muted">{t('aiRecallNudge')}</p>
           {/* Composer */}
           <div className="border-t border-subtle bg-surface p-3">
+            {learningMode === 'off' && (
+              <div data-assistant-learning-mode-off className="mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed">
+                {t('aiLearningModeOffNotice')}
+              </div>
+            )}
             {consentFor && <div data-assistant-consent role="alertdialog" aria-live="assertive" className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed">
               <span dir="auto" className="min-w-0 flex-1">{t('assistantConsentAsk', { provider: (consent.customName ?? t(consent.providerLabel)) })}</span>
               <button type="button" data-assistant-consent-allow onClick={() => void allowAndSend()} className="rounded-full bg-primary px-3 py-1 font-semibold text-white">{t('assistantConsentAllow')}</button>

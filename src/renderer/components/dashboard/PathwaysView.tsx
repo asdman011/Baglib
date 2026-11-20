@@ -1,5 +1,6 @@
 'use client';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
+import { useLearningMode } from '../ai/useLearningMode';
 import { FeedbackSkeleton } from '../ui/FeedbackSkeleton';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -43,6 +44,8 @@ function Creator({ templates, setTemplates, draft, onCreated, onError }: { templ
   const [drafting, setDrafting] = useState(false);
   const [drafted, setDrafted] = useState(false);
   const consent = useRemoteConsent();
+  const { modeFor } = useLearningMode();
+  const learningMode = modeFor('notes');
   const [needsConsent, setNeedsConsent] = useState(false);
   const [draftFailed, setDraftFailed] = useState(false);
   const steps = useMemo(() => parseOutline(outline).length, [outline]);
@@ -73,7 +76,7 @@ function Creator({ templates, setTemplates, draft, onCreated, onError }: { templ
     <select className={`${control} w-full`} value={kind} onChange={event => setKind(event.target.value as PathwayKind)} aria-label={t('pathwayKind')}>
       <option value="research">{t('pathwayKindResearch')}</option><option value="curriculum">{t('pathwayKindCurriculum')}</option>
     </select>
-    <div className="flex flex-wrap gap-2"><input className={`${control} min-w-[10rem] flex-1`} value={subject} onChange={event => setSubject(event.target.value)} maxLength={300} placeholder={t('pathwayAiSubject')} aria-label={t('pathwayAiSubject')} dir="auto" /><Button variant="secondary" size="sm" className="shrink-0 self-center" icon={<Sparkles className={ico} />} disabled={drafting || !subject.trim()} onClick={() => void aiDraft()}>{t(drafting ? 'pathwayAiDrafting' : 'pathwayAiDraft')}</Button></div>
+    <div className="flex flex-wrap gap-2"><input className={`${control} min-w-[10rem] flex-1`} value={subject} onChange={event => setSubject(event.target.value)} maxLength={300} placeholder={t('pathwayAiSubject')} aria-label={t('pathwayAiSubject')} dir="auto" /><Button variant="secondary" size="sm" className="shrink-0 self-center" icon={<Sparkles className={ico} />} disabled={drafting || learningMode === 'off' || !subject.trim()} title={learningMode === 'off' ? t('aiLearningModeOffNotice') : undefined} onClick={() => void aiDraft()}>{t(drafting ? 'pathwayAiDrafting' : 'pathwayAiDraft')}</Button></div>
     {needsConsent && <div data-curriculum-ai-consent role="alertdialog" className="space-y-2 rounded-lg border border-amber-500/50 p-3 text-xs leading-loose">
       <p>{t('assistantConsentAsk', { provider: consent.customName ?? t(consent.providerLabel) })}</p>
       <div className="flex gap-2"><button type="button" onClick={async () => { await consent.allow(); await aiDraft(); }} className="rounded border border-current px-3 py-1">{t('assistantConsentAllow')}</button><button type="button" onClick={() => setNeedsConsent(false)} className="rounded border border-current px-3 py-1">{t('assistantConsentCancel')}</button></div>

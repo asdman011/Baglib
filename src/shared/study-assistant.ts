@@ -5,6 +5,7 @@
  */
 import { KNOWN_PUA_CHAR_MAP } from './pdf-accessibility-utils';
 import { parseBookTarget, parseQuranTarget, validStudyTarget } from './study-notes';
+import { isAiLearningModule, type AiLearningModule } from './ai-learning-mode';
 
 export const ASSISTANT_TASKS =['qa', 'guide', 'questions', 'terms', 'organise', 'cards'] as const;
 export type AssistantTask = typeof ASSISTANT_TASKS[number];
@@ -23,6 +24,10 @@ export interface AssistantRequest {
   books: { id: string; sourceId?: string; from: number; to: number }[];
   passages: AssistantPassage[];
   readerSource?: { target: string; label: string };
+  module?: AiLearningModule;
+  inRevisionOrTest?: boolean;
+  revealFullAnswer?: boolean;
+  attempt?: string;
 }
 export interface AssistantPassage { target: string; label: string; tafsir?: string; translation?: string }
 export interface AssistantQuranQuery { surah: number; from: number; to: number; profile: 'hafs' | 'warsh'; tafsir?: string; translation?: string }
@@ -71,7 +76,21 @@ export function validateAssistantRequest(input: unknown): AssistantRequest {
     readerSource = { target: source.target, label: source.label };
   }
   if (!notes.length && !ranges.length && !passages.length && !readerSource) throw new Error('invalid-request');
-  return { task, question, language: value.language, allowRemote: value.allowRemote, notes: notes as string[], books: ranges, passages, ...(readerSource ? { readerSource } : {}) };
+  const attempt = typeof value.attempt === 'string' && value.attempt.trim() ? value.attempt.trim().slice(0, 2000) : undefined;
+  return {
+    task,
+    question,
+    language: value.language,
+    allowRemote: value.allowRemote,
+    notes: notes as string[],
+    books: ranges,
+    passages,
+    ...(readerSource ? { readerSource } : {}),
+    ...(isAiLearningModule(value.module) ? { module: value.module } : {}),
+    ...(value.inRevisionOrTest === true ? { inRevisionOrTest: true } : {}),
+    ...(value.revealFullAnswer === true ? { revealFullAnswer: true } : {}),
+    ...(attempt ? { attempt } : {}),
+  };
 }
 
 /** Precise book page/CFI, Quran range (at most 50 ayahs), or installed hadith target. */

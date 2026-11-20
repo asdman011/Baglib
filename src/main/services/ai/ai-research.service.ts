@@ -1,6 +1,7 @@
 import { translationDestination } from '../../../shared/translation-privacy';
 import { hasRemoteConsent } from '../../../shared/ai-consent';
 /**
+import { applyHintsPrompt, normalizeLearningModes, resolveLearningMode } from '../../../shared/ai-learning-mode';
  * Baglib — AI Research Assistant Coordinator & Anti-Spoiler RAG Service (KEY-143)
  *
  * Enforces Readest's anti-spoiler context ceiling (`<BOOK_PASSAGES page_limit="${currentPage}">`),
@@ -74,6 +75,7 @@ export class AIResearchService {
         ...DEFAULT_AI_SETTINGS,
         ...(stored || {}),
       };
+        learningModes: normalizeLearningModes(stored?.learningModes),
     } catch (err) {
       console.warn('[baglib:ai] Could not load AI settings from database:', err);
       return { ...DEFAULT_AI_SETTINGS };
@@ -89,6 +91,10 @@ export class AIResearchService {
       ...current,
       ...newSettings,
     };
+      learningModes: {
+        ...normalizeLearningModes(current.learningModes),
+        ...(newSettings.learningModes ?? {}),
+      },
     if (translationDestination(current)?.key !== translationDestination(merged)?.key) merged.translationConsent = undefined;
     this.settingsRepo.set(SETTINGS_KEY, merged);
     return merged;
@@ -134,6 +140,13 @@ export class AIResearchService {
 
     // 2. Anti-Spoiler Passage Extraction from FTS5
     const passages = this.extractBookPassagesUpToPage(
+    const legacyMode = this.settingsRepo.get<unknown>('ai.learningMode');
+    const learningMode = resolveLearningMode(settings, payload.module ?? 'reader', {
+      inRevisionOrTest: payload.inRevisionOrTest,
+      legacyMode,
+    });
+    if (learningMode === 'off') throw new Error('learning-mode-off');
+
       payload.bookId,
       payload.currentPage,
       payload.surroundingContext
@@ -186,8 +199,8 @@ export class AIResearchService {
     // 4. Generate Completion via BYOK Provider
     const generatedContent = await this.aiProvider.generateChatCompletion(
       {
-        systemPrompt,
-        userPrompt,
+        systemPrompt: applyHintsPrompt(systemPrompt, learningMode, { revealFullAnswer: payload.revealFullAnswer }),
+        userPrompt: effectiveUserPrompt,
         temperature: settings.temperature ?? 0.7,
       },
       settings

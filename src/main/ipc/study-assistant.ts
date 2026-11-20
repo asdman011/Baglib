@@ -12,7 +12,8 @@ import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
 import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
 import { providerErrorCode, providerErrorDetail } from '../../shared/ai-errors';
-import { isLocalAi } from '../../shared/ai-consent';
+import { isLocalAi, aiPrivacyError } from '../../shared/ai-consent';
+import { applyHintsPrompt, moduleFromStudyTarget, resolveLearningMode } from '../../shared/ai-learning-mode';
 import { runAssistantChat } from '../services/ai/assistant-chat';
 import { assistantResponseSchema, assistantSystemPrompt, budgetSources, validateAssistantAnswer, validateAssistantRequest, type AssistantAnswer, type AssistantSource } from '../../shared/study-assistant';
 
@@ -23,10 +24,10 @@ type Result<T> = { ok: true; data: T } | { ok: false; error: string; target?: st
 const failure = (error: unknown, known: string[]) => {
   const message = (error as Error)?.message ?? String(error);
   if (known.includes(message)) return { error: message };
-  if (/Gemini|OpenAI|Claude|Ollama|HTTP \d{3}|fetch failed|aborted|no answer within|API key/i.test(message)) return { error: providerErrorCode(message), detail: providerErrorDetail(message) };
+  if (/^provider-|Gemini|OpenAI|Claude|Ollama|HTTP \d{3}|fetch failed|aborted|no answer within|API key/i.test(message)) return { error: providerErrorCode(message), detail: providerErrorDetail(message) };
   return { error: 'engine-failed', detail: providerErrorDetail(message) };
 };
-const KNOWN = ['invalid-request', 'permission-denied', 'invalid-output', 'busy', 'no-sources', 'ai-disabled', 'warsh-not-installed', 'invalid-resource', 'ambiguous-alignment', 'missing-source', 'missing-page', 'no-text-layer'];
+const KNOWN = ['invalid-request', 'permission-denied', 'learning-mode-off', 'invalid-output', 'busy', 'no-sources', 'ai-disabled', 'warsh-not-installed', 'invalid-resource', 'ambiguous-alignment', 'missing-source', 'missing-page', 'no-text-layer'];
 
 const authorize = (event: IpcMainInvokeEvent) => {
   const frame = event.senderFrame;
@@ -36,7 +37,7 @@ const authorize = (event: IpcMainInvokeEvent) => {
 };
 
 /** A local Ollama on this computer needs no transfer consent; any other provider or address does. */
-export function isLocalProvider(settings: { provider?: string; ollamaEndpoint?: string }): boolean {
+export function isLocalProvider(settings: import('../../shared/ai-consent').ConsentSettings): boolean {
   return isLocalAi(settings);
 }
 
@@ -57,7 +58,7 @@ export function registerStudyAssistantIpc(): void {
   }, async (request,claims,source) => {
     const settings=AIResearchService.getInstance().getSettings();
     if(!settings.enabled)throw new Error('ai-disabled');
-    if(!isLocalProvider(settings)&&!request.allowRemote)throw new Error('permission-denied');
+    if(aiPrivacyError(settings, request.allowRemote))throw new Error('permission-denied');
     return AIProviderService.getInstance().generateChatCompletion({temperature:0,json:true,preventRedirect:!request.allowRemote,systemPrompt:explainPrompt(request.language),userPrompt:JSON.stringify({claims,sources:[source]})},settings);
   });
   ipcMain.handle('study-assistant:explain-back',async(event,input:unknown)=>{
@@ -66,7 +67,9 @@ export function registerStudyAssistantIpc(): void {
       authorize(event);const request=validateExplainRequest(input);
       const settings=AIResearchService.getInstance().getSettings();
       if(!settings.enabled)throw new Error('ai-disabled');
-      if(!isLocalProvider(settings)&&!request.allowRemote)throw new Error('permission-denied');
+      const learningMode=resolveLearningMode(settings,moduleFromStudyTarget(request.target)??'notes',{legacyMode:settingsRepository.get('ai.learningMode')});
+      if(learningMode==='off')throw new Error('learning-mode-off');
+      if(aiPrivacyError(settings, request.allowRemote))throw new Error('permission-denied');
       if(running)throw new Error('busy');running=true;owned=true;
       return {ok:true,data:await service().check(request)};
     } catch(error){return {ok:false,...failure(error,[...KNOWN,'passage-too-short','passage-too-long']),...(error instanceof AssistantBookError?{target:error.target}:{})};}
@@ -86,7 +89,13 @@ export function registerStudyAssistantIpc(): void {
       const request = validateAssistantRequest(input);
       const settings = AIResearchService.getInstance().getSettings();
       if (!settings.enabled) throw new Error('ai-disabled');
-      if (!isLocalProvider(settings) && !request.allowRemote) throw new Error('permission-denied');
+      const learningModule = request.module ?? moduleFromStudyTarget(request.readerSource?.target ?? request.passages[0]?.target) ?? 'notes';
+      const learningMode = resolveLearningMode(settings, learningModule, {
+        inRevisionOrTest: request.inRevisionOrTest,
+        legacyMode: settingsRepository.get('ai.learningMode'),
+      });
+      if (learningMode === 'off') throw new Error('learning-mode-off');
+      if (aiPrivacyError(settings, request.allowRemote)) throw new Error('permission-denied');
       if (running) throw new Error('busy');
       running = true;
       try {
@@ -128,8 +137,12 @@ export function registerStudyAssistantIpc(): void {
           temperature: 0,
           preventRedirect: !request.allowRemote,
           schema: assistantResponseSchema(request.task),
-          systemPrompt: assistantSystemPrompt(request.task, request.language),
-          userPrompt: JSON.stringify({ question: request.question, sources: fitted.sources.map(({ id, label, text }) => ({ id, label, text })) }),
+          systemPrompt: applyHintsPrompt(assistantSystemPrompt(request.task, request.language), learningMode, { revealFullAnswer: request.revealFullAnswer }),
+          userPrompt: JSON.stringify({
+            question: request.question,
+            ...(request.attempt ? { attempt: request.attempt } : {}),
+            sources: fitted.sources.map(({ id, label, text }) => ({ id, label, text })),
+          }),
         }, settings);
         return { ok: true, data: validateAssistantAnswer(output, fitted.sources, request.task, fitted.limited) };
       } finally { running = false; }
@@ -149,6 +162,7 @@ export function registerStudyAssistantIpc(): void {
       return await runAssistantChat(input, {
         db,
         settings: AIResearchService.getInstance().getSettings(),
+        legacyMode: settingsRepository.get('ai.learningMode'),
         complete: (prompt, settings) => AIProviderService.getInstance().generateChatCompletion(prompt, settings),
         resolve: async (target, label) => {
           if (target.startsWith('note:')) {
