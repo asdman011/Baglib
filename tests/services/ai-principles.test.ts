@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { AI_SCHOLARLY_POLICY, markAiGenerated } from '../../src/shared/ai-principles';
 import { AIProviderService } from '../../src/main/services/ai/ai-provider.service';
 import { AIResearchService, DEFAULT_AI_SETTINGS } from '../../src/main/services/ai/ai-research.service';
+import { translationDestination } from '../../src/shared/translation-privacy';
 import { TranslationService } from '../../src/main/services/ai/translation.service';
 import { runResearchEditorAi } from '../../src/main/services/ai/research-editor-ai';
 import { createTestDatabase } from '../helpers/test-db';
@@ -59,7 +60,7 @@ test('a failed dedicated translator never silently transfers content to a second
   const urls: string[] = [];
   globalThis.fetch = async url => { urls.push(String(url)); return new Response('failure', { status: 503 }); };
   try {
-    await assert.rejects(new TranslationService().translate({ text: 'private passage' }, { ...DEFAULT_AI_SETTINGS, translationProvider: 'deepl', translationApiKey: 'stub:fx' }), /DeepL HTTP 503/);
+    await assert.rejects(new TranslationService().translate({ text: 'private passage' }, { ...DEFAULT_AI_SETTINGS, translationProvider: 'deepl', translationApiKey: 'stub:fx', translationConsent: translationDestination({ ...DEFAULT_AI_SETTINGS, translationProvider: 'deepl', translationApiKey: 'stub:fx' })!.key }), /provider-busy/);
     assert.equal(urls.length, 1);
     assert.ok(urls[0].startsWith('https://api-free.deepl.com/'));
   } finally { globalThis.fetch = original; }

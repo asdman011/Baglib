@@ -19,6 +19,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import type { AISettings, AIProviderId, TranslationProviderId } from '../../../shared/types/ai';
+import { translationDestination } from '../../../shared/translation-privacy';
 import { TranslationKey } from '../../translations';
 import { CustomProviderFields } from './CustomProviderFields';
 
@@ -98,6 +99,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       const windowAPI = (window).electronAPI;
       if (windowAPI?.ai?.saveSettings) {
         await windowAPI.ai.saveSettings(settings);
+        window.dispatchEvent(new Event('baglib:ai-settings-changed'));
       }
       setSaveSuccess(true);
       setTimeout(() => {
@@ -398,6 +400,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             )}
           </div>
 
+          <div data-translation-privacy className="space-y-2 text-xs leading-loose">
+            {settings.translationProvider === 'google' && <label className="flex items-start gap-2"><input data-google-public type="checkbox" checked={settings.googlePublicTranslation === true} onChange={event => setSettings({ ...settings, googlePublicTranslation: event.target.checked, translationConsent: undefined })} />{t('aiTranslationPublicGoogle')}</label>}
+            {translationDestination(settings) && <><p dir="auto">{translationDestination(settings)!.provider} · {translationDestination(settings)!.endpoint}</p><p>{t('aiTranslationConsentNotice')}</p>{settings.translationConsent && <button data-translation-revoke type="button" className="underline" onClick={async () => { const saved = await window.electronAPI.ai.saveSettings({ translationConsent: undefined }); setSettings(current => ({ ...current, translationConsent: saved.translationConsent })); window.dispatchEvent(new Event('baglib:ai-settings-changed')); }}>{t('assistantConsentRevoke')}</button>}</>}
+          </div>
           {/* Test Connection Banner */}
           {testResult && (
             <div

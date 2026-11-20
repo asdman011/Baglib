@@ -1,3 +1,4 @@
+import { translationDestination } from '../../../shared/translation-privacy';
 import { hasRemoteConsent } from '../../../shared/ai-consent';
 /**
  * Baglib — AI Research Assistant Coordinator & Anti-Spoiler RAG Service (KEY-143)
@@ -37,6 +38,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   claudeModel: 'claude-3-5-sonnet-20241022',
   translationProvider: 'llm',
   targetLanguage: 'ar',
+  googlePublicTranslation: false,
 };
 
 const SETTINGS_KEY = 'ai_settings';
@@ -87,6 +89,7 @@ export class AIResearchService {
       ...current,
       ...newSettings,
     };
+    if (translationDestination(current)?.key !== translationDestination(merged)?.key) merged.translationConsent = undefined;
     this.settingsRepo.set(SETTINGS_KEY, merged);
     return merged;
   }
@@ -107,7 +110,7 @@ export class AIResearchService {
     const settings = this.getSettings();
 
     if (settings.enabled === false) throw new Error('ai-disabled');
-    if (!hasRemoteConsent(settings)) throw new Error('permission-denied');
+    if (payload.tool !== 'inline_translation' && !hasRemoteConsent(settings)) throw new Error('permission-denied');
 
     // 1. Handle Inline Translation Tool directly
     if (payload.tool === 'inline_translation') {

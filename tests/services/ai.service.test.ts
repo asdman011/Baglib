@@ -81,23 +81,12 @@ describe('KEY-143 BYOK AI Provider & Research Assistant Services', () => {
   describe('TranslationService', () => {
     const transService = TranslationService.getInstance();
 
-    it('handles empty or whitespace text gracefully without making network requests', async () => {
-      const res = await transService.translate(
-        { text: '   ' },
-        DEFAULT_AI_SETTINGS
-      );
-
-      assert.equal(res.translatedText, '');
-      assert.equal(res.providerUsed, 'none');
+    it('rejects empty text before any network request', async () => {
+      await assert.rejects(transService.translate({ text: '   ' }, DEFAULT_AI_SETTINGS), /invalid-request/);
     });
 
-    it('defaults target language to configured settings targetLanguage', async () => {
-      const res = await transService.translate(
-        { text: '' },
-        { ...DEFAULT_AI_SETTINGS, targetLanguage: 'fr' }
-      );
-
-      assert.equal(res.targetLang, 'fr');
+    it('rejects invalid target languages before any network request', async () => {
+      await assert.rejects(transService.translate({ text: 'passage', targetLang: 'bad&query' }, DEFAULT_AI_SETTINGS), /invalid-request/);
     });
   });
 

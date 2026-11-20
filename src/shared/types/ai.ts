@@ -36,6 +36,10 @@ export interface AISettings {
   // Translation configuration
   translationProvider: TranslationProviderId;
   translationApiKey?: string;
+  /** Consent for a dedicated translator identity + endpoint in the existing settings JSON. */
+  translationConsent?: string;
+  /** Public Google web translation is explicitly opt-in; never a fallback after an API error. */
+  googlePublicTranslation?: boolean;
   targetLanguage: string;
 }
 
@@ -72,9 +76,11 @@ export interface AIResearchResult {
   providerUsed: string;
   durationMs: number;
   savedNoteId?: string;
+  error?: import('../translation-privacy').TranslationErrorCode;
 }
 
 export interface TranslationResult {
+  error?: import('../translation-privacy').TranslationErrorCode;
   translatedText: string;
   sourceLang?: string;
   targetLang: string;

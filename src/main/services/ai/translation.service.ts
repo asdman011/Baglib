@@ -1,11 +1,11 @@
-import { hasRemoteConsent } from '../../../shared/ai-consent';
+import { assertTranslationAllowed, validateTranslationInput, translationDestination, TranslationError, translationErrorCode } from '../../../shared/translation-privacy';
 /**
  * Baglib — Dedicated & LLM-Powered Translation Service (KEY-143)
  *
  * Supports DeepL, Google Translate, Yandex, and scholarly LLM fallback translation.
  */
 
-import type { AISettings, TranslationResult, TranslationProviderId } from '../../../shared/types/ai';
+import type { AISettings, TranslationResult } from '../../../shared/types/ai';
 import { AIProviderService } from './ai-provider.service';
 import { buildTranslationPrompt } from '../../../shared/utils/ai-prompts';
 
@@ -33,16 +33,12 @@ export class TranslationService {
     options: TranslateOptions,
     settings: AISettings
   ): Promise<TranslationResult> {
-    const text = options.text?.trim();
-    if (!text) {
-      return {
-        translatedText: '',
-        targetLang: options.targetLang || settings.targetLanguage || 'ar',
-        providerUsed: 'none',
-      };
-    }
+    options = validateTranslationInput(options);
+    assertTranslationAllowed(settings);
+    const text = options.text.trim();
 
     const targetLang = options.targetLang || settings.targetLanguage || 'ar';
+    validateTranslationInput({ ...options, targetLang });
     const provider = settings.translationProvider || 'llm';
 
     try {
@@ -59,7 +55,7 @@ export class TranslationService {
       }
     } catch (err: unknown) {
       // Provider consent does not authorize sending text to a different provider on failure.
-      throw err;
+      throw new TranslationError(translationErrorCode(err));
     }
   }
 
@@ -74,19 +70,14 @@ export class TranslationService {
   ): Promise<TranslationResult> {
     const key = settings.translationApiKey || '';
     if (!key) {
-      throw new Error('DeepL API Key is missing');
+      throw new TranslationError('not-configured');
     }
 
-    // Free endpoints end with :fx
-    const isFree = key.endsWith(':fx');
-    const endpoint = isFree
-      ? 'https://api-free.deepl.com/v2/translate'
-      : 'https://api.deepl.com/v2/translate';
+    const endpoint = translationDestination(settings)!.endpoint;
 
     const normalizedTarget = targetLang.toUpperCase() === 'EN' ? 'EN-US' : targetLang.toUpperCase();
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const signal = AbortSignal.timeout(15000);
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -94,17 +85,16 @@ export class TranslationService {
         Authorization: `DeepL-Auth-Key ${key}`,
         'Content-Type': 'application/json',
       },
-      signal: controller.signal,
+      signal: signal,
+      redirect: 'error',
       body: JSON.stringify({
         text: [text],
         target_lang: normalizedTarget,
       }),
     });
-    clearTimeout(timeout);
 
     if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`DeepL HTTP ${res.status}: ${errText || res.statusText}`);
+      throw new Error('HTTP ' + res.status);
     }
 
     const data = await res.json() as {
@@ -133,15 +123,15 @@ export class TranslationService {
 
     if (key) {
       // Official Google Cloud Translation API
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const signal = AbortSignal.timeout(15000);
 
       const res = await fetch(
         `https://translation.googleapis.com/language/translate/v2?key=${key}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
+          signal: signal,
+      redirect: 'error',
           body: JSON.stringify({
             q: text,
             target: targetLang,
@@ -149,7 +139,6 @@ export class TranslationService {
           }),
         }
       );
-      clearTimeout(timeout);
 
       if (!res.ok) {
         throw new Error(`Google Cloud Translation returned HTTP ${res.status}`);
@@ -170,16 +159,15 @@ export class TranslationService {
       };
     }
 
-    // Public web client fallback
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    if (settings.googlePublicTranslation !== true) throw new TranslationError('not-configured');
+    // Explicitly selected public web client; never reached after a failed official request.
+    const signal = AbortSignal.timeout(12000);
 
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(
       targetLang
     )}&dt=t&q=${encodeURIComponent(text)}`;
 
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
+    const res = await fetch(url, { signal: signal, redirect: 'error' });
 
     if (!res.ok) {
       throw new Error(`Google Translate fallback failed with status ${res.status}`);
@@ -210,11 +198,10 @@ export class TranslationService {
   ): Promise<TranslationResult> {
     const key = settings.translationApiKey || '';
     if (!key) {
-      throw new Error('Yandex API Key is missing');
+      throw new TranslationError('not-configured');
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const signal = AbortSignal.timeout(15000);
 
     const res = await fetch('https://translate.api.cloud.yandex.net/translate/v2/translate', {
       method: 'POST',
@@ -222,13 +209,13 @@ export class TranslationService {
         'Content-Type': 'application/json',
         Authorization: `Api-Key ${key}`,
       },
-      signal: controller.signal,
+      signal: signal,
+      redirect: 'error',
       body: JSON.stringify({
         targetLanguageCode: targetLang,
         texts: [text],
       }),
     });
-    clearTimeout(timeout);
 
     if (!res.ok) {
       throw new Error(`Yandex HTTP ${res.status}`);
@@ -257,8 +244,7 @@ export class TranslationService {
     bookTitle: string | undefined,
     settings: AISettings
   ): Promise<TranslationResult> {
-    if (settings.enabled === false) throw new Error('ai-disabled');
-    if (!hasRemoteConsent(settings)) throw new Error('permission-denied');
+
     const prompt = buildTranslationPrompt(text, targetLang, bookTitle);
     const aiProvider = AIProviderService.getInstance();
 
@@ -267,6 +253,7 @@ export class TranslationService {
         systemPrompt: 'You are an expert bilingual academic and literary translator. Output the clean translated text only.',
         userPrompt: prompt,
         temperature: 0.3,
+        preventRedirect: true,
       },
       settings
     );

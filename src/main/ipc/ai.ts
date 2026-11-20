@@ -1,3 +1,4 @@
+import { translationErrorCode } from '../../shared/translation-privacy';
 import { errorMessage } from '../../shared/errors';
 /**
  * Baglib — AI Research Assistant & Translation IPC Handlers (KEY-143)
@@ -6,7 +7,7 @@ import { errorMessage } from '../../shared/errors';
 import { ipcMain } from 'electron';
 import { getDatabase } from '../database/connection';
 import { AIResearchService } from '../services/ai/ai-research.service';
-import { TranslationService, TranslateOptions } from '../services/ai/translation.service';
+import { TranslationService } from '../services/ai/translation.service';
 import type { AISettings, AIResearchQueryPayload } from '../../shared/types/ai';
 import { AIProviderService } from '../services/ai/ai-provider.service';
 import { runResearchEditorAi } from '../services/ai/research-editor-ai';
@@ -77,10 +78,11 @@ export function registerAIIpc(): void {
       const service = getAIService();
       return await service.executeTool(payload);
     } catch (err: unknown) {
-      console.warn('[IPC:ai:execute-tool] Error:', err);
+
       return {
-        content: `Error executing AI research tool: ${errorMessage(err)}`,
-        tool: payload.tool,
+        content: '',
+        error: translationErrorCode(err),
+        tool: payload?.tool || 'chat',
         spoilerPrevented: false,
         providerUsed: 'error',
         durationMs: 0,
@@ -99,17 +101,18 @@ export function registerAIIpc(): void {
   });
 
   // Dedicated or LLM translation
-  ipcMain.handle('ai:translate', async (_, options: TranslateOptions) => {
+  ipcMain.handle('ai:translate', async (_, options: unknown) => {
     try {
       const service = getAIService();
       const settings = service.getSettings();
       const transService = getTranslationService();
-      return await transService.translate(options, settings);
+      return await transService.translate(options as import('../../shared/translation-privacy').TranslationInput, settings);
     } catch (err: unknown) {
-      console.warn('[IPC:ai:translate] Error:', err);
+
       return {
-        translatedText: `Translation error: ${errorMessage(err)}`,
-        targetLang: options.targetLang || 'ar',
+        translatedText: '',
+        error: translationErrorCode(err),
+        targetLang: 'ar',
         providerUsed: 'error',
       };
     }

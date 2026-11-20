@@ -1,6 +1,10 @@
 import { researchEditorTranslations } from '../shared/research-editor-i18n';
 export const translations = {
   ar: {
+    aiTranslationPublicGoogle: "السماح بخدمة Google العامة عند عدم وجود مفتاح API. يُرسل النص إلى translate.googleapis.com بعد موافقتك؛ لا يُستخدم بديل تلقائي عند فشل خدمة أخرى.",
+    aiTranslationConsentNotice: "تتطلب الترجمة موافقتك على المزوّد والعنوان المعروضين قبل إرسال النص. يمكنك إلغاء الموافقة هنا.",
+    aiPrivacyConsentRequired: "وافِق على المزوّد الحالي قبل إرسال النص.",
+    aiPrivacyInvalidRequest: "الطلب غير صالح. لم يُرسل أي نص.",
     aiGeneratedMarker: "نص مولّد بالذكاء الاصطناعي",
     aiPrinciplesNotice: "قد يخطئ الذكاء الاصطناعي. تحقّق من الادعاءات في المصادر؛ هذا ليس فتوى.",
     aiRecallNudge: "حاول شرح النص بكلماتك أولاً قبل طلب ملخّص.",
@@ -6399,6 +6403,10 @@ export const translations = {
     ctxOpenHere: "فتح هنا",
   },
   en: {
+    aiTranslationPublicGoogle: "Allow public Google translation when no API key is set. Text goes to translate.googleapis.com after consent; it is never used automatically after another service fails.",
+    aiTranslationConsentNotice: "Translation asks for consent to the displayed provider and endpoint before sending text. You can revoke consent here.",
+    aiPrivacyConsentRequired: "Allow the current provider before sending text.",
+    aiPrivacyInvalidRequest: "Invalid request. No text was sent.",
     aiGeneratedMarker: "AI-generated",
     aiPrinciplesNotice: "AI can make mistakes. Check claims against sources; this is not a fatwa.",
     aiRecallNudge: "Try explaining the passage in your own words before asking for a summary.",

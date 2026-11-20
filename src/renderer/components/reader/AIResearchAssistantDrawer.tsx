@@ -1,7 +1,7 @@
 'use client';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
 import { markAiGenerated } from '../../../shared/ai-principles';
-import { errorMessage } from '../../../shared/errors';
+import { aiErrorText } from '../ai/ai-error-text';
 
 
 import React, { useState } from 'react';
@@ -62,7 +62,9 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
   const [userQuery, setUserQuery] = useState<string>('');
   const [targetLang, setTargetLang] = useState<string>('ar');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const consent = useRemoteConsent();
+  const aiConsent = useRemoteConsent();
+  const translationConsent = useRemoteConsent('translation');
+  const consent = activeTool === 'inline_translation' ? translationConsent : aiConsent;
   const [needsConsent, setNeedsConsent] = useState(false);
   const [result, setResult] = useState<AIResearchResult | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
@@ -95,6 +97,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
 
   const handleExecuteTool = async () => {
     const status = await consent.check().catch(() => ({ local: false, allowed: false }));
+    if ('ready' in status && !status.ready) { setResult({ content: t('researchAiNotConfigured'), tool: activeTool, spoilerPrevented: false, providerUsed: 'error', durationMs: 0 }); return; }
     if (!status.local && !status.allowed) { setNeedsConsent(true); return; }
     setNeedsConsent(false);
     setIsLoading(true);
@@ -118,7 +121,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
         };
 
         const res: AIResearchResult = await windowAPI.ai.executeTool(payload);
-        setResult(res);
+        setResult(res.error ? { ...res, content: aiErrorText(res.error, t) } : res);
 
       } else {
         // Mock fallback for browser dev mode
@@ -130,9 +133,9 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
           durationMs: 420,
         });
       }
-    } catch (err: unknown) {
+    } catch {
       setResult({
-        content: `Error: ${errorMessage(err) || 'Execution failed'}`,
+        content: t('assistantErrorEngine'),
         tool: activeTool,
         spoilerPrevented: false,
         providerUsed: 'error',
@@ -375,7 +378,7 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
                     <Copy className="w-3.5 h-3.5" />
                   )}
                 </button>
-                {bookId && !isSavedToNotes && (
+                {bookId && result.providerUsed !== 'error' && !isSavedToNotes && (
                   <button
                     onClick={handleSaveToNotes}
                     className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition"
