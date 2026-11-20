@@ -589,6 +589,16 @@ export const API = {
       ipcRenderer.invoke('explain-back:save-note', request),
   },
 
+  // KEY-439 (AI Task 5, Phase 1): AI Actions
+  aiActions: {
+    plan: (request: import('../shared/ai-actions').AiActionPlanRequest): Promise<import('../shared/ai-actions').AiActionPlanResponse> =>
+      ipcRenderer.invoke('ai-actions:plan', request),
+    confirm: (request: import('../shared/ai-actions').AiActionConfirmRequest): Promise<import('../shared/ai-actions').AiActionConfirmResponse> =>
+      ipcRenderer.invoke('ai-actions:confirm', request),
+    undo: (request: import('../shared/ai-actions').AiActionUndoRequest): Promise<import('../shared/ai-actions').AiActionUndoResponse> =>
+      ipcRenderer.invoke('ai-actions:undo', request),
+  },
+
   // Text-to-Speech (TTS), Audiobook Playback & SMIL Overlays (KEY-145)
   audio: {
     getPairing: (bookId: string) => ipcRenderer.invoke('audio:get-pairing', bookId),

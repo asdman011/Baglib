@@ -1,3 +1,30 @@
+## KEY-439 (Phase 1): AI actions with preview, confirm & undo (AI Task 5, epic KEY-434) — 2026-11-20T22:56+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/ai-actions.ts`: added fixed 5-tool OpenAI-compatible schema (`create_note`, `append_to_note`, `create_cards_from_selection`, `add_to_personal_list`, `open_source`), strict argument validation (`validateToolCallArguments`), and preview/confirm/undo types.
+- `src/main/services/ai/actions/tool-calling.ts`: added `callModelWithTools` for OpenAI-compatible (`/chat/completions`) and Ollama (`/api/chat`) tool calling without executing during planning; cleanly returns `unsupported` when the provider/model lacks tool support.
+- `src/main/services/ai/actions/tool-executor.ts`: added `AiActionsService` enforcing `enabled`, `ai.learningMode !== 'off'`, `providerReady`, and KEY-383 `isLocalAi` / `allowRemote` consent; validates DB existence before previewing; executes confirmed plans via `StudyNotesService`, `KnowledgeCardRepository`, and `PersonalListsService` with zero new DB fields (AI-written content marked with `markAiGenerated` + `'ai-generated'` tag; cards saved with `memorizing: false` in review state); reverses all steps on `undoExecution` and rejects double-undo.
+- `src/main/ipc/ai-actions.ts`, `src/main/index.ts`, `src/preload/index.ts`: registered `ai-actions:plan`, `ai-actions:confirm`, `ai-actions:undo` with `authorize(event)` frame checks and exposed `window.electronAPI.aiActions`.
+- `src/renderer/components/ai/AiActionsPreview.tsx` & `GlobalAssistant.tsx`: added Actions mode toggle (`data-assistant-actions-mode`), multi-step `AiActionsPreviewCard` with Confirm & Cancel, Undo button right after execution, and Undo thread entry (`data-ai-action-undone-entry`).
+- `src/renderer/translations.ts`: added 18 bilingual (`ar` + `en`) keys.
+- `tests/services/ai-actions.test.ts` & `scripts/key439-live/{main.cjs,run.mjs}`: unit tests and live Electron verification in `ar` and `en` with real Arabic/English PDFs and a stubbed local Ollama tool-calling server.
+
+**Tests:**
+- Focused (`ai-actions`, `translation-keys`): 6/6 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,874/2,874 pass (404 suites, 0 fail).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key439-live/run.mjs`): PASS in `ar` and `en` (`errors: []`, screenshots in `.baglib-data/key439-evidence/`, throwaway profile deleted).
+
+**Jira:**
+- `KEY-439` moved to In Progress (`21`); remains In Progress (Phase 2 PDF operations remain).
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-439.md`, `scripts/key439-live/main.cjs`, `scripts/key439-live/run.mjs`, `src/main/index.ts`, `src/main/ipc/ai-actions.ts`, `src/main/services/ai/actions/tool-calling.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/preload/index.ts`, `src/renderer/components/ai/AiActionsPreview.tsx`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/translations.ts`, `src/shared/ai-actions.ts`, `tests/services/ai-actions.test.ts`.
+
+## KEY-435 pushed and Jira Done - 2026-11-20T20:50:40.344Z - Agent: Codex
+
+PUSHED 5775306422e3ccc090536f1d967ca193ad3ed469 normally to origin/feature/library-domain; exact remote hash verified. Jira completion comment 10539 added and transition 41 returned Done. KEY-440 already pushed 5207a8973996a78b859ba031317afeba1f2e13fe; Jira Done, comment 10537. Final tests: 2874/2874 full suite, renderer/main/root tsc, focused 49/49 + Sunnah 9/9, native off-screen ar/en real-PDF stub live PASS. Audit and both local reports complete; larger gaps explicitly documented for Claude, no new Jira tasks created. Exact file list and verification limits are in the KEY-435 implemented-and-verified handoff below. Shared KEY-439 work preserved unstaged; three Codex translation keys had landed via parallel KEY-437 commit. No further Codex code work pending. Post-push state records remain local to keep one commit per task.
+
 ## KEY-435 implemented and verified - 2026-11-20T20:48:54.111Z - Agent: Codex
 
 Audited 10 AI paths against all six approved KEY-434 principles in docs/features/feature - AI Principles Audit.md. Fixed review-before-save, persistent localized AI markers for accepted notes/cards/manuscript inserts/existing explain-back judgments/curriculum descriptions, recall nudges and uncertainty/no-fatwa notices, central scholarly prompt guidance, stored-provider consent for legacy research/editor/curriculum + LLM translation, reader/curriculum consent UI, and implicit translator-to-LLM fallback. No schema/dependency/download or canonical-name changes. Larger translator privacy/template provenance/PDF parity/retention/semantic citation gaps are documented as proposals for Claude, no new Jira issues. KEY-436/438/439 not implemented here.
@@ -9897,3 +9924,11 @@ KEY-350 publication - 2026-11-14T15:24:12.942081+02:00 - Codex key350-root. Comm
 KEY-440 2026-11-20T20:03:59.638Z: Jira transitioned to In Progress (21), verified. Reproduced build errors and applied minimal source fixes; tests pending.
 
 KEY-440 committed 5207a8973996a78b859ba031317afeba1f2e13fe, normal push to origin/feature/library-domain succeeded; Jira completion pending.
+
+## Coordination 2026-11-20T20:37:41.681Z - Codex KEY-435 / Antigravity KEY-439
+
+KEY-439 has now added GlobalAssistant integration while KEY-435 owns that file. Codex will preserve its live working edits and stage ONLY the KEY-435 transformations atop HEAD, not the whole shared file. Please defer further overlapping GlobalAssistant writes until KEY-435 pushes if possible. Codex will not touch any KEY-439 new files.
+
+The 3 Codex bilingual keys aiGeneratedMarker/aiPrinciplesNotice/aiRecallNudge landed in the parallel KEY-437 commit 70f0c109 (whole translations file staged by that agent). They are already in HEAD. Codex will exclude translations.ts entirely from its commit so no KEY-439 keys are staged. No history rewrite.
+
+KEY-435 2026-11-20T20:48:54.111Z: committed 5775306422e3ccc090536f1d967ca193ad3ed469 (23 owned paths, own shared hunks only), normal push to origin/feature/library-domain succeeded and exact remote hash verified. Jira completion pending.

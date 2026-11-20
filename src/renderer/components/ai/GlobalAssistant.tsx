@@ -22,6 +22,7 @@ import { openStudyNote } from '../../utils/study-navigation';
 import { useOpenStudyLink } from '../../utils/use-study-link';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { TranslationKey } from '../../translations';
+import { AiActionsPreviewCard, dispatchAiActionEvents, type ActionPlanMessage, type ActionUndoneMessage } from './AiActionsPreview';
 
 const AISettingsModal = React.lazy(() => import('./AISettingsModal').then(module => ({ default: module.AISettingsModal })));
 const StudyAssistant = React.lazy(() => import('../notes/StudyAssistant').then(module => ({ default: module.StudyAssistant })));
@@ -31,10 +32,10 @@ type QuickAction = ChatAction | 'cards';
 const chapterActions: [QuickAction, TranslationKey][] = [['summarize', 'researchAiPromptSummarize'], ['rewrite', 'researchAiPromptRewrite'], ['translate', 'researchAiPromptTranslate'], ['outline', 'researchAiPromptOutline'], ['review', 'researchAiPromptReview']];
 const studyActions: [QuickAction, TranslationKey][] = [['summarize', 'assistantActionSummarize'], ['explain', 'assistantActionExplain'], ['guide', 'assistantTaskGuide'], ['questions', 'assistantTaskQuestions'], ['terms', 'assistantTaskTerms'], ['cards', 'assistantTaskCards']];
 type CardsMessage = { id: number; role: 'cards'; cards: AssistantCard[]; state: Record<number, 'added' | 'skipped'> };
-type Message = AssistantMessage | CardsMessage;
+type Message = AssistantMessage | CardsMessage | ActionPlanMessage | ActionUndoneMessage;
 
 export function GlobalAssistant() {
-  const { t, lang, dir, books, openBookForReading } = useWorkspace();
+  const { t, lang, dir, viewMode, setViewMode } = useWorkspace();
   const assistant = useAssistant();
   const { open, setOpen, sources, setSources, page, draft, setDraft } = assistant;
   const messages = assistant.messages as Message[];
@@ -50,6 +51,7 @@ export function GlobalAssistant() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [studyTools, setStudyTools] = useState(false);
   const [explain, setExplain] = useState<ChatSourceRef | null>(null);
+  const [actionsMode, setActionsMode] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
   const chapter = usePage && page?.chapterId ? page : null;
@@ -101,6 +103,19 @@ export function GlobalAssistant() {
     setBusy(true);
     try {
       await chapter?.flush?.();
+      if (!action && actionsMode) {
+        const res = await window.electronAPI.aiActions.plan({
+          instruction: text.trim(),
+          language: lang === 'ar' ? 'ar' : 'en',
+          allowRemote,
+          context: { selectedText: selection, activeTarget: sources[0]?.target, activeLabel: sources[0]?.label },
+        });
+        if (res.ok && res.kind === 'plan') push({ id: id(), role: 'action-plan', plan: res.plan, status: 'pending' });
+        else if (res.ok && res.kind === 'unsupported') push({ id: id(), role: 'error', text: t('aiActionUnsupported') });
+        else if (res.ok && res.kind === 'message') push({ id: id(), role: 'assistant', text: res.text, citations: [], sourceCount: 0 });
+        else if (!res.ok) push({ id: id(), role: 'error', text: res.error === 'learning-mode-off' ? t('aiActionLearningModeOff') : errorText(res.error, res.detail) });
+        return;
+      }
       if (action === 'cards') {
         const passages = sources.filter(ref => !ref.target.startsWith('note:') && passageKind(ref.target)).map(ref => ({ target: ref.target, label: ref.label }));
         const noteIds = sources.filter(ref => ref.target.startsWith('note:')).map(ref => ref.target.slice(5).split('#')[0]);
@@ -139,6 +154,35 @@ export function GlobalAssistant() {
     setMessages(current => current.map(item => (item.id === message.id && item.role === 'cards' ? { ...item, state: { ...item.state, [index]: 'added' } } : item)));
   };
   const explainable = sources.filter(ref => passageKind(ref.target));
+  const confirmActionPlan = async (message: ActionPlanMessage) => {
+    const prevView = viewMode;
+    setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'running', error: undefined } : item)));
+    const res = await window.electronAPI.aiActions.confirm({ planId: message.plan.planId, language: lang === 'ar' ? 'ar' : 'en' });
+    if (!res.ok) {
+      setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'pending', error: t('aiActionError', { detail: res.detail || res.error }) } : item)));
+      return;
+    }
+    dispatchAiActionEvents(message.plan.steps.map(step => step.tool));
+    for (const target of res.openTargets) openSource(target);
+    setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'executed', executionId: res.executionId, previousView: prevView } : item)));
+  };
+  const cancelActionPlan = (message: ActionPlanMessage) => {
+    setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'cancelled' } : item)));
+  };
+  const undoActionPlan = async (message: ActionPlanMessage) => {
+    if (!message.executionId) return;
+    const res = await window.electronAPI.aiActions.undo({ executionId: message.executionId });
+    if (!res.ok) {
+      setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, error: t('aiActionError', { detail: res.detail || res.error }) } : item)));
+      return;
+    }
+    dispatchAiActionEvents(message.plan.steps.map(step => step.tool));
+    if (res.revertOpenSource && message.previousView) setViewMode(message.previousView as typeof viewMode);
+    setMessages(current => [
+      ...current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'undone' as const } : item)),
+      { id: id(), role: 'action-undone', text: t('aiActionUndoneEntry') },
+    ]);
+  };
 
   return <>
     <button type="button" onClick={() => setOpen(!open)} data-assistant-fab data-research-ai-fab aria-expanded={open} aria-label={t('researchAiButton')} title={t('researchAiButton')}
@@ -196,6 +240,8 @@ export function GlobalAssistant() {
           <p className="max-w-[260px] leading-relaxed">{chapter ? t('researchAiSelectionHint') : t('assistantChatEmpty')}</p>
         </div>}
         {messages.map(message => {
+          if (message.role === 'action-plan') return <AiActionsPreviewCard key={message.id} message={message} t={t} onConfirm={item => void confirmActionPlan(item)} onCancel={cancelActionPlan} onUndo={item => void undoActionPlan(item)} />;
+          if (message.role === 'action-undone') return <div key={message.id} data-ai-action-undone-entry className="me-4 rounded-xl border border-subtle bg-surface px-3 py-2 text-[11px] text-muted">{message.text}</div>;
           if (message.role === 'cards') return <div key={message.id} data-research-ai-message="cards" className="me-4 space-y-2 rounded-xl border border-subtle bg-canvas p-3 text-xs">
             <span className="text-[10px] font-semibold text-muted">{t('assistantCardsTitle')}</span>
             {message.cards.map((card, index) => <div key={index} className="rounded-lg border border-subtle bg-surface p-2">
@@ -246,6 +292,8 @@ export function GlobalAssistant() {
           </div>
         </div>}
         <div className="mb-1.5 flex flex-wrap gap-1" role="group" aria-label={t('researchAiQuickActions')}>
+          <button type="button" data-assistant-actions-mode aria-pressed={actionsMode} onClick={() => setActionsMode(v => !v)} title={t('aiActionsModeHint')}
+            className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${actionsMode ? 'border-primary bg-primary/15 font-semibold text-primary-text' : 'border-subtle bg-canvas hover:border-primary/50 hover:text-primary-text'}`}>{t('aiActionsMode')}</button>
           {actions.map(([key, labelKey]) => <button key={key} type="button" disabled={busy} onMouseDown={event => event.preventDefault()} onClick={() => void send(draft, key, t(labelKey))} data-research-ai-action={key}
             className="rounded-full border border-subtle bg-canvas px-2.5 py-0.5 text-[11px] transition-colors hover:border-primary/50 hover:text-primary-text disabled:opacity-40">{t(labelKey)}</button>)}
         </div>
