@@ -31,6 +31,7 @@ function TemplateCard({ template, onUse, onCustomize, onRemove }: { template: Ga
         <h4 dir="auto" className="font-display text-base font-bold leading-snug break-words">{template.name}</h4>
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-text-muted">
           <Chip label={t(template.kind === 'research' ? 'pathwayKindResearch' : 'pathwayKindCurriculum')} />
+          {template.aiGenerated && <Chip data-template-ai-generated label={t('aiGeneratedMarker')} />}
           <span>{t('pathwayTemplateSteps', { steps: summary.steps })}</span>
         </div>
         {summary.sections.length > 0 && <p dir="auto" className="text-xs leading-relaxed text-text-muted">{summary.sections.join(' · ')}</p>}

@@ -23,7 +23,7 @@ export interface Pathway { id: string; name: string; description: string; kind: 
 export interface PathwayDetail extends Pathway { items: PathwayItem[] }
 export interface PathwayInput { id?: string; name: string; description: string; kind: PathwayKind; outline?: string }
 export interface PathwayItemInput { pathwayId: string; section: string; kind: 'resource' | 'link'; reference?: string; title: string; url?: string }
-export interface PathwayTemplate { id: string; name: string; kind: PathwayKind; outline: string }
+export interface PathwayTemplate { id: string; name: string; kind: PathwayKind; outline: string; aiGenerated?: boolean }
 
 export interface PathwaysAPI {
   list(): Promise<Pathway[]>;
@@ -100,5 +100,5 @@ export function validateTemplate(input: unknown): Omit<PathwayTemplate, 'id'> {
   if (!value || typeof value !== 'object' || !PATHWAY_KINDS.includes(value.kind as PathwayKind)) throw new Error('invalid-request');
   const outline = required(value.outline, 20_000);
   if (!parseOutline(outline).length) throw new Error('invalid-request');
-  return { name: required(value.name, 200), kind: value.kind as PathwayKind, outline };
+  return { name: required(value.name, 200), kind: value.kind as PathwayKind, outline, ...(value.aiGenerated === true ? { aiGenerated: true } : {}) };
 }

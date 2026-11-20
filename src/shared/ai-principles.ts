@@ -5,3 +5,10 @@ export const AI_SCHOLARLY_POLICY = 'Never issue a religious ruling or fatwa. Ref
 export function markAiGenerated(text: string, label: string): string {
   return label + '\n\n' + text;
 }
+
+const AI_MARKER_RE = /(?:AI-generated|نص مول[ّ]?د بالذكاء الاصطناعي|\(Auto-generated\)|سؤال مول[ّ]?د بالذكاء الاصطناعي)/u;
+
+/** Detect an existing AI-generated marker in saved text/metadata without modifying canonical names. */
+export function hasAiGeneratedMarker(text: string | null | undefined): boolean {
+  return typeof text === 'string' && AI_MARKER_RE.test(text);
+}

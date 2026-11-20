@@ -26,7 +26,7 @@ const control = 'rounded-lg border border-border bg-surface px-2.5 py-2 text-sm 
 const ico = 'size-4';
 const TAB_LABEL = { all: 'pathwaysTabAll', research: 'pathwaysTabResearch', curriculum: 'pathwaysTabCurricula', templates: 'pathwaysTabTemplates' } as const;
 
-type Draft = { name: string; kind: PathwayKind; outline: string };
+type Draft = { name: string; kind: PathwayKind; outline: string; aiGenerated?: boolean };
 type OpenItem = (item: PathwayItem) => void;
 
 function ProgressBar({ done, total, label, className = '' }: { done: number; total: number; label: string; className?: string }) {
@@ -42,7 +42,7 @@ function Creator({ templates, setTemplates, draft, onCreated, onError }: { templ
   const [outline, setOutline] = useState(draft?.outline ?? '');
   const [subject, setSubject] = useState('');
   const [drafting, setDrafting] = useState(false);
-  const [drafted, setDrafted] = useState(false);
+  const [drafted, setDrafted] = useState(Boolean(draft?.aiGenerated));
   const consent = useRemoteConsent();
   const { modeFor } = useLearningMode();
   const learningMode = modeFor('notes');
@@ -66,7 +66,7 @@ function Creator({ templates, setTemplates, draft, onCreated, onError }: { templ
     } catch { onError(); }
   };
   const remember = async () => {
-    try { const saved = await window.electronAPI.pathways.saveTemplate({ name, kind, outline }); setTemplates(current => [...current, saved]); }
+    try { const saved = await window.electronAPI.pathways.saveTemplate({ name, kind, outline, ...(drafted ? { aiGenerated: true } : {}) }); setTemplates(current => [...current, saved]); }
     catch { onError(); }
   };
 
@@ -396,13 +396,13 @@ export function PathwaysView() {
 
   const createFromTemplate = async (template: GalleryTemplate) => {
     try {
-      const created = await window.electronAPI.pathways.save(copyTemplate(template));
+      const created = await window.electronAPI.pathways.save(copyTemplate(template, undefined, t('aiGeneratedMarker')));
       setFailed(false); setTab('all');
       await load(created.id);
       setNotice(t('pathwayCreatedFromTemplate', { name: created.name }));
     } catch { fail(); }
   };
-  const customize = (template: GalleryTemplate) => { setDraft({ name: template.name, kind: template.kind, outline: template.outline, nonce: Date.now() }); window.setTimeout(() => document.querySelector('[data-pathway-creator]')?.scrollIntoView({ behavior: 'smooth' }), 50); };
+  const customize = (template: GalleryTemplate) => { setDraft({ name: template.name, kind: template.kind, outline: template.outline, ...(template.aiGenerated ? { aiGenerated: true } : {}), nonce: Date.now() }); window.setTimeout(() => document.querySelector('[data-pathway-creator]')?.scrollIntoView({ behavior: 'smooth' }), 50); };
   const removeTemplate = (template: GalleryTemplate) => { void window.electronAPI.pathways.removeTemplate(template.id).then(() => { setTemplates(current => current.filter((row: PathwayTemplate) => row.id !== template.id)); showToast({ message: t('feedbackRemoved') }); }).catch(fail); };
   const saveAsTemplate = async (pathway: PathwayDetail) => {
     try {

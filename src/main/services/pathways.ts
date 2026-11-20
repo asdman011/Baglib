@@ -4,6 +4,7 @@ import { StudyPlannerRepository } from '../database/repositories/study-planner.r
 import { parseBookTarget } from '../../shared/study-notes';
 import { SqliteSettingsRepository } from '../database/repositories/settings.repository';
 import { parseOutline, type Pathway, type PathwayDetail, type PathwayInput, type PathwayItem, type PathwayItemInput, type PathwayTemplate, type ReferenceFormat } from '../../shared/pathways';
+import { hasAiGeneratedMarker } from '../../shared/ai-principles';
 
 const TEMPLATES_KEY = 'pathways.templates.v1';
 const KINDS = `c.collection_type IN ('research','curriculum')`;
@@ -25,11 +26,14 @@ const bibtex = (items: Citation[]) => items.map(item => {
     .filter(([, value]) => value).map(([name, value]) => `  ${name} = {${braces(value!)}}`);
   return `@${item.url ? 'online' : item.author || item.publisher ? 'book' : 'misc'}{${item.key},\n${fields.join(',\n')}\n}`;
 }).join('\n\n');
-const markdown = (name: string, items: Citation[]) => [`# ${name}`, '', ...items.map(item => `- ${[item.author, item.title, item.publisher, item.year, item.note].filter(Boolean).join('. ')}${item.url ? ` <${item.url}>` : ''}`)].join('\n');
+const markdown = (name: string, items: Citation[], aiMarker?: string) => [`# ${name}`, ...(aiMarker ? ['', `> ${aiMarker}`] : []), '', ...items.map(item => `- ${[item.author, item.title, item.publisher, item.year, item.note].filter(Boolean).join('. ')}${item.url ? ` <${item.url}>` : ''}`)].join('\n');
 
 /** Bibliography text. Citation fields are copied as stored, so titles keep their spelling. */
-export function referenceText(name: string, items: Citation[], format: ReferenceFormat): string {
-  return `${format === 'bibtex' ? bibtex(items) : markdown(name, items)}\n`;
+export function referenceText(name: string, items: Citation[], format: ReferenceFormat, aiMarker?: string): string {
+  if (format === 'bibtex') {
+    return `${aiMarker ? `% ${aiMarker}\n\n` : ''}${bibtex(items)}\n`;
+  }
+  return `${markdown(name, items, aiMarker)}\n`;
 }
 
 /** A pathway is a typed `collection`; its steps are planner tasks, so status has one owner. See ADR-009. */
@@ -133,8 +137,8 @@ export class PathwayService {
     });
   }
   exportText(id: string, format: ReferenceFormat): { name: string; text: string } {
-    const { name } = this.get(id);
-    return { name, text: referenceText(name, this.citations(id), format) };
+    const { name, description } = this.get(id);
+    return { name, text: referenceText(name, this.citations(id), format, hasAiGeneratedMarker(description) ? description.trim() : undefined) };
   }
 
   templates(): PathwayTemplate[] { return this.settings.get<PathwayTemplate[]>(TEMPLATES_KEY) ?? []; }

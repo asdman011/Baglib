@@ -1,3 +1,23 @@
+## KEY-443: Keep AI-generated marker on saved curriculum templates & older saved material (AI Task 8, epic KEY-434) — 2026-11-21T00:19+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/ai-principles.ts`: added `hasAiGeneratedMarker` to detect localized AI-generated markers without modifying canonical names.
+- `src/shared/pathways.ts` & `src/shared/pathway-model.ts`: added optional `aiGenerated?: boolean` to `PathwayTemplate` (persisted in existing `pathways.templates.v1` JSON setting, no DB schema change), preserved in `validateTemplate`, `copyTemplate`, and `templateFromPathway`.
+- `src/main/services/pathways.ts`: updated `referenceText` and `exportText` to include the AI-generated marker in Markdown and BibTeX exports when `hasAiGeneratedMarker(description)` is true, never for user-written pathways.
+- `src/renderer/components/dashboard/{PathwaysView,PathwayTemplateGallery}.tsx`: preserved `aiGenerated` across template save, customize, and instantiation; rendered `aiGeneratedMarker` chip (`data-template-ai-generated`) on AI-generated templates.
+- `tests/services/curriculum-provenance.test.ts`: verified template save/reload/instantiation, pathway Markdown/BibTeX export, and older study notes reload/export in `ar` and `en`.
+
+**Tests:**
+- Focused (`curriculum-provenance`, `ai-principles`, `translation-keys`): 10/10 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,902/2,902 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass.
+
+**Jira:**
+- `KEY-443` In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/agent-ops/reports/KEY-443.md`, `src/main/services/pathways.ts`, `src/renderer/components/dashboard/PathwayTemplateGallery.tsx`, `src/renderer/components/dashboard/PathwaysView.tsx`, `src/shared/ai-principles.ts`, `src/shared/pathway-model.ts`, `src/shared/pathways.ts`, `tests/services/curriculum-provenance.test.ts`.
+
 ## KEY-438: Cited answers, unsourced markers & AI-generated card provenance (AI Task 4, epic KEY-434) — 2026-11-21T00:10+02:00 - Agent: Antigravity
 
 **Done:**

@@ -60,6 +60,8 @@ User explicitly authorizes one owned-file commit and normal push per task. KEY-4
 
 ## Recent Agent Updates
 
+- [2026-11-21T00:19+02:00, Agent: Antigravity KEY-443] VERIFIED AI-generated marker preservation on saved curriculum templates (`pathways.templates.v1`, `copyTemplate`, `templateFromPathway`, `PathwayTemplateGallery`), pathway Markdown/BibTeX exports, and older saved material (`exportableStudyNotes`), without labeling user-written text as AI or changing DB schema. 10/10 focused, 2,902/2,902 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass.
+
 - [2026-11-21T00:10+02:00, Agent: Antigravity KEY-438] VERIFIED cited-answer pipeline (`src/shared/cited-answer.ts` reused by `pdf-editor/cited-answer.ts`, `study-assistant`, `assistant-chat`, `research-editor-ai`, `ai-research.service`), unsourced statement badges, ruling/no-fatwa policy, translation-not-quotation badge, and `'ai-generated'` card provenance (`memorizing: false` until accepted). 43/43 focused, 2,899/2,899 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass, live Electron `ar`/`en` PASS (`stubCallsCount: 7`, 0 errors).
 
 - [2026-11-20T23:48+02:00, Agent: Antigravity (continuing Codex) KEY-442] VERIFIED shared AI privacy/consent/error surface (`isLocalAi` custom loopback parity, `AiPrivacyControls`, `AiOperationError`, `authorizeAiSender`, `pdf-collab:ask` + `PdfReviewPanel` KEY-436 learning mode integration). 33/33 focused, 2,893/2,893 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass, live Electron `ar`/`en` PASS (`stubCallsCount: 2`, 0 errors).

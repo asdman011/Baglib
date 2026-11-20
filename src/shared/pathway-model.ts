@@ -1,4 +1,5 @@
 import { parseOutline, type PathwayInput, type PathwayItem, type PathwayKind, type PathwayTemplate } from './pathways';
+import { hasAiGeneratedMarker } from './ai-principles';
 
 /**
  * Pure helpers for the Research space (KEY-306): copying a template into a pathway, turning a pathway back into a
@@ -23,10 +24,10 @@ export function summarizeOutline(outline: string): TemplateOutlineSummary {
 }
 
 /** "Create from template": the exact input the existing save call needs. The template itself is never changed. */
-export function copyTemplate(template: Pick<PathwayTemplate, 'name' | 'kind' | 'outline'>, name?: string): PathwayInput {
+export function copyTemplate(template: Pick<PathwayTemplate, 'name' | 'kind' | 'outline' | 'aiGenerated'>, name?: string, aiMarker?: string): PathwayInput {
   const cleaned = (name ?? '').trim() || template.name.trim();
   if (!cleaned || !parseOutline(template.outline).length) throw new Error('invalid-request');
-  return { name: cleaned.slice(0, 200), description: '', kind: template.kind, outline: template.outline };
+  return { name: cleaned.slice(0, 200), description: template.aiGenerated && aiMarker ? aiMarker : '', kind: template.kind, outline: template.outline };
 }
 
 const oneLine = (value: string, max: number) => value.replace(/\s+/gu, ' ').replace(/^(?:#+|[-*•]|\d+[.)])\s*/u, '').trim().slice(0, max);
@@ -45,11 +46,11 @@ export function outlineFromItems(items: Pick<PathwayItem, 'section' | 'kind' | '
 }
 
 /** "Save as my template": structure only. Resources, links, pins and progress are not part of a template. */
-export function templateFromPathway(pathway: { name: string; kind: PathwayKind; items: Pick<PathwayItem, 'section' | 'kind' | 'title'>[] }): Omit<PathwayTemplate, 'id'> {
+export function templateFromPathway(pathway: { name: string; description?: string; kind: PathwayKind; items: Pick<PathwayItem, 'section' | 'kind' | 'title'>[] }): Omit<PathwayTemplate, 'id'> {
   const outline = outlineFromItems(pathway.items);
   const name = pathway.name.trim().slice(0, 200);
   if (!name || !parseOutline(outline).length) throw new Error('invalid-request');
-  return { name, kind: pathway.kind, outline };
+  return { name, kind: pathway.kind, outline, ...(hasAiGeneratedMarker(pathway.description) ? { aiGenerated: true } : {}) };
 }
 
 export interface SectionProgress { section: string; done: number; total: number }
