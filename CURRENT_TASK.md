@@ -1,3 +1,23 @@
+## KEY-444: AI-assisted card retention stats & PDF digest try-first nudge (AI Task 9, epic KEY-434) — 2026-11-21T00:27+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/statistics-workspace.ts` & `src/main/services/statistics/workspace-statistics.service.ts`: added `AiRetentionComparison` (`aiAssisted` vs `other`) querying existing `knowledge`, `card_detail`, `srs_state` (FSRS `stability`, `lapses`, `reps`), `srs_review_log` (`recallRate`), and `knowledge_tag`/`tag` (`'ai-generated'`), with `minimumRecommendedSample: 10` and zero new analytics storage.
+- `src/renderer/components/statistics/StatisticsWorkspace.tsx`: rendered the AI-assisted vs other cards retention comparison (`data-ai-retention-comparison`) with an honest sample-size note (`data-ai-retention-sample-note`) and no claims that summaries improve memory.
+- `src/renderer/components/reader/PdfReviewPanel.tsx`: added an optional, skippable "Try first (optional)" nudge (`data-pdf-digest-try-first`) with `aiRecallNudge` and attempt scratchpad in PDF digests.
+- `src/renderer/translations.ts`: added 11 bilingual (`ar` + `en`) keys.
+- `tests/services/ai-retention-stats.test.ts`: verified FSRS retention comparison math and bilingual strings.
+
+**Tests:**
+- Focused (`ai-retention-stats`, `translation-keys`): 4/4 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,904/2,904 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass.
+
+**Jira:**
+- `KEY-444` In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/agent-ops/reports/KEY-444.md`, `src/main/services/statistics/workspace-statistics.service.ts`, `src/renderer/components/reader/PdfReviewPanel.tsx`, `src/renderer/components/statistics/StatisticsWorkspace.tsx`, `src/renderer/translations.ts`, `src/shared/statistics-workspace.ts`, `tests/services/ai-retention-stats.test.ts`.
+
 ## KEY-443: Keep AI-generated marker on saved curriculum templates & older saved material (AI Task 8, epic KEY-434) — 2026-11-21T00:19+02:00 - Agent: Antigravity
 
 **Done:**

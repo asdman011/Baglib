@@ -60,6 +60,8 @@ User explicitly authorizes one owned-file commit and normal push per task. KEY-4
 
 ## Recent Agent Updates
 
+- [2026-11-21T00:27+02:00, Agent: Antigravity KEY-444] VERIFIED AI-assisted vs other card retention comparison in `StatisticsWorkspace` using existing FSRS `srs_state`/`srs_review_log`/`knowledge_tag` (`'ai-generated'`) with honest sample-size note (no new storage, no summary memory claims) and optional "Try first" nudge in `PdfReviewPanel`. 4/4 focused, 2,904/2,904 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass.
+
 - [2026-11-21T00:19+02:00, Agent: Antigravity KEY-443] VERIFIED AI-generated marker preservation on saved curriculum templates (`pathways.templates.v1`, `copyTemplate`, `templateFromPathway`, `PathwayTemplateGallery`), pathway Markdown/BibTeX exports, and older saved material (`exportableStudyNotes`), without labeling user-written text as AI or changing DB schema. 10/10 focused, 2,902/2,902 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass.
 
 - [2026-11-21T00:10+02:00, Agent: Antigravity KEY-438] VERIFIED cited-answer pipeline (`src/shared/cited-answer.ts` reused by `pdf-editor/cited-answer.ts`, `study-assistant`, `assistant-chat`, `research-editor-ai`, `ai-research.service`), unsourced statement badges, ruling/no-fatwa policy, translation-not-quotation badge, and `'ai-generated'` card provenance (`memorizing: false` until accepted). 43/43 focused, 2,899/2,899 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass, live Electron `ar`/`en` PASS (`stubCallsCount: 7`, 0 errors).

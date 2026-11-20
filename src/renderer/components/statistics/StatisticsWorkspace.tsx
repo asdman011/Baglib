@@ -111,6 +111,49 @@ export function StatisticsWorkspace() {
           <SeriesChart title={t('statisticsForecast')} points={reviewForecast(snapshot.due, today)} unit={t('statisticsDue')} />
         </div>
         <p className="text-xs text-text-muted">{t('statisticsForecastHint')}</p>
+        {snapshot.aiRetention && (
+          <div data-ai-retention-comparison className="rounded-2xl border border-border bg-canvas/50 p-4 space-y-3">
+            <h3 className="text-sm font-bold">{t('statisticsAiRetentionTitle')}</h3>
+            <div className="grid sm:grid-cols-2 gap-3 text-xs">
+              {([
+                ['ai', t('statisticsAiRetentionAiGroup'), snapshot.aiRetention.aiAssisted],
+                ['other', t('statisticsAiRetentionOtherGroup'), snapshot.aiRetention.other],
+              ] as const).map(([key, label, group]) => (
+                <div key={key} data-ai-retention-group={key} className="rounded-xl border border-border bg-surface p-3 space-y-1.5">
+                  <div className="font-semibold text-sm">{label}</div>
+                  <div className="flex justify-between gap-2 text-text-muted">
+                    <span>{t('statisticsAiRetentionReviewedCards')}</span>
+                    <strong className="tabular-nums text-text">{number(group.reviewedCards)} / {number(group.cards)}</strong>
+                  </div>
+                  <div className="flex justify-between gap-2 text-text-muted">
+                    <span>{t('statisticsAiRetentionRecallRate')}</span>
+                    <strong className="tabular-nums text-text">{group.recallRate !== null ? `${number(Math.round(group.recallRate * 100))}%` : '—'}</strong>
+                  </div>
+                  <div className="flex justify-between gap-2 text-text-muted">
+                    <span>{t('statisticsAiRetentionStability')}</span>
+                    <strong className="tabular-nums text-text">{group.avgStability !== null ? `${number(group.avgStability)} ${t('statisticsDaysUnit')}` : '—'}</strong>
+                  </div>
+                  <div className="flex justify-between gap-2 text-text-muted">
+                    <span>{t('statisticsAiRetentionLapses')}</span>
+                    <strong className="tabular-nums text-text">{group.avgLapses !== null ? number(group.avgLapses) : '—'}</strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p data-ai-retention-sample-note className="text-xs text-text-muted leading-relaxed">
+              {t(
+                snapshot.aiRetention.aiAssisted.reviewedCards < snapshot.aiRetention.minimumRecommendedSample ||
+                snapshot.aiRetention.other.reviewedCards < snapshot.aiRetention.minimumRecommendedSample
+                  ? 'statisticsAiRetentionSmallSample'
+                  : 'statisticsAiRetentionSampleNote',
+                {
+                  aiCards: snapshot.aiRetention.aiAssisted.reviewedCards,
+                  otherCards: snapshot.aiRetention.other.reviewedCards,
+                },
+              )}
+            </p>
+          </div>
+        )}
       </StatisticsSection>
     </>}
     <StatisticsSection id="study" title={t('statisticsStudy')} icon={GraduationCap}>

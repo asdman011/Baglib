@@ -2,6 +2,23 @@ import { civilDate, addCivilDays, parseCivilDate } from './study-planner';
 
 export type StatisticsRange = 'week' | 'month' | 'year' | 'all';
 export interface ChartPoint { date: string; value: number }
+export interface AiRetentionGroupStats {
+  cards: number;
+  reviewedCards: number;
+  reviews: number;
+  retainedReviews: number;
+  recallRate: number | null;
+  avgStability: number | null;
+  totalLapses: number;
+  avgLapses: number | null;
+}
+
+export interface AiRetentionComparison {
+  aiAssisted: AiRetentionGroupStats;
+  other: AiRetentionGroupStats;
+  minimumRecommendedSample: number;
+}
+
 export interface StatisticsSnapshot {
   reading: { date: string; seconds: number; pages: number; activeBooks: number }[];
   knowledge: { date: string; notes: number; cards: number }[];
@@ -11,6 +28,7 @@ export interface StatisticsSnapshot {
   subjects: { ar: string | null; en: string | null; count: number }[];
   inProgress: number;
   completed: number;
+  aiRetention?: AiRetentionComparison;
 }
 
 export function buildTimeline(points: ChartPoint[], range: StatisticsRange, today = civilDate(new Date())): ChartPoint[] {
