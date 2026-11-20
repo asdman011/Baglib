@@ -216,20 +216,184 @@ function tableEnd(lines: readonly SourceLine[], index: number): number {
 }
 
 /** The table whose lines contain `offset`, with the offsets to replace; null outside tables and in code fences. */
-export function tableAt(content: string, offset: number): { start: number; end: number; table: MarkdownTable } | null {
-  if (offset < 0 || offset > content.length) return null;
+export interface MarkdownTableSpan {
+  start: number;
+  end: number;
+  fromLine: number;
+  toLine: number;
+  table: MarkdownTable;
+}
+
+/** All pipe tables in `content` with their character offsets and 1-based line numbers; skips fenced code blocks. */
+export function findMarkdownTables(content: string): MarkdownTableSpan[] {
   const lines = sourceLines(content);
+  const tables: MarkdownTableSpan[] = [];
   for (let index = 0; index + 1 < lines.length; index++) {
     const line = lines[index];
     if (line.fenced || lines[index + 1].fenced || !startsTable(line.text, lines[index + 1].text)) continue;
     const last = tableEnd(lines, index);
     const start = line.start;
     const end = lines[last].end;
-    if (offset >= start && offset <= end) {
-      const table = parseMarkdownTable(lines.slice(index, last + 1).map(item => item.text).join('\n'));
-      if (table) return { start, end, table };
+    const table = parseMarkdownTable(lines.slice(index, last + 1).map(item => item.text).join('\n'));
+    if (table) {
+      tables.push({ start, end, fromLine: index + 1, toLine: last + 1, table });
     }
     index = last;
+  }
+  return tables;
+}
+
+/** The table whose lines contain `offset`, with the offsets to replace; null outside tables and in code fences. */
+export function tableAt(content: string, offset: number): { start: number; end: number; table: MarkdownTable } | null {
+  if (offset < 0 || offset > content.length) return null;
+  const hit = findMarkdownTables(content).find(item => offset >= item.start && offset <= item.end);
+  return hit ? { start: hit.start, end: hit.end, table: hit.table } : null;
+}
+
+interface CellSpan {
+  rawStart: number;
+  rawEnd: number;
+  start: number;
+  end: number;
+}
+
+/** Character spans (relative to `line`) for each cell in a Markdown table row, respecting `\|` escapes and optional outer pipes. */
+function splitRowSpans(line: string): CellSpan[] {
+  const leadingSpaces = line.length - line.trimStart().length;
+  const trimmed = line.trim();
+  if (!trimmed) return [];
+  const base = leadingSpaces;
+  const rawSegments: { rawStart: number; rawEnd: number }[] = [];
+  let segStart = 0;
+  for (let index = 0; index < trimmed.length; index++) {
+    const char = trimmed[index];
+    if (char === '\\' && trimmed[index + 1] === '|') {
+      index++;
+      continue;
+    }
+    if (char === '|') {
+      rawSegments.push({ rawStart: base + segStart, rawEnd: base + index });
+      segStart = index + 1;
+    }
+  }
+  rawSegments.push({ rawStart: base + segStart, rawEnd: base + trimmed.length });
+  if (trimmed.startsWith('|')) rawSegments.shift();
+  if (trimmed.endsWith('|') && !isEscaped(trimmed, trimmed.length - 1)) rawSegments.pop();
+
+  return rawSegments.map(({ rawStart, rawEnd }) => {
+    const raw = line.slice(rawStart, rawEnd);
+    const leftTrim = raw.length - raw.trimStart().length;
+    const rightTrim = raw.length - raw.trimEnd().length;
+    if (leftTrim + rightTrim >= raw.length) {
+      const caret = rawStart + (raw.startsWith(' ') ? 1 : 0);
+      return { rawStart, rawEnd, start: caret, end: caret };
+    }
+    return {
+      rawStart,
+      rawEnd,
+      start: rawStart + leftTrim,
+      end: rawEnd - rightTrim,
+    };
+  });
+}
+
+function cellSpanAtLine(lineStart: number, lineText: string, col: number): { anchor: number; head: number } {
+  const spans = splitRowSpans(lineText);
+  if (!spans.length) return { anchor: lineStart, head: lineStart };
+  const clampedCol = clamp(col, 0, spans.length - 1);
+  const span = spans[clampedCol];
+  return { anchor: lineStart + span.start, head: lineStart + span.end };
+}
+
+/** Returns the document selection range for cell `(row, col)` (`row = -1` for header, `0..rows.length-1` for body) in the table starting at `tableStart`. */
+export function cellOffsetInTable(content: string, tableStart: number, row: number, col: number): { anchor: number; head: number } | null {
+  const hit = findMarkdownTables(content).find(item => item.start === tableStart);
+  if (!hit) return null;
+  const lines = sourceLines(content);
+  const targetLineIndex = (hit.fromLine - 1) + (row < 0 ? 0 : row + 2);
+  const targetLine = lines[targetLineIndex];
+  if (!targetLine) return null;
+  return cellSpanAtLine(targetLine.start, targetLine.text, col);
+}
+
+/**
+ * Moves the caret to the next (`direction = 1`) or previous (`direction = -1`) cell of the table at `offset`.
+ * Pressing Tab on the last cell of the table appends a new empty row and places the caret in its first cell.
+ * Returns `null` when `offset` is outside a table or when Shift+Tab is pressed on the very first header cell.
+ */
+export function moveTableCell(content: string, offset: number, direction: 1 | -1): { content: string; anchor: number; head: number } | null {
+  if (offset < 0 || offset > content.length) return null;
+  const hit = findMarkdownTables(content).find(item => offset >= item.start && offset <= item.end);
+  if (!hit) return null;
+
+  const lines = sourceLines(content);
+  const firstLineIdx = hit.fromLine - 1;
+  const lastLineIdx = hit.toLine - 1;
+  let lineIdx = firstLineIdx;
+  for (let i = firstLineIdx; i <= lastLineIdx; i++) {
+    if (offset >= lines[i].start && offset <= lines[i].end) {
+      lineIdx = i;
+      break;
+    }
+  }
+
+  const relLine = lineIdx - firstLineIdx;
+  const cols = columnCount(hit.table);
+  let row: number;
+  let col: number;
+
+  if (relLine === 0) {
+    row = -1;
+    const spans = splitRowSpans(lines[lineIdx].text);
+    const localOffset = offset - lines[lineIdx].start;
+    col = spans.findIndex(span => localOffset <= span.rawEnd);
+    if (col < 0) col = Math.max(0, spans.length - 1);
+  } else if (relLine === 1) {
+    // Delimiter line: Tab goes to first body row (or appends one), Shift+Tab goes to last header cell.
+    if (direction === 1) {
+      row = -1;
+      col = cols - 1;
+    } else {
+      const target = cellSpanAtLine(lines[firstLineIdx].start, lines[firstLineIdx].text, cols - 1);
+      return { content, ...target };
+    }
+  } else {
+    row = relLine - 2;
+    const spans = splitRowSpans(lines[lineIdx].text);
+    const localOffset = offset - lines[lineIdx].start;
+    col = spans.findIndex(span => localOffset <= span.rawEnd);
+    if (col < 0) col = Math.max(0, spans.length - 1);
+  }
+
+  if (direction === 1) {
+    if (col + 1 < cols) {
+      const target = cellOffsetInTable(content, hit.start, row, col + 1);
+      return target ? { content, ...target } : null;
+    }
+    if (row + 1 < hit.table.rows.length) {
+      const target = cellOffsetInTable(content, hit.start, row + 1, 0);
+      return target ? { content, ...target } : null;
+    }
+    // Append a new empty row at the end of the table.
+    const nextTable = insertTableRow(hit.table, hit.table.rows.length);
+    const formatted = formatMarkdownTable(nextTable);
+    const nextContent = content.slice(0, hit.start) + formatted + content.slice(hit.end);
+    const target = cellOffsetInTable(nextContent, hit.start, nextTable.rows.length - 1, 0);
+    return target ? { content: nextContent, ...target } : null;
+  }
+
+  // direction === -1
+  if (col - 1 >= 0) {
+    const target = cellOffsetInTable(content, hit.start, row, col - 1);
+    return target ? { content, ...target } : null;
+  }
+  if (row > 0) {
+    const target = cellOffsetInTable(content, hit.start, row - 1, cols - 1);
+    return target ? { content, ...target } : null;
+  }
+  if (row === 0) {
+    const target = cellOffsetInTable(content, hit.start, -1, cols - 1);
+    return target ? { content, ...target } : null;
   }
   return null;
 }

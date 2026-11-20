@@ -43,7 +43,7 @@ export const QuickNoteScratchpad: React.FC<{
 }> = ({ initialNote, initialContent, onSaved, autoFocus, draftKey: ownDraftKey, companion, lineStamp }) => {
   const { books, dir, t, lang, refreshTags } = useWorkspace();
   const { openLink } = useOpenStudyLink();
-  const slashLabels = { link: t('slashLink'), card: t('slashCard'), quran: t('slashQuran'), hadith: t('slashHadith'), poem: t('slashPoem'), heading: t('studyHeading'), quote: t('studyQuote'), list: t('studyList'), date: t('slashDate'), salla: t('slashSalla'), azza: t('slashAzza'), subhanahu: t('slashSubhanahu'), radiyaHu: t('slashRadiyaHu'), radiyaHa: t('slashRadiyaHa'), rahimahu: t('slashRahimahu') };
+  const slashLabels = { link: t('slashLink'), card: t('slashCard'), quran: t('slashQuran'), hadith: t('slashHadith'), poem: t('slashPoem'), heading: t('studyHeading'), quote: t('studyQuote'), list: t('studyList'), table: t('slashTable'), calloutNote: t('slashCalloutNote'), calloutTip: t('slashCalloutTip'), calloutWarning: t('slashCalloutWarning'), date: t('slashDate'), salla: t('slashSalla'), azza: t('slashAzza'), subhanahu: t('slashSubhanahu'), radiyaHu: t('slashRadiyaHu'), radiyaHa: t('slashRadiyaHa'), rahimahu: t('slashRahimahu') };
   const draftKey = ownDraftKey ?? (initialContent !== undefined ? 'study.capture.draft.v1' : DRAFT_KEY);
   const { notes } = useStudyNotes();
   const [title, setTitle] = useState(initialNote?.title || '');
@@ -220,7 +220,7 @@ export const QuickNoteScratchpad: React.FC<{
         wikiLangEn: t('slashWikiLangEn'),
         wikiLangToggle: t('slashWikiLangToggle'),
         wikiOffline: t('slashWikiOffline'),
-      }} slashLabels={slashLabels} dateText={() => { const today = new Date(); const hijri = calculateHijriDate(today); return `${today.toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'long' })} — ${lang === 'ar' ? hijri.formattedAr : hijri.formattedEn}`; }} onSave={() => void save()} />}
+      }} slashLabels={slashLabels} calloutLabels={{ note: t('calloutNote'), tip: t('calloutTip'), warning: t('calloutWarning'), ayah: t('calloutAyah'), hadith: t('calloutHadith'), poem: t('calloutPoem'), question: t('calloutQuestion'), summary: t('calloutSummary') }} dateText={() => { const today = new Date(); const hijri = calculateHijriDate(today); return `${today.toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'long' })} — ${lang === 'ar' ? hijri.formattedAr : hijri.formattedEn}`; }} onSave={() => void save()} />}
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <input data-scratchpad-tags aria-label={t('dashScratchpadTagsPlaceholder')} value={tagsInput} onChange={event => setTagsInput(event.target.value)} placeholder={t('dashScratchpadTagsPlaceholder')} className="rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs min-w-0" />
       <input aria-label={t('studyAliases')} value={aliasesInput} onChange={event => setAliasesInput(event.target.value)} placeholder={t('studyAliases')} className="rounded-lg border border-subtle bg-canvas px-3 py-2 text-xs min-w-0" />

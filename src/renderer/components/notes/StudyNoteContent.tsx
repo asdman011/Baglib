@@ -10,6 +10,7 @@ import { useOpenStudyLink, type LinkOpenOptions } from '../../utils/use-study-li
 import { previewStudyTarget, type StudyPreview } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { PARAGRAPH_ANCHOR, findParagraph, noteParagraphs, parseNoteTarget, stripParagraphAnchors } from '../../../shared/note-paragraphs';
+import { normalizeCalloutKind } from '../../../shared/note-callouts';
 
 // Corpus text does not change while the app runs; notes do, so they are never cached.
 const previewCache = new Map<string, StudyPreview | null>();
@@ -62,10 +63,11 @@ const calloutKeys: Record<string, TranslationKey> = {
 function formatted(text: string, t: (key: TranslationKey) => string): React.ReactNode {
   return text.split('\n').map((line, index) => {
     // Obsidian-style callout header `> [!ayah] Title`, and footnote definitions `[^1]: text`.
-    const callout = /^>\s*\[!([A-Za-z]+)\]\s*(.*)$/u.exec(line);
+    const callout = /^>\s*\[!([^\]\n]+)\]\s*(.*)$/u.exec(line);
     if (callout) {
-      const type = callout[1].toLowerCase();
-      return <React.Fragment key={index}>{index > 0 && '\n'}<span data-callout={type} className="inline-block border-s-2 border-amber-500 ps-2"><span className="rounded bg-amber-500/15 px-2 text-xs font-bold not-italic">{calloutKeys[type] ? t(calloutKeys[type]) : type}</span>{callout[2] && <span className="ms-2 font-bold">{callout[2]}</span>}</span></React.Fragment>;
+      const rawType = callout[1].trim();
+      const type = normalizeCalloutKind(rawType) ?? rawType.toLowerCase();
+      return <React.Fragment key={index}>{index > 0 && '\n'}<span data-callout={type} className="inline-block border-s-2 border-amber-500 ps-2"><span className="rounded bg-amber-500/15 px-2 text-xs font-bold not-italic">{calloutKeys[type] ? t(calloutKeys[type]) : rawType}</span>{callout[2] && <span className="ms-2 font-bold">{callout[2]}</span>}</span></React.Fragment>;
     }
     const footnote = /^\[\^([\w-]{1,20})\]:\s*(.*)$/u.exec(line);
     if (footnote) return <React.Fragment key={index}>{index > 0 && '\n'}<span data-footnote={footnote[1]} className="text-xs text-muted"><sup className="me-1">{footnote[1]}</sup>{footnote[2]}</span></React.Fragment>;

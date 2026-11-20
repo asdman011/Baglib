@@ -1,3 +1,30 @@
+## KEY-243: CodeMirror 6 study-note editor upgrades (Option A) — 2026-11-20 - Agent: Antigravity
+
+**Done:**
+- `src/shared/markdown-table.ts`: added `findMarkdownTables`, `cellOffsetInTable`, and `moveTableCell` for `Tab` / `Shift-Tab` cell navigation and end-of-table row insertion.
+- `src/shared/note-callouts.ts`: added `normalizeCalloutKind` and `findMarkdownCallouts` for `> [!note]`, `> [!tip]`, `> [!warning]` (plus `ayah`, `hadith`, `poem`, `question`, `summary`) and Arabic labels (`ملاحظة`, `فائدة`, `نصيحة`, `تنبيه`, `تحذير`), skipping fenced code blocks.
+- `src/shared/note-slash-commands.ts`: added `table`, `calloutNote`, `calloutTip`, `calloutWarning` slash commands (`SlashCommandId` & `SLASH_COMMANDS`).
+- `src/renderer/components/notes/study-note-live-preview.ts` & `StudyNoteEditor.tsx`: added CodeMirror 6 live preview (`markdownLivePreviewPlugin` for headings, bold, italic, inline code, bullet/ordered lists, blockquotes, Markdown links), `tablePreviewField` (`TableWidget` block grid when caret is outside, cell click to edit) + `tableTabKeymap`, `calloutPreviewPlugin` (`CalloutBadgeWidget` + boxed callout classes), and `lineDirectionPlugin` using `markdownBlockDirections` + `EditorView.perLineTextDirection`.
+- `src/renderer/components/notes/StudyNoteContent.tsx`: updated callout header regex to use `normalizeCalloutKind` for Arabic callout labels in preview.
+- `src/renderer/translations.ts`, `NoteEditorPane.tsx`, `QuickNoteScratchpad.tsx`: added 4 bilingual (`ar` + `en`) keys (`slashTable`, `slashCalloutNote`, `slashCalloutTip`, `slashCalloutWarning`) and passed `calloutLabels` to `StudyNoteEditor`.
+- `tests/services/{markdown-table,note-callouts,note-links-and-slash}.test.ts` & `scripts/key243-live/{run.mjs,main.cjs}`: unit tests and live Electron verification in `ar` and `en`.
+
+**Tests:**
+- Focused (`markdown-table`, `note-callouts`, `text-direction`, `note-links-and-slash`, `translation-keys`): 40/40 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,858/2,858 pass (404 suites, 0 fail).
+- `npx tsc --noEmit`: 0 errors. `git diff --check`: clean.
+- Live Electron (`node scripts/key243-live/run.mjs`): PASS in `ar` and `en` with real PDFs from `tests/real-files/` (`errors: []`, screenshots in `.baglib-data/key243-evidence/`, throwaway profile deleted).
+
+**Jira:**
+- Moved `KEY-243` to In Progress (`21`), and moved to Done (`41`) after commit+push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-243.md`, `scripts/key243-live/main.cjs`, `scripts/key243-live/run.mjs`, `src/renderer/components/dashboard/QuickNoteScratchpad.tsx`, `src/renderer/components/notes/NoteEditorPane.tsx`, `src/renderer/components/notes/StudyNoteContent.tsx`, `src/renderer/components/notes/StudyNoteEditor.tsx`, `src/renderer/components/notes/study-note-live-preview.ts`, `src/renderer/translations.ts`, `src/shared/markdown-table.ts`, `src/shared/note-callouts.ts`, `src/shared/note-slash-commands.ts`, `tests/services/markdown-table.test.ts`, `tests/services/note-callouts.test.ts`, `tests/services/note-links-and-slash.test.ts`.
+
+## KEY-433 active ? 2026-11-20T21:24:07+02:00 ? Agent: Codex
+
+Canvas external links: inspect KEY-244/432, reuse system external IPC with main allow-list, preserve page behavior and modifier editing. Tests/live ar+en pending. Authorized one scoped commit and normal push by current request. Antigravity owns notes/*, markdown-table.ts, text-direction.ts and translations.ts; do not edit/stage those. Jira KEY-433 transitioned via 21 to In Progress (verified response, 2026-11-20).
+
 ﻿## KEY-432: slash search scopes (Dictionary, People, Wikipedia) — 2026-11-20 - Agent: Antigravity
 
 **Done:**

@@ -292,6 +292,10 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
     heading: t('studyHeading'),
     quote: t('studyQuote'),
     list: t('studyList'),
+    table: t('slashTable'),
+    calloutNote: t('slashCalloutNote'),
+    calloutTip: t('slashCalloutTip'),
+    calloutWarning: t('slashCalloutWarning'),
     date: t('slashDate'),
     salla: t('slashSalla'),
     azza: t('slashAzza'),
@@ -660,6 +664,16 @@ export const NoteEditorPane: React.FC<NoteEditorPaneProps> = ({
                 wikiLangToggle: t('slashWikiLangToggle'),
                 wikiOffline: t('slashWikiOffline'),
               }} slashLabels={slashLabels}
+              calloutLabels={{
+                note: t('calloutNote'),
+                tip: t('calloutTip'),
+                warning: t('calloutWarning'),
+                ayah: t('calloutAyah'),
+                hadith: t('calloutHadith'),
+                poem: t('calloutPoem'),
+                question: t('calloutQuestion'),
+                summary: t('calloutSummary'),
+              }}
               onMakeCards={makeCards}
               autoFocus={!note}
               searchCorpus={(kinds, q, options) => searchCorpus(kinds, q, (id) => t(collectionKeys[id]), options?.limit, 'hafs', { ...options, unsplitNotice: t('sunnahUnsplitNotice') })}

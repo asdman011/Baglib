@@ -1,5 +1,5 @@
 /** Commands offered after typing `/` at the start of a line or after a space in a note. */
-export type SlashCommandId = 'link' | 'quran' | 'hadith' | 'poem' | 'card' | 'heading' | 'quote' | 'list' | 'date' | 'salla' | 'azza' | 'radiyaHu' | 'radiyaHa' | 'rahimahu' | 'subhanahu';
+export type SlashCommandId = 'link' | 'quran' | 'hadith' | 'poem' | 'card' | 'heading' | 'quote' | 'list' | 'table' | 'calloutNote' | 'calloutTip' | 'calloutWarning' | 'date' | 'salla' | 'azza' | 'radiyaHu' | 'radiyaHa' | 'rahimahu' | 'subhanahu';
 
 export interface SlashCommand {
   id: SlashCommandId;
@@ -16,6 +16,10 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { id: 'heading', keywords: 'heading title عنوان', insert: '## ' },
   { id: 'quote', keywords: 'quote اقتباس نص', insert: '> ' },
   { id: 'list', keywords: 'list bullet قائمة', insert: '- ' },
+  { id: 'table', keywords: 'table grid جدول', insert: '|  |  |\n| --- | --- |\n|  |  |' },
+  { id: 'calloutNote', keywords: 'callout note صندوق ملاحظة', insert: '> [!note] \n> ' },
+  { id: 'calloutTip', keywords: 'callout tip benefit صندوق فائدة نصيحة', insert: '> [!tip] \n> ' },
+  { id: 'calloutWarning', keywords: 'callout warning alert صندوق تنبيه تحذير', insert: '> [!warning] \n> ' },
   { id: 'date', keywords: 'date today تاريخ اليوم', insert: '' },
   { id: 'salla', keywords: 'salla pbuh saw prophet صلى صلي النبي', insert: 'ﷺ' },
   { id: 'azza', keywords: 'azza jalla عز وجل', insert: 'عز وجل' },

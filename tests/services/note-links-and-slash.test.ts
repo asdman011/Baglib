@@ -62,7 +62,7 @@ describe('slash commands', () => {
     assert.deepEqual(parseSlashCommand('/قصيدة')?.scope, 'albayan');
     assert.deepEqual(parseSlashCommand('/verse')?.scope, 'albayan');
     assert.ok(matchSlashCommands('رَضي').some(command => command.id === 'radiyaHa'));
-    assert.equal(matchSlashCommands('').length, 12);
+    assert.equal(matchSlashCommands('').length, 16);
     assert.deepEqual(matchSlashCommands('zzz'), []);
   });
 });

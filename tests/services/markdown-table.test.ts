@@ -1,13 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  cellOffsetInTable,
   deleteTableColumn,
   deleteTableRow,
   displayWidth,
   emptyMarkdownTable,
+  findMarkdownTables,
   formatMarkdownTable,
   insertTableColumn,
   insertTableRow,
+  moveTableCell,
   parseMarkdownTable,
   tableAt,
 } from '../../src/shared/markdown-table';
@@ -126,4 +129,35 @@ test('formatting a parsed table and parsing it again is stable', () => {
   const again = parseMarkdownTable(formatMarkdownTable(table));
   assert.deepEqual(again, table);
   assert.deepEqual(parseMarkdownTable(formatMarkdownTable(again!)), table);
+});
+
+test('Tab and Shift-Tab move across table cells and append a row at the end', () => {
+  const doc = 'Intro\n\n| Col1 | Col2 |\n| --- | --- |\n| v1 | v2 |\n\nOutro';
+  const tables = findMarkdownTables(doc);
+  assert.equal(tables.length, 1);
+  const start = tables[0].start;
+
+  // Header cell 0 -> Header cell 1 -> Body row 0 cell 0 -> Body row 0 cell 1 -> Appended row 1 cell 0.
+  const c0 = cellOffsetInTable(doc, start, -1, 0)!;
+  assert.equal(doc.slice(c0.anchor, c0.head), 'Col1');
+
+  const step1 = moveTableCell(doc, c0.anchor, 1)!;
+  assert.equal(step1.content.slice(step1.anchor, step1.head), 'Col2');
+
+  const step2 = moveTableCell(step1.content, step1.anchor, 1)!;
+  assert.equal(step2.content.slice(step2.anchor, step2.head), 'v1');
+
+  const step3 = moveTableCell(step2.content, step2.anchor, 1)!;
+  assert.equal(step3.content.slice(step3.anchor, step3.head), 'v2');
+
+  const step4 = moveTableCell(step3.content, step3.anchor, 1)!;
+  assert.notEqual(step4.content, doc);
+  const appended = parseMarkdownTable(step4.content.slice(start, step4.content.indexOf('\n\nOutro')))!;
+  assert.equal(appended.rows.length, 2);
+  assert.deepEqual(appended.rows[1], ['', '']);
+
+  // Shift-Tab from body row 0 cell 0 goes back to header cell 1; from header cell 0 returns null.
+  const back = moveTableCell(doc, step2.anchor, -1)!;
+  assert.equal(doc.slice(back.anchor, back.head), 'Col2');
+  assert.equal(moveTableCell(doc, c0.anchor, -1), null);
 });

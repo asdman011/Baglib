@@ -17,6 +17,16 @@ import { slashSearchExtension, type SlashSearchLabels } from './slash-search-ext
 import type { SlashBook } from '../../utils/slash-search';
 import { parseSlashCommand, suggestScopes } from '../../../shared/slash-command';
 import type { CorpusKind, CorpusOption } from '../../utils/corpus-lookup';
+import type { CalloutKind } from '../../../shared/note-callouts';
+import {
+  calloutLabelsFacet,
+  calloutPreviewPlugin,
+  editorDirFacet,
+  lineDirectionPlugin,
+  markdownLivePreviewPlugin,
+  tablePreviewField,
+  tableTabKeymap,
+} from './study-note-live-preview';
 
 // After /quran, /hadith or /poem the next `[[` search is limited to that source and inserts its text.
 const quoteMode = new WeakMap<EditorView, CorpusKind>();
@@ -60,31 +70,84 @@ const theme = EditorView.theme({
   '.cm-relation-picker-btn[aria-pressed="true"]': { backgroundColor: 'rgb(16 185 129 / 0.2)', borderColor: 'rgb(16 185 129)', color: 'rgb(16 185 129)', fontWeight: '600' },
   // The app's own surface and ink, so the menu reads in both the light and dark themes.
   '.cm-study-link': { color: 'rgb(16 185 129)', textDecoration: 'underline', textUnderlineOffset: '0.2em', textDecorationThickness: '1px' },
+  // KEY-243 live preview: headings, emphasis, inline code, bullets, blockquotes, callouts, and tables.
+  '.cm-lp-heading': { fontWeight: '700', lineHeight: '1.85' },
+  '.cm-lp-h1': { fontSize: '1.35em' },
+  '.cm-lp-h2': { fontSize: '1.2em' },
+  '.cm-lp-h3': { fontSize: '1.1em' },
+  '.cm-lp-h4, .cm-lp-h5, .cm-lp-h6': { fontSize: '1.03em' },
+  '.cm-lp-strong': { fontWeight: '700' },
+  '.cm-lp-em': { fontStyle: 'italic' },
+  '.cm-lp-code': {
+    fontFamily: 'ui-monospace, monospace',
+    fontSize: '0.9em',
+    padding: '0.05em 0.35em',
+    borderRadius: '0.3rem',
+    backgroundColor: 'rgb(128 128 128 / 0.14)',
+  },
+  '.cm-lp-bullet': { color: 'rgb(245 158 11)', fontWeight: '700', paddingInlineEnd: '0.2em' },
+  '.cm-lp-list-mark': { color: 'rgb(245 158 11)', fontWeight: '600' },
+  '.cm-lp-quote': {
+    borderInlineStart: '3px solid rgb(245 158 11 / 0.7)',
+    paddingInlineStart: '0.75rem',
+    fontStyle: 'italic',
+    opacity: '0.92',
+  },
+  '.cm-lp-callout': {
+    borderInlineStart: '3px solid rgb(59 130 246 / 0.75)',
+    backgroundColor: 'rgb(59 130 246 / 0.08)',
+    paddingInlineStart: '0.75rem',
+    paddingInlineEnd: '0.6rem',
+  },
+  '.cm-lp-callout-tip': {
+    borderInlineStartColor: 'rgb(16 185 129 / 0.8)',
+    backgroundColor: 'rgb(16 185 129 / 0.08)',
+  },
+  '.cm-lp-callout-warning': {
+    borderInlineStartColor: 'rgb(245 158 11 / 0.85)',
+    backgroundColor: 'rgb(245 158 11 / 0.1)',
+  },
+  '.cm-lp-callout-first': { borderStartStartRadius: '0.45rem', borderStartEndRadius: '0.45rem', paddingTop: '0.35rem' },
+  '.cm-lp-callout-last': { borderEndStartRadius: '0.45rem', borderEndEndRadius: '0.45rem', paddingBottom: '0.35rem' },
+  '.cm-lp-callout-badge': {
+    display: 'inline-block',
+    fontSize: '0.76em',
+    fontWeight: '700',
+    padding: '0 0.45em',
+    marginInlineEnd: '0.45em',
+    borderRadius: '0.35rem',
+    backgroundColor: 'rgb(59 130 246 / 0.18)',
+    color: 'rgb(37 99 235)',
+  },
+  '.cm-lp-callout-badge-tip': { backgroundColor: 'rgb(16 185 129 / 0.18)', color: 'rgb(5 150 105)' },
+  '.cm-lp-callout-badge-warning': { backgroundColor: 'rgb(245 158 11 / 0.2)', color: 'rgb(217 119 6)' },
+  '.cm-lp-callout-title': { fontWeight: '700' },
+  '.cm-lp-table-wrap': {
+    margin: '0.45rem 0',
+    overflowX: 'auto',
+    borderRadius: '0.5rem',
+    border: '1px solid rgb(128 128 128 / 0.28)',
+  },
+  '.cm-lp-table': {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '0.9em',
+    lineHeight: '1.7',
+  },
+  '.cm-lp-table th, .cm-lp-table td': {
+    border: '1px solid rgb(128 128 128 / 0.22)',
+    padding: '0.3rem 0.6rem',
+    textAlign: 'start',
+    cursor: 'text',
+  },
+  '.cm-lp-table th': {
+    fontWeight: '700',
+    backgroundColor: 'rgb(128 128 128 / 0.1)',
+  },
+  '.cm-lp-table tr:hover td': {
+    backgroundColor: 'rgb(128 128 128 / 0.05)',
+  },
 });
-
-// Each line gets dir="auto", so it takes the direction of its first strong letter. CodeMirror reads that
-// computed direction for cursor motion (perLineTextDirection), so Home, End and arrows follow what is shown.
-const autoDirection = Decoration.line({ attributes: { dir: 'auto' } });
-function directionDecorations(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  for (const { from, to } of view.visibleRanges) {
-    for (let pos = from; pos <= to;) {
-      const line = view.state.doc.lineAt(pos);
-      // Judge the line by what it shows (link labels, not targets). A line with no letters, such as
-      // `2:255-257`, keeps the note's direction instead of falling back to left-to-right.
-      let shown = line.text;
-      for (const link of studyLinks(line.text).reverse()) shown = shown.slice(0, link.start) + link.label + shown.slice(link.end);
-      if (/\p{L}/u.test(shown)) builder.add(line.from, line.from, autoDirection);
-      pos = line.to + 1;
-    }
-  }
-  return builder.finish();
-}
-const lineDirection = ViewPlugin.fromClass(class {
-  decorations: DecorationSet;
-  constructor(view: EditorView) { this.decorations = directionDecorations(view); }
-  update(update: ViewUpdate) { if (update.docChanged || update.viewportChanged) this.decorations = directionDecorations(update.view); }
-}, { decorations: plugin => plugin.decorations });
 
 // Live preview for links: on lines without the cursor, `[[target|label]]` shows only its label, styled as a
 // link, so Arabic labels read in their own direction. The raw text comes back as soon as the cursor enters the line.
@@ -385,8 +448,9 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   expandHonorifics?: boolean;
   /** Enter starts the new line with this text when it returns one (lecture timestamps). */
   newLinePrefix?: () => string | null;
+  calloutLabels?: Partial<Record<CalloutKind, string>>;
   onSave?: () => void;
-}>(function StudyNoteEditor({ value, onChange, dir, disabled, ariaLabel, placeholder, notes, books, kindLabels, relationLabels, currentNoteId, onAnchorParagraph, searchCorpus, slashLabels, slashSearchLabels, dateText, onMakeCards, autoFocus, expandHonorifics = true, newLinePrefix, onSave }, ref) {
+}>(function StudyNoteEditor({ value, onChange, dir, disabled, ariaLabel, placeholder, notes, books, kindLabels, relationLabels, currentNoteId, onAnchorParagraph, searchCorpus, slashLabels, slashSearchLabels, dateText, onMakeCards, autoFocus, expandHonorifics = true, newLinePrefix, calloutLabels, onSave }, ref) {
   // CodeMirror needs a real DOM (MutationObserver, ranges). Simplified DOMs used by unit tests get a plain textarea.
   const supported = typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && typeof document.createRange === 'function';
   const fallback = useRef<HTMLTextAreaElement>(null);
@@ -399,6 +463,8 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   const honorifics = useRef(new Compartment());
   const labels = useRef(new Compartment());
   const relations = useRef(new Compartment());
+  const direction = useRef(new Compartment());
+  const calloutFacet = useRef(new Compartment());
 
   useEffect(() => {
     if (!supported || !host.current) return;
@@ -513,7 +579,8 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
             return;
           }
           const text = command.id === 'date' ? latest.current.dateText() : command.insert;
-          editor.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+          const anchor = command.id === 'table' ? from + 2 : from + text.length;
+          editor.dispatch({ changes: { from, to, insert: text }, selection: { anchor } });
           if (command.id === 'quran' || command.id === 'hadith' || command.id === 'poem') quoteMode.set(editor, command.id);
           else quoteMode.delete(editor);
           if (text === '[[') startCompletion(editor);
@@ -539,7 +606,12 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
           syntaxHighlighting(highlight),
           EditorView.lineWrapping,
           EditorView.perLineTextDirection.of(true),
-          lineDirection,
+          direction.current.of(editorDirFacet.of(dir)),
+          calloutFacet.current.of(calloutLabelsFacet.of(calloutLabels ?? {})),
+          lineDirectionPlugin,
+          markdownLivePreviewPlugin,
+          calloutPreviewPlugin,
+          tablePreviewField,
           linkPreview,
           paragraphAnchors,
           relationHover,
@@ -573,6 +645,7 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
             ...defaultKeymap,
             ...historyKeymap,
           ]),
+          Prec.high(tableTabKeymap),
           editable.current.of([EditorView.editable.of(!disabled), EditorState.readOnly.of(!!disabled)]),
           honorifics.current.of(expandHonorifics ? honorificInput : []),
           relations.current.of(relationNames.of(relationLabels ?? {})),
@@ -622,6 +695,15 @@ export const StudyNoteEditor = forwardRef<StudyNoteEditorHandle, {
   useEffect(() => {
     view.current?.dispatch({ effects: relations.current.reconfigure(relationNames.of(JSON.parse(relationKey))) });
   }, [relationKey]);
+
+  const calloutKey = JSON.stringify(calloutLabels ?? {});
+  useEffect(() => {
+    view.current?.dispatch({ effects: calloutFacet.current.reconfigure(calloutLabelsFacet.of(JSON.parse(calloutKey))) });
+  }, [calloutKey]);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: direction.current.reconfigure(editorDirFacet.of(dir)) });
+  }, [dir]);
 
   // Focus once the editor is first editable (a new note is disabled while its saved draft loads).
   const focused = useRef(false);
