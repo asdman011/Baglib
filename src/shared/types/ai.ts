@@ -82,6 +82,8 @@ export interface AIResearchResult {
   providerUsed: string;
   durationMs: number;
   savedNoteId?: string;
+  citations?: import('../research-ai').ResearchAiCitation[];
+  isTranslation?: boolean;
   error?: import('../translation-privacy').TranslationErrorCode;
 }
 

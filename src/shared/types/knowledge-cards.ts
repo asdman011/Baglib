@@ -16,6 +16,8 @@ export interface SaveCardInput {
   language?: string;
   /** Only for cards from a library book. */
   workId?: string;
+  /** Optional existing tags (e.g. 'ai-generated') stored in knowledge_tag. */
+  tags?: string[];
 }
 
 export interface KnowledgeCard {
@@ -31,6 +33,7 @@ export interface KnowledgeCard {
   language: string | null;
   workId: string | null;
   memorizing: boolean;
+  aiGenerated?: boolean;
   createdAt: string;
   noteId?: string | null;
   ord?: number | null;
@@ -150,6 +153,9 @@ export function validateCardInput(input: unknown): SaveCardInput {
   if (typeof back !== 'string' || back.length > MAX_CARD_TEXT) throw new Error('invalid-request');
   if (!CARD_SOURCE_KINDS.includes(sourceKind as CardSourceKind)) throw new Error('invalid-request');
   if (['quran','hadith','poetry'].includes(sourceKind as string) && (value.questionKind && value.questionKind !== 'recall' || value.payload)) throw new Error('invalid-request');
+  const tags = Array.isArray(value.tags)
+    ? value.tags.filter((t): t is string => typeof t === 'string' && t.trim().length > 0 && t.length <= 64).map(t => t.trim()).slice(0, 20)
+    : undefined;
   return {
     ...validateQuestion(value.questionKind, value.payload),
     front,
@@ -159,5 +165,6 @@ export function validateCardInput(input: unknown): SaveCardInput {
     sourceLabel: optionalField(value.sourceLabel),
     language: optionalField(value.language),
     workId: optionalField(value.workId),
+    ...(tags?.length ? { tags } : {}),
   };
 }

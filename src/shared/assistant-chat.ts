@@ -7,6 +7,7 @@
 import type { ResearchAiCitation, ResearchAiSource } from './research-ai';
 import type { ProviderErrorCode } from './ai-errors';
 import { isAiLearningModule, type AiLearningModule } from './ai-learning-mode';
+import { CITED_ANSWER_RULING_POLICY } from './cited-answer';
 
 export type ChatAction = 'summarize' | 'explain' | 'guide' | 'questions' | 'terms' | 'outline' | 'rewrite' | 'translate' | 'review';
 export const CHAT_ACTIONS: readonly ChatAction[] = ['summarize', 'explain', 'guide', 'questions', 'terms', 'outline', 'rewrite', 'translate', 'review'];
@@ -28,7 +29,7 @@ export interface ChatRequest {
   attempt?: string;
 }
 export type ChatError = 'invalid-request' | 'ai-disabled' | 'learning-mode-off' | 'permission-denied' | 'busy' | 'not-configured' | 'needs-selection' | 'missing-source' | ProviderErrorCode;
-export type ChatResponse = { ok: true; text: string; citations: ResearchAiCitation[]; sourceCount: number } | { ok: false; error: ChatError; detail?: string };
+export type ChatResponse = { ok: true; text: string; citations: ResearchAiCitation[]; sourceCount: number; isTranslation?: boolean } | { ok: false; error: ChatError; detail?: string };
 
 export const CHAT_LIMITS = { turns: 12, turn: 4000, sources: 20, selection: 8000, chapter: 20000, sourceText: 4000, total: 60000 };
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -92,8 +93,9 @@ export function buildChatPrompt(input: { request: ChatRequest; sources: Research
     'You are the assistant in BagLib, an Islamic studies library. Talk with the user naturally, like a knowledgeable study partner: answer what they ask, follow up on earlier turns, and keep answers clear and concise. Do not greet, introduce yourself or name the app; go straight to the answer.',
     `Reply in ${language} unless the user writes in another language or asks for a translation.`,
     sources.length || chapter ? 'The user shared the material below. Use it first. When a statement relies on a numbered source, cite it right after the statement as [1] or [2][3]. Only cite numbers from the list.' : 'The user has not shared any material for this conversation.',
-    'If the material does not cover the question, still help: answer from your general knowledge and say briefly that this part is not from their sources. Never claim a source says something it does not.',
+    'If the material does not cover the question, still help: answer from your general knowledge and say briefly that this part is not from their sources. Never claim a source says something it does not. Any statement without a source citation will be marked as unsourced.',
     'Strict rule for Quran and hadith: write their wording ONLY when it appears in the material given, copied exactly. Never write a verse or a hadith from memory, not even a well-known one, not even partly, and do not put remembered wording in quotation marks. Instead, describe its meaning in your own words and give the reference (for example: al-Baqarah 2:153, or Sahih Muslim 2999), then suggest adding it with "Add source" so its exact text can be quoted from BagLib.',
+    CITED_ANSWER_RULING_POLICY,
     'Be careful with rulings: mention differences of opinion where they exist.',
     'Use plain text: short paragraphs or "- " lists, no Markdown headings.',
     ...(chapterBlock ? ['', chapterBlock] : []),

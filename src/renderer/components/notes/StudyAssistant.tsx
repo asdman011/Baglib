@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, BookOpenText, Check, Copy, FileText, Library, Loader2, MessageSquareQuote, NotebookPen, Send, Sparkles, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { answerAsNote, ASSISTANT_TASKS, cardSourceKind, type AssistantAnswer, type AssistantCard, type AssistantPassage, type AssistantTask } from '../../../shared/study-assistant';
+import { splitCitedTextParts } from '../../../shared/cited-answer';
 import { searchCorpus, type CorpusOption } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { parseBookTarget, matchesStudyQuery, type StudyNote } from '../../../shared/study-notes';
@@ -138,7 +139,7 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
   const addCard = async (card: AssistantCard, key: string) => {
     try {
       const workId = parseBookTarget(card.target)?.id;
-      await window.electronAPI.knowledgeCards.save({ front: card.front, back: markAiGenerated(card.back, t('aiGeneratedMarker')), sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId });
+      await window.electronAPI.knowledgeCards.save({ front: card.front, back: markAiGenerated(card.back, t('aiGeneratedMarker')), sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId, tags: ['ai-generated'] });
       window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
       setCards(current => ({ ...current, [key]: 'added' }));
     } catch { setTurns(current => [...current, { id: ++turnId.current, task: 'cards', question: '', error: { code: 'engine-failed' } }]); }
@@ -274,7 +275,28 @@ export function StudyAssistant({ notes, initialNotes, readerSource, onClose }: {
                 <p data-ai-principles-notice className="text-xs leading-loose text-muted">{t('aiPrinciplesNotice')}</p>
                 {turn.answer.abstained && <p data-assistant-abstained className="rounded-lg bg-amber-500/10 p-2 text-sm">{t('assistantAbstained')}</p>}
                 {turn.answer.limited && <p className="text-xs text-muted">{t('assistantLimited')}</p>}
-                {turn.answer.answer && <div data-assistant-answer dir="auto" className="whitespace-pre-wrap text-sm leading-loose">{turn.answer.answer}</div>}
+                {turn.answer.answer && <div data-assistant-answer dir="auto" className="whitespace-pre-wrap text-sm leading-loose">
+                  {splitCitedTextParts(turn.answer.answer).map((part, idx) => {
+                    if (part.type === 'citation' && part.n !== undefined) {
+                      const cite = turn.answer!.citations[part.n - 1];
+                      if (cite) {
+                        return (
+                          <button key={idx} type="button" onClick={() => open(cite.target)} data-assistant-inline-citation={cite.target} className="mx-0.5 inline font-semibold text-primary-text underline-offset-2 hover:underline">
+                            {part.value}
+                          </button>
+                        );
+                      }
+                    }
+                    if (part.type === 'unsourced') {
+                      return (
+                        <span key={idx} data-ai-unsourced-badge className="mx-1 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                          {t('aiUnsourcedBadge')}
+                        </span>
+                      );
+                    }
+                    return <React.Fragment key={idx}>{part.value}</React.Fragment>;
+                  })}
+                </div>}
                 {turn.answer.citations.length > 0 && <div className="border-t border-subtle pt-2.5">
                   <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-muted"><MessageSquareQuote size={12} aria-hidden="true" />{t('assistantSources')}</h3>
                   <ol className="space-y-1.5">{turn.answer.citations.map((citation, index) => <li key={index}>

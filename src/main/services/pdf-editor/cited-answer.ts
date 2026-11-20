@@ -1,13 +1,17 @@
 import type { PdfAnswer } from '../../../shared/types/pdf-collaboration';
 import type { PdfInspection } from '../../../shared/types/pdf-editor';
+import { validateCitedJsonAnswer } from '../../../shared/cited-answer';
+
 export function validatePdfAnswer(value: string, inspection: PdfInspection): PdfAnswer {
-  const raw = JSON.parse(value.replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, ''));
-  if (!raw || typeof raw.answer !== 'string' || raw.answer.length > 20000 || typeof raw.abstained !== 'boolean' || !Array.isArray(raw.citations) || raw.citations.length > 30) throw new Error('invalid-output');
-  const citations = raw.citations.map((citation: { page: number; quote: string }) => {
-    const page = inspection.pages.find(page => page.page === citation.page);
-    if (!page || typeof citation.quote !== 'string' || citation.quote.length < 3 || citation.quote.length > 2000 || !page.text.includes(citation.quote)) throw new Error('invalid-output');
-    return { page: citation.page, quote: citation.quote };
-  });
-  if (!raw.abstained && (!raw.answer.trim() || !citations.length)) throw new Error('invalid-output');
-  return { answer: raw.answer, citations, abstained: raw.abstained, limited: inspection.extraction === 'limited' };
+  const validated = validateCitedJsonAnswer(
+    value,
+    inspection.pages.map(p => ({ page: p.page, text: p.text })),
+    { requirePage: true, maxCitations: 30 },
+  );
+  return {
+    answer: validated.answer,
+    citations: validated.citations.map(c => ({ page: c.page!, quote: c.quote })),
+    abstained: validated.abstained,
+    limited: inspection.extraction === 'limited',
+  };
 }

@@ -1,3 +1,24 @@
+## KEY-438: Cited answers, unsourced markers & AI-generated card provenance (AI Task 4, epic KEY-434) — 2026-11-21T00:10+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/cited-answer.ts` & `src/main/services/pdf-editor/cited-answer.ts`: unified cited-answer pipeline (`validateCitedJsonAnswer`, `quoteMatchesSource`, `markUnsourcedStatements`, `splitCitedTextParts`, `CITED_ANSWER_RULING_POLICY`), with `validatePdfAnswer` delegating to `validateCitedJsonAnswer`.
+- `src/shared/study-assistant.ts`, `src/main/ipc/study-assistant.ts`, `src/shared/assistant-chat.ts`, `src/main/services/ai/assistant-chat.ts`, `src/shared/research-ai.ts`, `src/main/services/ai/research-editor-ai.ts`, `src/shared/utils/ai-prompts.ts`, `src/shared/types/ai.ts`, `src/main/services/ai/ai-research.service.ts`: enforced `CITED_ANSWER_RULING_POLICY` (no fatwa; point to sources and scholars), marked uncited statements with `[غير موثق بمصدر]` / `[unsourced]`, and flagged translation output with `isTranslation: true` (not quotation).
+- `src/renderer/components/ai/{AssistantContext,GlobalAssistant}.tsx`, `src/renderer/components/notes/StudyAssistant.tsx`, `src/renderer/components/reader/AIResearchAssistantDrawer.tsx`, `src/renderer/translations.ts`: rendered clickable BagLib citation links, amber unsourced badges (`data-ai-unsourced-badge`), and translation-not-quotation badges (`data-ai-translation-badge`).
+- `src/shared/types/knowledge-cards.ts`, `src/main/database/repositories/knowledge-card.repository.ts`, `src/renderer/components/knowledge/SavedCardsPanel.tsx`: attached existing `'ai-generated'` tag in `knowledge_tag` when saving AI-made cards from `StudyAssistant`/`GlobalAssistant` (with `memorizing: false` so they stay out of revision until accepted into memorization), and rendered `aiGeneratedMarker` badge (`data-card-ai-generated`). No new DB fields.
+- `tests/services/cited-answer.test.ts` & `scripts/key438-live/{main.cjs,run.mjs}`: unit tests and live Electron verification in `ar` and `en` with real Arabic/English PDFs and stubbed local Ollama.
+
+**Tests:**
+- Focused (`cited-answer`, `study-assistant`, `assistant-chat`, `research-ai`, `ai.service`, `ai-principles`, `translation-keys`): 43/43 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,899/2,899 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key438-live/run.mjs`): PASS in `ar` and `en` (`errors: []`, `stubCallsCount: 7`, screenshots in `.baglib-data/key438-evidence/`, throwaway profile deleted).
+
+**Jira:**
+- `KEY-438` In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/agent-ops/reports/KEY-438.md`, `scripts/key438-live/main.cjs`, `scripts/key438-live/run.mjs`, `src/main/database/repositories/knowledge-card.repository.ts`, `src/main/ipc/study-assistant.ts`, `src/main/services/ai/ai-research.service.ts`, `src/main/services/ai/assistant-chat.ts`, `src/main/services/ai/research-editor-ai.ts`, `src/main/services/pdf-editor/cited-answer.ts`, `src/renderer/components/ai/AssistantContext.tsx`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/components/knowledge/SavedCardsPanel.tsx`, `src/renderer/components/notes/StudyAssistant.tsx`, `src/renderer/components/reader/AIResearchAssistantDrawer.tsx`, `src/renderer/translations.ts`, `src/shared/assistant-chat.ts`, `src/shared/cited-answer.ts`, `src/shared/research-ai.ts`, `src/shared/study-assistant.ts`, `src/shared/types/ai.ts`, `src/shared/types/knowledge-cards.ts`, `src/shared/utils/ai-prompts.ts`, `tests/services/cited-answer.test.ts`.
+
 ## KEY-442: One shared privacy and error surface for older AI paths and PDF AI (AI Task 7, epic KEY-434) — 2026-11-20T23:48+02:00 - Agent: Antigravity (continuing Codex)
 
 **Done:**

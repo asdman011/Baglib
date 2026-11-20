@@ -5,6 +5,7 @@
  */
 import { parseManuscriptSnapshot } from './manuscript-snapshot';
 import { isLocalAddress, normaliseBaseUrl } from './ai-providers';
+import { CITED_ANSWER_RULING_POLICY } from './cited-answer';
 
 export type ResearchAiAction = 'ask' | 'summarize' | 'rewrite' | 'translate' | 'outline' | 'review';
 export const RESEARCH_AI_ACTIONS: readonly ResearchAiAction[] = ['ask', 'summarize', 'rewrite', 'translate', 'outline', 'review'];
@@ -25,7 +26,7 @@ export interface ResearchAiSource { n: number; ref: string; label: string; text:
 export interface ResearchAiCitation { n: number; ref: string; label: string }
 export type ResearchAiError = 'permission-denied' | 'learning-mode-off' | 'not-configured' | 'needs-selection' | 'needs-question' | 'invalid-request' | import('./ai-errors').ProviderErrorCode;
 export type ResearchAiResponse =
-  | { ok: true; text: string; citations: ResearchAiCitation[]; sourceCount: number; provider: string }
+  | { ok: true; text: string; citations: ResearchAiCitation[]; sourceCount: number; provider: string; isTranslation?: boolean }
   | { ok: false; error: ResearchAiError; message?: string };
 
 export interface ChapterLink { block_id: string; target_scheme: string; target_id: string }
@@ -119,6 +120,7 @@ export function buildResearchAiPrompt(input: {
     'Only cite numbers that appear in the sources list. Never invent sources, numbers, verses or hadith.',
     'If the chapter and sources do not support an answer, say so plainly.',
     'Quote Quranic verses and hadith exactly as given; do not paraphrase them as quotations.',
+    CITED_ANSWER_RULING_POLICY,
     `Answer in ${answerLang} unless asked to translate. Use plain text with short paragraphs or "- " lists, no Markdown headings.`,
     '',
     `<CHAPTER title="${chapterTitle.replace(/"/g, "'")}">`,

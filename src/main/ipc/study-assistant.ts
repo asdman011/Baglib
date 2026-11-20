@@ -144,7 +144,7 @@ export function registerStudyAssistantIpc(): void {
             sources: fitted.sources.map(({ id, label, text }) => ({ id, label, text })),
           }),
         }, settings);
-        return { ok: true, data: validateAssistantAnswer(output, fitted.sources, request.task, fitted.limited) };
+        return { ok: true, data: validateAssistantAnswer(output, fitted.sources, request.task, fitted.limited, request.language) };
       } finally { running = false; }
     } catch (error) {
       return { ok: false, ...failure(error, KNOWN), ...(error instanceof AssistantBookError ? { target: error.target } : {}) };

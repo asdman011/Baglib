@@ -15,6 +15,7 @@ import { useLearningMode } from './useLearningMode';
 import { moduleFromWorkspaceView } from '../../../shared/ai-learning-mode';
 import { useStudyNotes } from '../../hooks/useStudyNotes';
 import { answerForInsert } from '../../../shared/research-ai';
+import { splitCitedTextParts } from '../../../shared/cited-answer';
 import { cardSourceKind, passageKind, type AssistantCard } from '../../../shared/study-assistant';
 import type { ChatAction, ChatSourceRef } from '../../../shared/assistant-chat';
 import { matchesStudyQuery, parseBookTarget } from '../../../shared/study-notes';
@@ -150,7 +151,7 @@ export function GlobalAssistant() {
       });
       if (result.ok) {
         const msgId = id();
-        push({ id: msgId, role: 'assistant', text: result.text, citations: result.citations, sourceCount: result.sourceCount });
+        push({ id: msgId, role: 'assistant', text: result.text, citations: result.citations, sourceCount: result.sourceCount, isTranslation: result.isTranslation });
         if (options?.hintMessageId) {
           setHintMeta(current => ({ ...current, [options.hintMessageId!]: { ...current[options.hintMessageId!], revealed: true } }));
         } else if (learningMode === 'hints' && !options?.revealFullAnswer) {
@@ -176,7 +177,7 @@ export function GlobalAssistant() {
   };
   const addCard = async (message: CardsMessage, index: number) => {
     const card = message.cards[index];
-    await window.electronAPI.knowledgeCards.save({ front: card.front, back: markAiGenerated(card.back, t('aiGeneratedMarker')), sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId: parseBookTarget(card.target)?.id });
+    await window.electronAPI.knowledgeCards.save({ front: card.front, back: markAiGenerated(card.back, t('aiGeneratedMarker')), sourceKind: cardSourceKind(card.target), sourceRef: card.target, sourceLabel: card.label, workId: parseBookTarget(card.target)?.id, tags: ['ai-generated'] });
     window.dispatchEvent(new CustomEvent('baglib:knowledge-card-saved'));
     setMessages(current => current.map(item => (item.id === message.id && item.role === 'cards' ? { ...item, state: { ...item.state, [index]: 'added' } } : item)));
   };
@@ -291,7 +292,41 @@ export function GlobalAssistant() {
           return <div key={message.id} data-research-ai-message={message.role}
             className={`flex flex-col rounded-2xl px-3 py-2.5 text-xs ${message.role === 'user' ? 'ms-8 rounded-ee-md bg-primary text-white' : message.role === 'error' ? 'me-4 border border-red-500/40 bg-red-500/10' : 'me-4 rounded-es-md border border-subtle bg-canvas'}`}>
             {message.role !== 'user' && <span className="mb-1 text-[10px] font-semibold opacity-70">{t('researchAiAssistant')}</span>}
-            <p dir="auto" className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+            {message.role === 'assistant' && message.isTranslation && (
+              <span data-ai-translation-badge className="mb-1.5 inline-flex self-start rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
+                {t('aiTranslationNotQuotation')}
+              </span>
+            )}
+            <p dir="auto" className="whitespace-pre-wrap leading-relaxed">
+              {message.role === 'assistant'
+                ? splitCitedTextParts(message.text).map((part, idx) => {
+                    if (part.type === 'citation' && part.n !== undefined) {
+                      const cite = message.citations.find(c => c.n === part.n);
+                      if (cite) {
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            {...linkHandlers(cite.ref, { title: cite.label })}
+                            data-research-ai-inline-citation={cite.ref}
+                            className="mx-0.5 inline font-semibold text-primary-text underline-offset-2 hover:underline"
+                          >
+                            {part.value}
+                          </button>
+                        );
+                      }
+                    }
+                    if (part.type === 'unsourced') {
+                      return (
+                        <span key={idx} data-ai-unsourced-badge className="mx-1 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                          {t('aiUnsourcedBadge')}
+                        </span>
+                      );
+                    }
+                    return <React.Fragment key={idx}>{part.value}</React.Fragment>;
+                  })
+                : message.text}
+            </p>
             {message.role === 'error' && message.settings && <button type="button" onClick={() => setSettingsOpen(true)} className="mt-2 self-start rounded-md border border-subtle px-2 py-1">{t('researchAiOpenSettings')}</button>}
             {message.role === 'assistant' && <>
               {message.citations.length > 0 && <ol className="mt-2 space-y-1 border-t border-subtle pt-2" aria-label={t('researchAiSources')} data-research-ai-citations>

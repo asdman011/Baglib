@@ -2,6 +2,8 @@ import { validateAiResearchInput } from '../../../shared/ai-research-input';
 import { translationDestination } from '../../../shared/translation-privacy';
 import { hasRemoteConsent } from '../../../shared/ai-consent';
 import { applyHintsPrompt, normalizeLearningModes, resolveLearningMode } from '../../../shared/ai-learning-mode';
+import { markUnsourcedStatements } from '../../../shared/cited-answer';
+import { parseAnswerCitations, type ResearchAiSource } from '../../../shared/research-ai';
 /**
  * Baglib — AI Research Assistant Coordinator & Anti-Spoiler RAG Service (KEY-143)
  *
@@ -137,6 +139,7 @@ export class AIResearchService {
         spoilerPrevented: false,
         providerUsed: transResult.providerUsed,
         durationMs: Date.now() - startTime,
+        isTranslation: true,
       };
     }
 
@@ -213,12 +216,33 @@ export class AIResearchService {
     );
 
     // Generation only: the user reviews the returned text before explicitly saving it.
+    const validPassages = settings.antiSpoilerCeiling !== false
+      ? passages.filter((p) => p.pageNumber <= payload.currentPage)
+      : passages;
+    const sources: ResearchAiSource[] = validPassages.map((p, index) => ({
+      n: index + 1,
+      ref: payload.bookId ? `book:${payload.bookId}#p=${p.pageNumber}` : `page:${p.pageNumber}`,
+      label: p.chapterTitle ? `${p.chapterTitle} (${p.pageNumber})` : `${payload.bookTitle} (${p.pageNumber})`,
+      text: p.text,
+    }));
+    const parsed = parseAnswerCitations(generatedContent.trim(), sources);
+    const uiLang: 'ar' | 'en' = payload.targetLang === 'ar'
+      ? 'ar'
+      : payload.targetLang === 'en'
+        ? 'en'
+        : /[\u0600-\u06FF]/u.test(payload.userQuery || payload.selectedText || payload.bookTitle)
+          ? 'ar'
+          : settings.targetLanguage === 'ar'
+            ? 'ar'
+            : 'en';
+    const content = markUnsourcedStatements(parsed.text, new Set(parsed.citations.map((c) => c.n)), uiLang);
     return {
-      content: generatedContent.trim(),
+      content,
       tool: payload.tool,
       spoilerPrevented: settings.antiSpoilerCeiling !== false,
       providerUsed: settings.provider || 'ollama',
       durationMs: Date.now() - startTime,
+      citations: parsed.citations,
     };
   }
 

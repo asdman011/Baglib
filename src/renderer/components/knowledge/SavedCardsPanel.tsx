@@ -306,6 +306,12 @@ export function SavedCardsPanel({
                   >
                     {cardTextForList(card.front, 'front')}
                   </p>
+                  {card.aiGenerated && (
+                    <span data-card-ai-generated className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                      <Sparkles className="size-2.5" aria-hidden="true" />
+                      {t('aiGeneratedMarker')}
+                    </span>
+                  )}
 
                   {card.sourceRef && (
                     <div className="flex items-center gap-2 text-xs">

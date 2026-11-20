@@ -27,6 +27,7 @@ interface CardRow {
   language: string | null;
   workId: string | null;
   srsState: string | null;
+  aiGenerated?: number;
   createdAt: string;
   noteId?: string | null;
   ord?: number | null;
@@ -34,22 +35,27 @@ interface CardRow {
 
 const getCardSelect = (db: Database): string => {
   let hasNoteCols = false;
+  let hasTagTables = false;
   try {
     hasNoteCols = Boolean(db.prepare("SELECT 1 FROM pragma_table_info('card_detail') WHERE name='note_id'").get());
+    hasTagTables = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_tag'").get());
   } catch {}
   const noteCols = hasNoteCols ? 'c.note_id AS noteId, c.ord AS ord' : 'NULL AS noteId, NULL AS ord';
+  const aiGenCol = hasTagTables
+    ? "EXISTS (SELECT 1 FROM knowledge_tag kt JOIN tag tg ON tg.id = kt.tag_id WHERE kt.knowledge_id = k.id AND tg.name = 'ai-generated') AS aiGenerated"
+    : '0 AS aiGenerated';
   return `
   SELECT k.id, c.question_kind AS questionKind, c.payload_json AS payloadJson,
     (SELECT COALESCE(MAX(revision),0) FROM entity_version WHERE entity_type='knowledge' AND entity_id=k.id) AS cardRevision,
     c.front, c.back, c.source_kind AS sourceKind, c.source_ref AS sourceRef,
-    c.source_label AS sourceLabel, c.language, k.work_id AS workId, s.state AS srsState, k.created_at AS createdAt,
+    c.source_label AS sourceLabel, c.language, k.work_id AS workId, s.state AS srsState, ${aiGenCol}, k.created_at AS createdAt,
     ${noteCols}
   FROM knowledge k
   JOIN card_detail c ON c.knowledge_id = k.id
   LEFT JOIN srs_state s ON s.knowledge_id = k.id`;
 };
 
-const toCard = ({ srsState, payloadJson, ...row }: CardRow): KnowledgeCard => ({ ...row, payload: payloadJson ? JSON.parse(payloadJson) : null, memorizing: srsState !== null && srsState !== 'suspended' });
+const toCard = ({ srsState, payloadJson, aiGenerated, ...row }: CardRow): KnowledgeCard => ({ ...row, payload: payloadJson ? JSON.parse(payloadJson) : null, memorizing: srsState !== null && srsState !== 'suspended', ...(aiGenerated ? { aiGenerated: true } : {}) });
 
 export class KnowledgeCardRepository {
   private settings: SqliteSettingsRepository;
@@ -100,6 +106,22 @@ export class KnowledgeCardRepository {
           .run(id, input.front, input.back, input.sourceKind, input.sourceRef ?? null, input.sourceLabel ?? null, input.language ?? null, input.questionKind ?? 'recall', input.payload ? JSON.stringify(input.payload) : null);
       }
       });
+      if (input.tags?.length) {
+        const hasTagTables = Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_tag'").get());
+        if (hasTagTables) {
+          const findTag = this.db.prepare('SELECT id FROM tag WHERE name = ?');
+          const insertTag = this.db.prepare("INSERT OR IGNORE INTO tag (id, name, origin) VALUES (?, ?, 'manual')");
+          const linkTag = this.db.prepare('INSERT OR IGNORE INTO knowledge_tag (knowledge_id, tag_id) VALUES (?, ?)');
+          for (const rawTag of input.tags) {
+            const name = rawTag.trim();
+            if (!name) continue;
+            const existingTag = findTag.get(name) as { id: string } | undefined;
+            const tagId = existingTag?.id ?? randomUUID();
+            if (!existingTag) insertTag.run(tagId, name);
+            linkTag.run(id, tagId);
+          }
+        }
+      }
       return toCard(this.db.prepare(`${getCardSelect(this.db)} WHERE k.id = ?`).get(id) as CardRow);
     })();
   }

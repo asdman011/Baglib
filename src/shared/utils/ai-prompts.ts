@@ -6,6 +6,7 @@
  */
 
 import type { BookPassage, AIResearchToolType } from '../types/ai';
+import { CITED_ANSWER_RULING_POLICY } from '../cited-answer';
 
 export interface SystemPromptOptions {
   bookTitle: string;
@@ -29,9 +30,9 @@ export function buildAntiSpoilerSystemPrompt(options: SystemPromptOptions): stri
   const contextSection =
     validPassages.length > 0
       ? `\n\n<BOOK_PASSAGES page_limit="${currentPage}">\n${validPassages
-          .map((c) => {
+          .map((c, idx) => {
             const header = c.chapterTitle || `Page ${c.pageNumber}`;
-            return `[${header}, Page ${c.pageNumber}]\n${c.text}`;
+            return `[${idx + 1}] [${header}, Page ${c.pageNumber}]\n${c.text}`;
           })
           .join('\n\n')}\n</BOOK_PASSAGES>`
       : '\n\n[No indexed content available for pages read up to this point.]';
@@ -53,7 +54,7 @@ ABSOLUTE ANTI-SPOILER CONSTRAINTS:
 4. Maintain academic neutrality, precision, and avoid intrusive hallucination.
 
 </SYSTEM>
-\nCite chapter titles or page references when quoting passages from the context.${contextSection}`;
+\nCite numbered passages as [1], [2], etc. right after each statement that relies on them. Any statement without a citation will be marked as unsourced. ${CITED_ANSWER_RULING_POLICY}${contextSection}`;
 }
 
 /**

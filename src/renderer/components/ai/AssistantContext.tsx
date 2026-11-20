@@ -19,7 +19,7 @@ export interface AssistantPage {
 }
 export type AssistantMessage =
   | { id: number; role: 'user'; text: string; action?: ChatAction }
-  | { id: number; role: 'assistant'; text: string; citations: ResearchAiCitation[]; sourceCount: number; inserted?: boolean }
+  | { id: number; role: 'assistant'; text: string; citations: ResearchAiCitation[]; sourceCount: number; inserted?: boolean; isTranslation?: boolean }
   | { id: number; role: 'error'; text: string; settings?: boolean };
 
 interface AssistantValue {

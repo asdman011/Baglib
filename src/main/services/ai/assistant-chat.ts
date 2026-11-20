@@ -7,6 +7,7 @@ import { errorMessage } from '../../../shared/errors';
 import { providerErrorCode, providerErrorDetail } from '../../../shared/ai-errors';
 import { aiPrivacyError } from '../../../shared/ai-consent';
 import { applyHintsPrompt, resolveLearningMode } from '../../../shared/ai-learning-mode';
+import { markUnsourcedStatements } from '../../../shared/cited-answer';
 import { buildChatPrompt, validateChatRequest, type ChatResponse } from '../../../shared/assistant-chat';
 import { parseAnswerCitations, providerReady, type ResearchAiSource } from '../../../shared/research-ai';
 import type { AISettings } from '../../../shared/types/ai';
@@ -53,7 +54,11 @@ export async function runAssistantChat(input: unknown, deps: AssistantChatDeps):
     const answer = await deps.complete({ ...prompt, systemPrompt, temperature, preventRedirect: !request.allowRemote }, deps.settings);
     const parsed = parseAnswerCitations(answer, sources);
     if (!parsed.text) return { ok: false, error: 'provider-busy', detail: 'empty answer' };
-    return { ok: true, text: parsed.text, citations: parsed.citations, sourceCount: sources.length };
+    if (request.action === 'translate') {
+      return { ok: true, text: parsed.text, citations: parsed.citations, sourceCount: sources.length, isTranslation: true };
+    }
+    const text = markUnsourcedStatements(parsed.text, new Set(parsed.citations.map(c => c.n)), request.lang);
+    return { ok: true, text, citations: parsed.citations, sourceCount: sources.length };
   } catch (error) {
     const message = errorMessage(error);
     return { ok: false, error: providerErrorCode(message), detail: providerErrorDetail(message) };

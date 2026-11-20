@@ -1,5 +1,6 @@
 import { hasRemoteConsent } from '../../../shared/ai-consent';
 import { applyHintsPrompt, resolveLearningMode } from '../../../shared/ai-learning-mode';
+import { markUnsourcedStatements } from '../../../shared/cited-answer';
 /**
  * KEY-373 (RE-12): grounded research AI for the manuscript editor. Reads the chapter and the sources it cites
  * (manuscript_link) locally, then calls only the provider the user chose in the BYOK settings.
@@ -54,7 +55,11 @@ export async function runResearchEditorAi(input: unknown, deps: ResearchEditorAi
     const answer = await deps.complete({ ...prompt, systemPrompt, temperature }, deps.settings);
     const parsed = parseAnswerCitations(answer, sources);
     if (!parsed.text) return { ok: false, error: 'provider-error', message: 'empty-answer' };
-    return { ok: true, text: parsed.text, citations: parsed.citations, sourceCount: sources.length, provider: deps.settings.provider || 'ollama' };
+    if (request.action === 'translate') {
+      return { ok: true, text: parsed.text, citations: parsed.citations, sourceCount: sources.length, provider: deps.settings.provider || 'ollama', isTranslation: true };
+    }
+    const text = markUnsourcedStatements(parsed.text, new Set(parsed.citations.map(c => c.n)), request.lang);
+    return { ok: true, text, citations: parsed.citations, sourceCount: sources.length, provider: deps.settings.provider || 'ollama' };
   } catch (error) {
     const message = errorMessage(error);
     return { ok: false, error: providerErrorCode(message), message: providerErrorDetail(message) };

@@ -3,6 +3,7 @@ import { AiPrivacyControls } from '../ai/AiPrivacyControls';
 import { useRemoteConsent } from '../ai/useRemoteConsent';
 import { useLearningMode } from '../ai/useLearningMode';
 import { markAiGenerated } from '../../../shared/ai-principles';
+import { splitCitedTextParts } from '../../../shared/cited-answer';
 import { aiErrorText } from '../ai/ai-error-text';
 
 
@@ -435,10 +436,36 @@ export const AIResearchAssistantDrawer: React.FC<AIResearchAssistantDrawerProps>
             )}
 
             <p data-ai-principles-notice className="text-xs leading-loose text-zinc-500">{t('aiGeneratedMarker')} · {t('aiPrinciplesNotice')}</p>
+            {(result.isTranslation || activeTool === 'inline_translation') && result.providerUsed !== 'error' && (
+              <span data-ai-translation-badge className="inline-flex rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+                {t('aiTranslationNotQuotation')}
+              </span>
+            )}
             {/* Generated Content Body */}
             <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/30 whitespace-pre-wrap leading-relaxed font-sans text-xs select-text">
-              {result.content}
+              {result.providerUsed !== 'error' && !result.isTranslation && activeTool !== 'inline_translation'
+                ? splitCitedTextParts(result.content).map((part, idx) => {
+                    if (part.type === 'unsourced') {
+                      return (
+                        <span key={idx} data-ai-unsourced-badge className="mx-1 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                          {t('aiUnsourcedBadge')}
+                        </span>
+                      );
+                    }
+                    return <React.Fragment key={idx}>{part.value}</React.Fragment>;
+                  })
+                : result.content}
             </div>
+            {result.citations && result.citations.length > 0 && (
+              <ol data-reader-ai-citations className="space-y-1 border-t border-zinc-200 dark:border-zinc-800 pt-2 text-[11px] text-zinc-600 dark:text-zinc-400">
+                {result.citations.map((c) => (
+                  <li key={c.n} className="flex gap-1.5">
+                    <span className="tabular-nums font-semibold">[{c.n}]</span>
+                    <span dir="auto">{c.label}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
         )}
       </div>
