@@ -2,6 +2,8 @@
 
 ## Recent Agent Updates
 
+- [2026-11-20T21:24:07+02:00, Agent: Codex KEY-433] VERIFIED focused 12/12, root tsc, editor/main builds, lint 0 errors, vendor integrity and native ar/en canvas+page+BagLib links. Full suite 2,858/2,858 pass (404 suites); scoped commit/push pending. No strings/schema/vendor edits. Production renderer build blocked by existing unrelated SRS template/ES2017 type errors; report KEY-433 records limitations.
+
 - [2026-11-19T22:53:00+02:00, Agent: Antigravity KEY-395] VERIFIED Revision Browser & Deck Manager on existing SRS tables and `settings` (`revision.savedSearches.v1`, no new DB tables/fields or dependencies). Supports source type, science (categories + tags), KEY-386 lists (`any`/`all`), Arabic-normalised search, sorting (`due`, `retrievability`, `difficulty`, `lapses`, `created`, `source`), saved searches → filtered decks, and bulk actions (`suspend`, `unsuspend`, `reschedule`, `moveDeck`, `tag`, `delete`). Full suite 2,837/2,837 pass, 6,000-card unit test pass, `tsc --noEmit` 0 errors, `git diff --check` clean, live Electron `ar`/`en` PASS (`scripts/revision-browser-live/run.mjs`). Report in `docs/agent-ops/reports/KEY-395.md`.
 
 - [2026-11-19T22:36:00+02:00, Agent: Antigravity KEY-429] VERIFIED annotation-aware sharing and copying across Quran, Sunnah, Book reader, multi-tab Copy links, and Personal Lists hub, with "Source only" setting in Settings → Workspace (`workspace.prefs.v1`, no DB schema change) and one-off toggles. Full suite 2,835/2,835 pass (400 suites, 0 fail), focused 58/58 pass, `tsc --noEmit` 0 errors, `git diff --check` clean, live Electron `ar`/`en` PASS (`scripts/share-annotations-live/run.mjs`). Report in `docs/agent-ops/reports/KEY-429.md`.

@@ -1,3 +1,4 @@
+import { installCanvasLinks } from './canvas/links';
 import { MarkdownAdapter, HtmlAdapter } from '@blocksuite/affine/shared/adapters';
 import { GfxControllerIdentifier } from '@blocksuite/affine/std/gfx';
 import { sourceSchemas, sourceStoreExtensions, sourceViewExtensions } from './blocks';
@@ -369,11 +370,16 @@ async function mount() {
       event.stopPropagation();
       void session.insertSource(payload.kind, payload.props as unknown as Record<string, unknown>);
     }, true);
-    // KEY-244: open BagLib links, quick-note embeds, and source blocks when clicked on canvas (even behind edgeless-note-mask).
+    // Page links keep their existing behavior. Canvas capture also sees masked links.
+    installCanvasLinks(editor, () => editor.mode === 'edgeless', target => {
+      if (target.noteId) void bridge.notes?.open(target.noteId).catch(bridge.error);
+      else if (target.url) void bridge.sources?.open(target.url).catch(bridge.error);
+    });
     const isBaglibTargetUrl = (url: string) => /^(note|quran|sunnah|book|poetry|media|person|baglib|https?):/i.test(url.trim());
     let downPos = { x: 0, y: 0 };
     document.addEventListener('pointerdown', event => { downPos = { x: event.clientX, y: event.clientY }; }, true);
     document.addEventListener('click', event => {
+      if (editor.mode === 'edgeless') return;
       if (Math.hypot(event.clientX - downPos.x, event.clientY - downPos.y) >= 5) return;
       for (const node of event.composedPath()) {
         if (node instanceof HTMLAnchorElement) {
@@ -382,43 +388,6 @@ async function mount() {
             event.preventDefault();
             event.stopPropagation();
             void bridge.sources?.open(href).catch(bridge.error);
-            return;
-          }
-        }
-      }
-      if (editor.mode !== 'edgeless') return;
-      const inMask = event.composedPath().some(node => (node as HTMLElement)?.tagName?.toLowerCase() === 'edgeless-note-mask');
-      if (!inMask) return;
-      const { clientX: cx, clientY: cy } = event;
-      const queryAllDeep = (root: ParentNode, selector: string): Element[] => {
-        const out = Array.from(root.querySelectorAll(selector));
-        for (const el of Array.from(root.querySelectorAll('*'))) {
-          if (el.shadowRoot) out.push(...queryAllDeep(el.shadowRoot, selector));
-        }
-        return out;
-      };
-      for (const embed of queryAllDeep(editor, 'baglib-note-embed')) {
-        const card = (embed.shadowRoot ?? embed).querySelector('.note-card');
-        const rect = card?.getBoundingClientRect();
-        if (rect && cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
-          const noteId = (embed as unknown as { model?: { props?: { noteId?: string } } }).model?.props?.noteId;
-          if (noteId) {
-            event.preventDefault();
-            event.stopPropagation();
-            void bridge.notes?.open(noteId).catch(bridge.error);
-            return;
-          }
-        }
-      }
-      for (const src of queryAllDeep(editor, 'baglib-source-block')) {
-        const card = (src.shadowRoot ?? src).querySelector('.source-card');
-        const rect = card?.getBoundingClientRect();
-        if (rect && cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
-          const url = (src as unknown as { model?: { props?: { url?: string } } }).model?.props?.url;
-          if (url) {
-            event.preventDefault();
-            event.stopPropagation();
-            void bridge.sources?.open(url).catch(bridge.error);
             return;
           }
         }

@@ -1,3 +1,4 @@
+import { allowedExternalUrl } from './external-url';
 import * as ipcModule0 from 'electron';
 import * as ipcModule1 from '../services/shield/content-shield.service';
 import { errorMessage } from '../../shared/errors';
@@ -173,9 +174,10 @@ export function setupSystemIPC() {
    */
   ipcMain.handle('system:open-external', async (_, url: string) => {
     try {
-      if (!url || typeof url !== 'string') return false;
+      const target = allowedExternalUrl(url);
+      if (!target) return false;
       const { shell } = ipcModule0;
-      await shell.openExternal(url);
+      await shell.openExternal(target);
       return true;
     } catch (err) {
       console.error('[baglib:system] open-external error:', err);

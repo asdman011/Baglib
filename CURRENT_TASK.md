@@ -1,3 +1,11 @@
+## KEY-433 implemented and verified - 2026-11-20T21:52:17+02:00 - Agent: Codex
+
+Implemented canvas external links using existing system IPC with main http/https/mailto allow-list. Native ar/en PASS: inline/note/surface/bookmark/GitHub embed exact shell URLs, selection/position preserved, modifier selection, double-click editing, page behavior unchanged and real-PDF BagLib source opening; 0 renderer errors and profiles deleted. Focused 12/12, root tsc, main/editor builds, scoped lint (0 errors), vendor integrity (2899 files) and diff checks pass. Full suite 2,858/2,858 PASS (404 suites, 0 failures). Production renderer build has unrelated existing SRS template/ES2017 type errors, recorded in local report. No protected Antigravity files edited.
+
+Exact tracked files: `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`, `docs/features/BlockSuite.md`, `research-editor/app/src/main.ts`, `research-editor/app/src/canvas/links.ts`, `src/main/ipc/system.ts`, `src/main/ipc/external-url.ts`, `src/renderer/components/research/source-search.ts`, `tests/main/external-url.test.ts`, `scripts/key433-live/main.cjs`, `scripts/key433-live/run.mjs`. Local-only board + report `docs/agent-ops/reports/KEY-433.md`; evidence `.baglib-data/key433-evidence/`. No real files modified. Research evidence/limitations in `docs/features/BlockSuite.md`.
+
+Jira: transitioned KEY-433 to In Progress (21), verified response. Commit/push explicitly authorized by current request; pending locked scoped commit and normal push to origin/feature/library-domain. Done/comment after push only.
+
 ## KEY-243: CodeMirror 6 study-note editor upgrades (Option A) — 2026-11-20 - Agent: Antigravity
 
 **Done:**
@@ -21,11 +29,7 @@
 **Files:**
 `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-243.md`, `scripts/key243-live/main.cjs`, `scripts/key243-live/run.mjs`, `src/renderer/components/dashboard/QuickNoteScratchpad.tsx`, `src/renderer/components/notes/NoteEditorPane.tsx`, `src/renderer/components/notes/StudyNoteContent.tsx`, `src/renderer/components/notes/StudyNoteEditor.tsx`, `src/renderer/components/notes/study-note-live-preview.ts`, `src/renderer/translations.ts`, `src/shared/markdown-table.ts`, `src/shared/note-callouts.ts`, `src/shared/note-slash-commands.ts`, `tests/services/markdown-table.test.ts`, `tests/services/note-callouts.test.ts`, `tests/services/note-links-and-slash.test.ts`.
 
-## KEY-433 active ? 2026-11-20T21:24:07+02:00 ? Agent: Codex
-
-Canvas external links: inspect KEY-244/432, reuse system external IPC with main allow-list, preserve page behavior and modifier editing. Tests/live ar+en pending. Authorized one scoped commit and normal push by current request. Antigravity owns notes/*, markdown-table.ts, text-direction.ts and translations.ts; do not edit/stage those. Jira KEY-433 transitioned via 21 to In Progress (verified response, 2026-11-20).
-
-﻿## KEY-432: slash search scopes (Dictionary, People, Wikipedia) — 2026-11-20 - Agent: Antigravity
+## KEY-432: slash search scopes (Dictionary, People, Wikipedia) — 2026-11-20 - Agent: Antigravity
 
 **Done:**
 - `src/shared/slash-command.ts`: added `dictionary`, `people`, and `wikipedia` to `SlashScope`, `SLASH_SCOPES`, and `SCOPE_TERMS` (with Arabic & English aliases: `/dictionary`, `/معجم`, `/قاموس`, `/people`, `/scholars`, `/narrators`, `/علماء`, `/رواة`, `/رجال`, `/أعلام`, `/wikipedia`, `/ويكيبيديا`, `/wiki`).

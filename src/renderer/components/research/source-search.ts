@@ -12,7 +12,7 @@ export function createResearchSourceSearch(api: Window['electronAPI'], books: ()
   const normalize = (value: string) => normalizeArabicText(value, { normalizeTaaMarbuta: false });
   return {
     async open(url) {
-      if (/^https?:\/\//iu.test(url.trim())) {
+      if (/^(https?:\/\/|mailto:)/iu.test(url.trim())) {
         await api.openExternal(url.trim());
         return;
       }
