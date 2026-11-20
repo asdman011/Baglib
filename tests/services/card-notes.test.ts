@@ -454,3 +454,14 @@ test('card note translation keys are defined and localized in ar and en', () => 
     assert.ok((translations.en as Record<string, string>)[k], 'English translation must exist for ' + k);
   }
 });
+
+// ES2017-compatible multiline matching must preserve Arabic diacritics and mixed scripts.
+test('nested cloze plain text preserves multiline Arabic and English, excluding hints', () => {
+  for (const inner of ['first\nsecond', 'عِلْمٌ\r\nEnglish', 'first\u2028second\u2029third']) {
+    const text = '{{c1::before {{c2::' + inner + '::hint\nتلميح}} after}}';
+    const result = processClozes(text, 1, 'back');
+    assert.deepEqual(result.clozeTexts, ['before ' + inner + ' after']);
+    assert.ok(result.rendered.includes(inner));
+    assert.ok(!result.rendered.includes('hint'));
+  }
+});

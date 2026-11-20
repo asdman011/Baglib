@@ -1,3 +1,12 @@
+## KEY-440 verified - 2026-11-20T20:10:08.383Z - Agent: Codex
+
+Fixed production renderer SRS fallback typing using a render-only Pick and replaced dotAll with equivalent ES2017 multiline matching. Introducing source lines: fc2b8b18e (KEY-390); shared context fallback assignment 532b1a907 (KEY-397). Arabic/English multiline regression passes. AGENTS.md now requires production renderer verification alongside main/root tsc/full tests. No tsconfig, target, dependency or schema changes. UX/layout unchanged; production compilation restored.
+
+Verified: npm run build:renderer, npm run build:main, node node_modules/typescript/bin/tsc --noEmit and node scripts/test-runner.js --test-concurrency=2: 2859/2859, 404 suites, zero failures. Existing five CSS ::highlight optimizer warnings remain nonfatal. Evidence .baglib-data/key440-evidence; local report docs/agent-ops/reports/KEY-440.md.
+
+Exact tracked files: `AGENTS.md`, `src/renderer/components/knowledge/SrsReviewPanel.tsx`, `src/renderer/components/knowledge/SrsReviewScreen.tsx`, `src/shared/revision/template-engine.ts`, `tests/services/card-notes.test.ts`, `CURRENT_TASK.md`, `IMPLEMENTATION_PLAN.md`. Own state hunks only; preserve all concurrent KEY-437 work. Jira In Progress (21); Done pending commit and successful normal push, explicitly authorized by current request.
+
+
 # Implementation Plan
 
 ## Recent Agent Updates

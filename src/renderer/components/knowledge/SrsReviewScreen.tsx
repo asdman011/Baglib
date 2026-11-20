@@ -12,7 +12,7 @@ import { MISTAKE_CATEGORIES, kindKey, mistakeKey, type MistakeCategory } from '.
 import { PracticeAnswer } from './PracticeAnswer';
 import { SafeCardRenderer, isTemplateHtml } from './SafeCardRenderer';
 import { renderTemplate, contextClozeCardFields, DEFAULT_CONTEXT_CLOZE_TEMPLATE, cardSearchTerm } from '../../../shared/revision/template-engine';
-import type { CardNote, CardNoteType } from '../../../shared/types/card-notes';
+import type { CardNote, CardNoteType, CardNoteTemplate } from '../../../shared/types/card-notes';
 import type { ReviewQueue, ReviewRating } from '../../../shared/srs';
 
 export interface SrsReviewScreenProps {
@@ -165,7 +165,7 @@ export const SrsReviewScreen: React.FC<SrsReviewScreenProps> = ({
     if (currentNote && currentNoteType) {
       try {
         const cardOrd = card.ord ?? 0;
-        let template = currentNoteType.templates[cardOrd];
+        let template: Pick<CardNoteTemplate, 'ord' | 'name' | 'front' | 'back'> | undefined = currentNoteType.templates[cardOrd];
         let clozeNum = cardOrd + 1;
 
         if (currentNoteType.kind === 'cloze') {

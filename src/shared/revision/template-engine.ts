@@ -159,7 +159,7 @@ export function processClozes(
 
       if (isMatch) {
         // Collect text without inner cloze markers
-        const plainBody = c.body.replace(/\{\{c\d+(?:,\d+)*::(.*?)(?:::.*?)?\}\}/gsu, '$1');
+        const plainBody = c.body.replace(/\{\{c\d+(?:,\d+)*::([\s\S]*?)(?:::[\s\S]*?)?\}\}/gu, '$1');
         matchedTexts.push(plainBody);
 
         if (side === 'front') {

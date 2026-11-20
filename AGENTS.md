@@ -345,6 +345,8 @@ Never:
 
 Do not tell the user a task is finished merely because code has been written.
 
+Production renderer verification (KEY-440): for changes to renderer code or shared code imported by the renderer, run `npm run build:renderer` as well as `npm run build:main`, `node node_modules/typescript/bin/tsc --noEmit`, and `node scripts/test-runner.js`. Root TypeScript checking alone does not cover the renderer project configuration. Do not loosen either TypeScript configuration to pass these checks.
+
 Before describing implementation work as complete, verify as applicable:
 
 - requested behavior has been implemented;

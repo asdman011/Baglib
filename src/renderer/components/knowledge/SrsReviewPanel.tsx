@@ -9,7 +9,7 @@ import { useOpenStudyLink } from '../../utils/use-study-link';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { KNOWLEDGE_CARD_SAVED } from '../../libs/knowledge-card-context';
 import { renderTemplate, contextClozeCardFields, DEFAULT_CONTEXT_CLOZE_TEMPLATE } from '../../../shared/revision/template-engine';
-import type { CardNote, CardNoteType } from '../../../shared/types/card-notes';
+import type { CardNote, CardNoteType, CardNoteTemplate } from '../../../shared/types/card-notes';
 import type { ReviewQueue, ReviewRating } from '../../../shared/srs';
 
 const playCardTts = async (text: string, ttsLang: string) => {
@@ -115,7 +115,7 @@ export function SrsReviewPanel({ deckId }: { deckId?: string | null } = {}) {
     if (currentNote && currentNoteType) {
       try {
         const cardOrd = card.ord ?? 0;
-        let template = currentNoteType.templates[cardOrd];
+        let template: Pick<CardNoteTemplate, 'ord' | 'name' | 'front' | 'back'> | undefined = currentNoteType.templates[cardOrd];
         let clozeNum = cardOrd + 1;
 
         if (currentNoteType.kind === 'cloze') {
