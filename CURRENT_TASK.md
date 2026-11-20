@@ -1,3 +1,37 @@
+﻿## AI epic KEY-434 complete, reviewed - 2026-11-21 - Agent: Claude Code
+
+**Reviewed and passed (Claude):**
+
+| Task | Commit | Agent |
+|---|---|---|
+| KEY-433 canvas web links | bb27ecd6 | Codex |
+| KEY-243 note editor upgrades | 363ecef7 | Antigravity |
+| KEY-440 production renderer build | 5207a897 | Codex |
+| KEY-435 AI audit | 57753064 | Codex |
+| KEY-437 Explain it back | 70f0c109 | Antigravity |
+| KEY-439 AI actions, phase 1 | 28c8b8b5 | Antigravity |
+| KEY-439 AI actions, phase 2 (PDF) | 27bd34b3 | Antigravity |
+| KEY-436 learning mode | 4d82befe | Antigravity |
+| KEY-441 translation privacy | 0e7efbee | Codex |
+| KEY-442 shared privacy surface | 8ddbb626 | Codex, finished by Antigravity |
+| KEY-438 cited answers | e45a3809 | Antigravity |
+| KEY-443 template marker | 4d52df52 | Antigravity |
+| KEY-444 retention stats | 07437325 | Antigravity |
+
+**Checks.** tsc clean, and the focused tests pass for each task.
+
+**Points checked by hand:**
+- the main process allows only http, https and mailto links;
+- AI-action plans are stored in main, and confirm executes only the stored plan;
+- PDF paths come only from library records; outputs are new files, and undo deletes only those outputs;
+- AI cards stay out of revision until they are accepted;
+- local AI detection uses an exact list of hosts.
+
+**Jira changes:**
+- Created KEY-433 to KEY-444: the epic KEY-434 with the new label "AI", its child tasks, and the bugs KEY-433 and KEY-440.
+- The user approved the KEY-434 principles on 2026-11-20.
+
+**Files.** CURRENT_TASK.md only.
 ## KEY-439 (Phase 2): PDF operations as AI actions (AI Task 5, epic KEY-434) — 2026-11-21T00:44+02:00 - Agent: Antigravity
 
 **Done:**
