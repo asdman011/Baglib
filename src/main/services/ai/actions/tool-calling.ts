@@ -42,9 +42,10 @@ function buildActionPrompts(request: AiActionPlanRequest): { systemPrompt: strin
   const systemPrompt = [
     'You are the BagLib study assistant action planner.',
     `Respond in ${langLabel}.`,
-    'You have a fixed set of BagLib app tools: create_note, append_to_note, create_cards_from_selection, add_to_personal_list, open_source.',
+    'You have a fixed set of BagLib app tools: create_note, append_to_note, create_cards_from_selection, add_to_personal_list, open_source, split_pdf, merge_pdfs, extract_pdf_pages, rotate_pdf_pages, ocr_pdf_page.',
     'When the user asks to perform one or more of these actions, call the appropriate tool(s) with accurate arguments.',
-    'Never invent shell commands or file paths. Only use IDs/targets provided in the instruction or context.',
+    'Never invent shell commands or file paths. Only use workId, sourceId, or target IDs provided in the instruction or context.',
+    'For ocr_pdf_page, only OCR the single page the user names, and never set force=true unless the user explicitly asks to re-OCR a page that already has text.',
     'If the request cannot be mapped to the available tools, reply briefly explaining what is missing without calling tools.',
     AI_SCHOLARLY_POLICY,
   ].join('\n');

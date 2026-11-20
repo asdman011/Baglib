@@ -18,6 +18,11 @@ export const AI_ACTION_TOOL_NAMES = [
   'create_cards_from_selection',
   'add_to_personal_list',
   'open_source',
+  'split_pdf',
+  'merge_pdfs',
+  'extract_pdf_pages',
+  'rotate_pdf_pages',
+  'ocr_pdf_page',
 ] as const;
 
 export type AiActionToolName = (typeof AI_ACTION_TOOL_NAMES)[number];
@@ -133,6 +138,106 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'split_pdf',
+      description: 'Split a library PDF into new PDF files next to the source. Never overwrites the original.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['workId'],
+        properties: {
+          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          sourceId: { type: 'string', maxLength: 180 },
+          ranges: { type: 'string', minLength: 1, maxLength: 500 },
+          pagesPerFile: { type: 'integer', minimum: 1, maximum: 5000 },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'merge_pdfs',
+      description: 'Merge two or more library PDFs into a new PDF file next to the first source.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['sources'],
+        properties: {
+          sources: {
+            type: 'array',
+            minItems: 2,
+            maxItems: 10,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['workId'],
+              properties: {
+                workId: { type: 'string', minLength: 1, maxLength: 180 },
+                sourceId: { type: 'string', maxLength: 180 },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'extract_pdf_pages',
+      description: 'Extract specific pages (e.g. "1,3-5") from a library PDF into a new PDF file next to the source.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['workId', 'pages'],
+        properties: {
+          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          sourceId: { type: 'string', maxLength: 180 },
+          pages: { type: 'string', minLength: 1, maxLength: 500 },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rotate_pdf_pages',
+      description: 'Rotate pages of a library PDF by 90, 180, or 270 degrees into a new PDF file next to the source.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['workId', 'angle'],
+        properties: {
+          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          sourceId: { type: 'string', maxLength: 180 },
+          angle: { type: 'integer', enum: [90, 180, 270] },
+          pages: { type: 'string', minLength: 1, maxLength: 500 },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ocr_pdf_page',
+      description: 'Run OCR on one named page of a library PDF and write a new text file next to the source. Do not force OCR on pages that already have a text layer unless explicitly asked.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['workId', 'page'],
+        properties: {
+          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          sourceId: { type: 'string', maxLength: 180 },
+          page: { type: 'integer', minimum: 1, maximum: 10000 },
+          language: { type: 'string', enum: ['ara', 'eng', 'ara+eng', 'auto'] },
+          force: { type: 'boolean' },
+        },
+      },
+    },
+  },
 ];
 
 export interface CreateNoteArgs {
@@ -168,12 +273,49 @@ export interface OpenSourceArgs {
   label?: string;
 }
 
+export interface SplitPdfArgs {
+  workId: string;
+  sourceId?: string;
+  ranges?: string;
+  pagesPerFile?: number;
+}
+
+export interface MergePdfsArgs {
+  sources: Array<{ workId: string; sourceId?: string }>;
+}
+
+export interface ExtractPdfPagesArgs {
+  workId: string;
+  sourceId?: string;
+  pages: string;
+}
+
+export interface RotatePdfPagesArgs {
+  workId: string;
+  sourceId?: string;
+  angle: 90 | 180 | 270;
+  pages?: string;
+}
+
+export interface OcrPdfPageArgs {
+  workId: string;
+  sourceId?: string;
+  page: number;
+  language?: 'ara' | 'eng' | 'ara+eng' | 'auto';
+  force?: boolean;
+}
+
 export type ValidatedAiActionCall =
   | { tool: 'create_note'; args: CreateNoteArgs }
   | { tool: 'append_to_note'; args: AppendToNoteArgs }
   | { tool: 'create_cards_from_selection'; args: CreateCardsArgs }
   | { tool: 'add_to_personal_list'; args: AddToPersonalListArgs }
-  | { tool: 'open_source'; args: OpenSourceArgs };
+  | { tool: 'open_source'; args: OpenSourceArgs }
+  | { tool: 'split_pdf'; args: SplitPdfArgs }
+  | { tool: 'merge_pdfs'; args: MergePdfsArgs }
+  | { tool: 'extract_pdf_pages'; args: ExtractPdfPagesArgs }
+  | { tool: 'rotate_pdf_pages'; args: RotatePdfPagesArgs }
+  | { tool: 'ocr_pdf_page'; args: OcrPdfPageArgs };
 
 export type AiActionErrorCode =
   | 'ai-disabled'
@@ -208,6 +350,11 @@ export interface AiActionPreviewStep {
     target?: string;
     sourceLabel?: string;
     tags?: string[];
+    outputPaths?: string[];
+    pageRange?: string;
+    angle?: number;
+    page?: number;
+    ocrLanguage?: string;
   };
 }
 
@@ -226,6 +373,7 @@ export interface AiActionExecutedStep {
   itemKind?: PersonalListItemKind;
   itemRef?: string;
   openTarget?: string;
+  outputPaths?: string[];
 }
 
 export interface AiActionPlanRequest {
@@ -281,6 +429,48 @@ export interface AiActionsAPI {
 
 const SAFE_ID = /^[\w-]{1,180}$/u;
 const OPEN_SOURCE_PREFIXES = ['book:', 'quran:', 'sunnah:', 'note:'] as const;
+const PAGE_RANGE_SYNTAX = /^\s*\d+(?:\s*-\s*\d+)?(?:\s*,\s*\d+(?:\s*-\s*\d+)?)*\s*$/u;
+const OCR_LANGUAGES = ['ara', 'eng', 'ara+eng', 'auto'] as const;
+
+export function parsePageRanges(
+  spec: string,
+  totalPages: number
+): { ok: true; pages: number[]; groups: number[][] } | { ok: false; reason: string } {
+  if (typeof spec !== 'string' || !PAGE_RANGE_SYNTAX.test(spec)) {
+    return { ok: false, reason: 'invalid-page-range-syntax' };
+  }
+  if (!Number.isInteger(totalPages) || totalPages < 1) {
+    return { ok: false, reason: 'invalid-total-pages' };
+  }
+  const tokens = spec.split(',').map(part => part.trim()).filter(Boolean);
+  if (tokens.length === 0 || tokens.length > 500) {
+    return { ok: false, reason: 'invalid-page-range-syntax' };
+  }
+  const pages: number[] = [];
+  const groups: number[][] = [];
+  for (const token of tokens) {
+    const match = /^(\d+)(?:\s*-\s*(\d+))?$/u.exec(token);
+    if (!match) return { ok: false, reason: 'invalid-page-range-syntax' };
+    const start = Number.parseInt(match[1], 10);
+    const end = match[2] !== undefined ? Number.parseInt(match[2], 10) : start;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start || end > totalPages) {
+      return { ok: false, reason: 'page-out-of-range' };
+    }
+    const group: number[] = [];
+    for (let p = start; p <= end; p++) {
+      pages.push(p);
+      group.push(p);
+      if (pages.length > 10_000) return { ok: false, reason: 'page-range-too-large' };
+    }
+    groups.push(group);
+  }
+  return { ok: true, pages, groups };
+}
+
+function parseOptionalId(raw: unknown): string | undefined | null {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  return typeof raw === 'string' && SAFE_ID.test(raw.trim()) ? raw.trim() : null;
+}
 
 export function isAiActionToolName(name: unknown): name is AiActionToolName {
   return typeof name === 'string' && (AI_ACTION_TOOL_NAMES as readonly string[]).includes(name);
@@ -393,6 +583,123 @@ export function validateToolCallArguments(
       }
       const label = typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 300) : undefined;
       return { ok: true, call: { tool: 'open_source', args: { target, ...(label ? { label } : {}) } } };
+    }
+
+    case 'split_pdf': {
+      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
+      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
+      const sourceId = parseOptionalId(args.sourceId);
+      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+      const ranges = typeof args.ranges === 'string' && args.ranges.trim() ? args.ranges.trim() : undefined;
+      if (ranges !== undefined && (ranges.length > 500 || !PAGE_RANGE_SYNTAX.test(ranges))) {
+        return { ok: false, reason: 'invalid-page-range-syntax' };
+      }
+      let pagesPerFile: number | undefined;
+      if (args.pagesPerFile !== undefined) {
+        if (typeof args.pagesPerFile !== 'number' || !Number.isInteger(args.pagesPerFile) || args.pagesPerFile < 1 || args.pagesPerFile > 5000) {
+          return { ok: false, reason: 'invalid-pages-per-file' };
+        }
+        pagesPerFile = args.pagesPerFile;
+      }
+      return {
+        ok: true,
+        call: {
+          tool: 'split_pdf',
+          args: {
+            workId,
+            ...(sourceId ? { sourceId } : {}),
+            ...(ranges ? { ranges } : {}),
+            ...(pagesPerFile !== undefined ? { pagesPerFile } : {}),
+          },
+        },
+      };
+    }
+
+    case 'merge_pdfs': {
+      if (!Array.isArray(args.sources) || args.sources.length < 2 || args.sources.length > 10) {
+        return { ok: false, reason: 'invalid-merge-sources' };
+      }
+      const sources: Array<{ workId: string; sourceId?: string }> = [];
+      for (const item of args.sources) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return { ok: false, reason: 'invalid-merge-sources' };
+        const rec = item as Record<string, unknown>;
+        const workId = typeof rec.workId === 'string' ? rec.workId.trim() : '';
+        if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
+        const sourceId = parseOptionalId(rec.sourceId);
+        if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+        sources.push({ workId, ...(sourceId ? { sourceId } : {}) });
+      }
+      return { ok: true, call: { tool: 'merge_pdfs', args: { sources } } };
+    }
+
+    case 'extract_pdf_pages': {
+      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
+      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
+      const sourceId = parseOptionalId(args.sourceId);
+      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+      const pages = typeof args.pages === 'string' ? args.pages.trim() : '';
+      if (!pages || pages.length > 500 || !PAGE_RANGE_SYNTAX.test(pages)) {
+        return { ok: false, reason: 'invalid-page-range-syntax' };
+      }
+      return {
+        ok: true,
+        call: {
+          tool: 'extract_pdf_pages',
+          args: { workId, ...(sourceId ? { sourceId } : {}), pages },
+        },
+      };
+    }
+
+    case 'rotate_pdf_pages': {
+      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
+      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
+      const sourceId = parseOptionalId(args.sourceId);
+      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+      if (args.angle !== 90 && args.angle !== 180 && args.angle !== 270) {
+        return { ok: false, reason: 'invalid-rotation-angle' };
+      }
+      const pages = typeof args.pages === 'string' && args.pages.trim() ? args.pages.trim() : undefined;
+      if (pages !== undefined && (pages.length > 500 || !PAGE_RANGE_SYNTAX.test(pages))) {
+        return { ok: false, reason: 'invalid-page-range-syntax' };
+      }
+      return {
+        ok: true,
+        call: {
+          tool: 'rotate_pdf_pages',
+          args: { workId, ...(sourceId ? { sourceId } : {}), angle: args.angle, ...(pages ? { pages } : {}) },
+        },
+      };
+    }
+
+    case 'ocr_pdf_page': {
+      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
+      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
+      const sourceId = parseOptionalId(args.sourceId);
+      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+      if (typeof args.page !== 'number' || !Number.isInteger(args.page) || args.page < 1 || args.page > 10_000) {
+        return { ok: false, reason: 'invalid-page-number' };
+      }
+      let language: OcrPdfPageArgs['language'];
+      if (args.language !== undefined) {
+        if (typeof args.language !== 'string' || !(OCR_LANGUAGES as readonly string[]).includes(args.language)) {
+          return { ok: false, reason: 'invalid-ocr-language' };
+        }
+        language = args.language as OcrPdfPageArgs['language'];
+      }
+      const force = args.force === true ? true : undefined;
+      return {
+        ok: true,
+        call: {
+          tool: 'ocr_pdf_page',
+          args: {
+            workId,
+            ...(sourceId ? { sourceId } : {}),
+            page: args.page,
+            ...(language ? { language } : {}),
+            ...(force ? { force } : {}),
+          },
+        },
+      };
     }
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { BookOpenText, Check, Layers, ListPlus, NotebookPen, RotateCcw, Sparkles, X } from 'lucide-react';
+import { BookOpenText, Check, FileOutput, Layers, ListPlus, Merge, NotebookPen, RotateCcw, RotateCw, ScanText, Scissors, Sparkles, X } from 'lucide-react';
 import type { AiActionPlan, AiActionPreviewStep } from '../../../shared/ai-actions';
 import { PERSONAL_LISTS_CHANGED } from '../../../shared/personal-lists';
 import type { TranslationKey } from '../../translations';
@@ -40,6 +40,16 @@ function StepIcon({ tool }: { tool: AiActionPreviewStep['tool'] }) {
       return <ListPlus className="mt-0.5 size-3.5 shrink-0 text-primary-text" />;
     case 'open_source':
       return <BookOpenText className="mt-0.5 size-3.5 shrink-0 text-primary-text" />;
+    case 'split_pdf':
+      return <Scissors className="mt-0.5 size-3.5 shrink-0 text-primary-text" />;
+    case 'merge_pdfs':
+      return <Merge className="mt-0.5 size-3.5 shrink-0 text-primary-text" />;
+    case 'extract_pdf_pages':
+      return <FileOutput className="mt-0.5 size-3.5 shrink-0 text-primary-text" />;
+    case 'rotate_pdf_pages':
+      return <RotateCw className="mt-0.5 size-3.5 shrink-0 text-primary-text" />;
+    case 'ocr_pdf_page':
+      return <ScanText className="mt-0.5 size-3.5 shrink-0 text-primary-text" />;
   }
 }
 
@@ -115,6 +125,20 @@ export function AiActionsPreviewCard({
               <p dir="auto" className="mt-1 text-[10px] text-muted">
                 {step.details.target}
               </p>
+            )}
+
+            {step.details.outputPaths && step.details.outputPaths.length > 0 && (
+              <div className="mt-1.5 space-y-0.5 rounded border border-subtle/60 bg-canvas px-2 py-1 text-[10px] text-muted">
+                <p className="font-medium text-ink">{t('aiActionOutputFiles')}</p>
+                {step.details.outputPaths.map(outPath => {
+                  const filename = outPath.split(/[\\/]/u).pop() || outPath;
+                  return (
+                    <p key={outPath} dir="ltr" className="truncate font-mono">
+                      {filename}
+                    </p>
+                  );
+                })}
+              </div>
             )}
           </li>
         ))}

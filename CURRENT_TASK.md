@@ -1,3 +1,24 @@
+## KEY-439 (Phase 2): PDF operations as AI actions (AI Task 5, epic KEY-434) — 2026-11-21T00:44+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/ai-actions.ts`: added 5 Phase 2 PDF tools (`split_pdf`, `merge_pdfs`, `extract_pdf_pages`, `rotate_pdf_pages`, `ocr_pdf_page`) to `AI_ACTION_TOOL_NAMES` / `AI_ACTION_TOOLS`, `parsePageRanges(spec, totalPages)`, and strict `validateToolCallArguments` validation (no free filesystem paths from the model).
+- `src/main/services/ai/actions/pdf-actions.ts`: reused existing `runStirlingPdf` (`stirling.ts`) + `pdfEngineTools()` (`tools.ts`) for split/merge/extract/rotate, `OcrService.getInstance().recognizePdfPage` (`ocr.service.ts`) for single-page OCR, and `pdfjs-dist/legacy/build/pdf.mjs` for page count and text-layer inspection; `uniqueOutputPaths` writes collision-safe NEW files next to the source.
+- `src/main/services/ai/actions/{tool-executor,tool-calling}.ts`: resolved library PDFs via `resolvePdfSource(db, workId, sourceId)`, validated page ranges in main, enforced text-layer guard on `ocr_pdf_page` (blocks OCR on pages with existing text unless `force: true`), previewed planned output paths, and implemented undo deleting ONLY the newly created output files.
+- `src/renderer/components/ai/AiActionsPreview.tsx` & `src/renderer/translations.ts`: added icons, planned output filename display, and 7 bilingual (`ar` + `en`) keys.
+- `tests/services/ai-actions.test.ts` & `scripts/key439-phase2-live/{main.cjs,run.mjs}`: unit tests and live Electron verification in `ar` and `en` with real Arabic/English text-layer and scanned-image-only PDFs copied into a throwaway profile.
+
+**Tests:**
+- Focused (`tests/services/ai-actions.test.ts`): 6/6 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,906/2,906 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key439-phase2-live/run.mjs`): PASS in `ar` (5 new files created & undone) and `en` (2 new files created & undone), `errors: []`, screenshots in `.baglib-data/key439-phase2-evidence/`, throwaway profile deleted.
+
+**Jira:**
+- `KEY-439` In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-439.md`, `scripts/key439-phase2-live/main.cjs`, `scripts/key439-phase2-live/run.mjs`, `src/main/services/ai/actions/pdf-actions.ts`, `src/main/services/ai/actions/tool-calling.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/renderer/components/ai/AiActionsPreview.tsx`, `src/renderer/translations.ts`, `src/shared/ai-actions.ts`, `tests/services/ai-actions.test.ts`.
+
 ## KEY-444: AI-assisted card retention stats & PDF digest try-first nudge (AI Task 9, epic KEY-434) — 2026-11-21T00:27+02:00 - Agent: Antigravity
 
 **Done:**
