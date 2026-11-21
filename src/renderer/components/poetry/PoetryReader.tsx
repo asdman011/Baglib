@@ -11,6 +11,7 @@ import { ListItemControls, listMenuItems } from '../lists/PersonalListControls';
 import { poemListRef } from '../../../shared/personal-lists';
 import { shortcutForEvent, shortcutHint } from '../actions/shortcuts';
 import { addPassageToSrs, passageNote } from '../actions/passage-actions';
+import { requestAssistant } from '../ai/AssistantContext';
 import { createPoetryVersePayload, requestSendToManuscript, writeSourceDrag } from '../../../shared/manuscript-transfer';
 import { NoteMarker } from '../notes/NoteMarker';
 import { useNoteMarkers } from '../../hooks/useNoteMarkers';
@@ -246,6 +247,7 @@ export function PoetryReader({ poem, onBack, onPoet, initialVerse, initialTo }: 
             { id: 'copy-line', label: t('ctxCopyText'), onClick: () => copyRow({ sadr: row.sadr, ajuz: null }) },
             highlightItems(row),
             { id: 'srs', label: t('ctxAddSrs'), onClick: () => addPassageToSrs({ text: poetryCopyText([row], poem), sourceKind: 'poetry', sourceRef: 'poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, sourceLabel: [poem.poet_name, poem.title].filter(Boolean).join(' — '), language: poem.language }) },
+            { id: 'add-to-ai', label: t('ctxAddToAiConversation'), onClick: () => requestAssistant({ sources: [{ target: 'poetry:ashaar:' + poem.id + ':' + row.sourceFrom + ':' + row.sourceTo, label: [poem.poet_name, poem.title].filter(Boolean).join(' — ') }] }) },
             { id: 'manuscript', label: t('ctxSendToManuscript'), onClick: () => requestSendToManuscript(versePayload()) },
           ]} key={row.index} data-poetry-row data-poetry-row-index={row.index} data-poetry-kind={row.kind} data-actions-open={actionsRow === row.index} data-card-kind="poetry" data-card-ref={`poetry:${poem.id}:${row.index}`} data-card-label={[poem.poet_name, poem.title].filter(Boolean).join(' · ')} data-poetry-source-index={row.sourceFrom} data-poetry-mark={rowMark(row)} aria-selected={selected}
             onPointerDown={event => {

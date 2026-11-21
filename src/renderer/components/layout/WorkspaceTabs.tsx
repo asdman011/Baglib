@@ -10,7 +10,8 @@
  * - `useWorkspaceTabShortcuts`: Ctrl+T/W/Tab/1…9, Ctrl+Shift+T, Alt+Left/Right and the mouse back/forward buttons.
  */
 import React from 'react';
-import { AppWindow, FolderPlus, Columns2, Copy, ListPlus, Plus, RotateCcw, X } from 'lucide-react';
+import { AppWindow, FolderPlus, Columns2, Copy, ListPlus, Plus, RotateCcw, Sparkles, X } from 'lucide-react';
+import { requestAssistant } from '../ai/AssistantContext';
 import { TabScope, useTabs, useWorkspace } from '../context/WorkspaceContext';
 import { formatTabsLinksWithAnnotations } from '../../utils/share-with-annotations';
 import { editorLeaveGuard } from '../research/editor-leave';
@@ -362,6 +363,20 @@ export const WorkspaceTabRow: React.FC = () => {
             if (!moved) toast?.showToast({ message: t('workspaceTabMoveToNewWindowFailed'), type: 'danger' });
           });
         },
+      });
+    }
+    const aiSources = targets
+      .map(id => state.tabs.find(tab => tab.id === id))
+      .filter((tab): tab is WorkspaceTab => Boolean(tab))
+      .map(tab => tabTargetToListItem(currentLocation(tab).target ?? '', tabLabel(tab, t)))
+      .filter((item): item is NonNullable<ReturnType<typeof tabTargetToListItem>> => Boolean(item))
+      .map(item => ({ target: item.itemRef, label: item.label }));
+    if (aiSources.length > 0) {
+      items.push({
+        id: 'add-to-ai',
+        label: t('ctxAddToAiConversation'),
+        icon: <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />,
+        onClick: () => requestAssistant({ sources: aiSources }),
       });
     }
     const shareSourceOnly = prefs?.shareSourceOnly ?? false;

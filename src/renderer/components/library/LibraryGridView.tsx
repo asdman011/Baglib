@@ -1,6 +1,8 @@
 'use client';
 
 import { requestBookRevision } from '../knowledge/BookRevisionHost';
+import { requestAssistant } from '../ai/AssistantContext';
+import { bookStudyTarget } from '../../../shared/study-notes';
 import React, { createElement, useState, useRef, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { ContextMenu } from '../ui/ContextMenu';
 import { Menu } from '../ui/Menu';
@@ -1075,6 +1077,7 @@ export const LibraryGridView: React.FC = () => {
     const items = actions.map(action => ({ id: action.id, label: action.label, icon: createElement(CARD_ACTION_ICONS[action.icon] ?? Info, { size: 14 }), danger: action.danger, disabled: !!action.disabledReason, disabledReason: action.disabledReason, onClick: action.onSelect }));
     if (book.workType === 'lecture' && book.filePath && isLectureFormat(book.digitalFormat)) items.push({ id: 'lecture-series', label: t('lectureAddToSeries'), icon: createElement(Info, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => setSeriesWork(book.id) });
     // KEY-398: revise this book.
+    items.push({ id: 'add-to-ai', label: t('ctxAddToAiConversation'), icon: createElement(Sparkles, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => requestAssistant({ sources: [{ target: bookStudyTarget({ id: book.id, sourceId: book.sourceId }), label: book.title }] }) });
     items.push({ id: 'revise-deck', label: t('bookReviseDeck'), icon: createElement(Layers, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => requestBookRevision({ mode: 'deck', workId: book.id }) });
     items.push({ id: 'revise-questions', label: t('bookReviseQuestions'), icon: createElement(Sparkles, { size: 14 }), danger: false, disabled: false, disabledReason: undefined, onClick: () => requestBookRevision({ mode: 'questions', workId: book.id, title: book.title }) });
     // KEY-386: Star and "Add to list".

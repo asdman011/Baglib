@@ -2,6 +2,8 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { ContextMenu } from '../ui/ContextMenu';
+import { requestAssistant } from '../ai/AssistantContext';
 import type { Lecture } from '../../../shared/lectures';
 import type { LectureSeries } from '../../../shared/lecture-series';
 const button = 'rounded-lg border border-subtle px-2 py-1 text-xs disabled:opacity-40';
@@ -44,7 +46,8 @@ export function LectureSeriesList({ lectures, series, selected, onSelect, onRemo
     [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
     void apply(window.electronAPI.lectures.series.reorder(group.id, ids));
   };
-  const row = (lecture: Lecture, group?: LectureSeries, index = 0) => <li key={lecture.id} data-lecture-row={lecture.id} draggable={!!group}
+  const row = (lecture: Lecture, group?: LectureSeries, index = 0) => <ContextMenu as="li" key={lecture.id} data-lecture-row={lecture.id} draggable={!!group}
+    items={[{ id: 'add-to-ai', label: t('ctxAddToAiConversation'), onClick: () => requestAssistant({ sources: [{ target: `media:${lecture.id}`, label: lecture.title }] }) }]}
     onDragStart={event => { event.stopPropagation(); event.dataTransfer.setData('application/x-baglib-lecture', lecture.id); event.dataTransfer.effectAllowed = 'move'; }}
     onDragOver={event => { if (group && event.dataTransfer.types.includes('application/x-baglib-lecture')) { event.preventDefault(); event.stopPropagation(); } }}
     onDrop={event => { if (!group || !event.dataTransfer.types.includes('application/x-baglib-lecture')) return; event.preventDefault(); event.stopPropagation(); reorder(group, event.dataTransfer.getData('application/x-baglib-lecture'), lecture.id); }}
@@ -54,7 +57,7 @@ export function LectureSeriesList({ lectures, series, selected, onSelect, onRemo
     <div className="flex gap-1"><select data-series-assign className="min-w-0 flex-1 rounded border border-subtle bg-surface p-1 text-xs leading-relaxed" aria-label={t('lectureAddToSeries') + ' · ' + lecture.title} value={group?.id ?? ''} onChange={event => void apply(window.electronAPI.lectures.series.assign(lecture.id, event.target.value || null))}>
       <option value="">{t('lectureNoSeries')}</option>{series.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
     </select>{group && <><button data-series-up type="button" className={button} disabled={index === 0} aria-label={t('lectureSeriesUp')} title={t('lectureSeriesUp')} onClick={() => move(group, index, -1)}><ArrowUp size={12} /></button><button data-series-down type="button" className={button} disabled={index === group.items.length - 1} aria-label={t('lectureSeriesDown')} title={t('lectureSeriesDown')} onClick={() => move(group, index, 1)}><ArrowDown size={12} /></button></>}</div>
-  </li>;
+  </ContextMenu>;
   const grouped = new Set(series.flatMap(item => item.items.map(lecture => lecture.workId)));
   return <div className="min-w-0 space-y-2 max-h-[65vh] overflow-auto rounded-xl border border-subtle p-2" data-lecture-series-list>
     <form className="flex gap-1" onSubmit={event => { event.preventDefault(); void apply(window.electronAPI.lectures.series.create(name).then(() => setName(''))); }}>

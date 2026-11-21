@@ -7,7 +7,7 @@ import { markAiGenerated } from '../../../shared/ai-principles';
  * study-assistant pipeline with approval, and the full study tools stay one click away.
  */
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpenText, Bot, Check, Copy, FilePlus2, FileText, Loader2, NotebookPen, Plus, RotateCcw, Send, Settings, Sparkles, X } from 'lucide-react';
+import { BookOpenText, Bot, Check, Copy, Feather, FilePlus2, FileText, Headphones, Loader2, NotebookPen, Plus, RotateCcw, Send, Settings, Sparkles, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAssistant, type AssistantMessage } from './AssistantContext';
 import { useRemoteConsent } from './useRemoteConsent';
@@ -18,7 +18,8 @@ import { answerForInsert } from '../../../shared/research-ai';
 import { splitCitedTextParts } from '../../../shared/cited-answer';
 import { cardSourceKind, passageKind, type AssistantCard } from '../../../shared/study-assistant';
 import type { ChatAction, ChatSourceRef } from '../../../shared/assistant-chat';
-import { matchesStudyQuery, parseBookTarget } from '../../../shared/study-notes';
+import { bookStudyTarget, matchesStudyQuery, parseBookTarget } from '../../../shared/study-notes';
+import { isUnableToolReply, looksLikeActionRequest } from '../../../shared/ai-actions';
 import { searchCorpus, type CorpusOption } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { openStudyNote } from '../../utils/study-navigation';
@@ -38,7 +39,7 @@ type CardsMessage = { id: number; role: 'cards'; cards: AssistantCard[]; state: 
 type Message = AssistantMessage | CardsMessage | ActionPlanMessage | ActionUndoneMessage;
 
 export function GlobalAssistant() {
-  const { t, lang, dir, viewMode, setViewMode } = useWorkspace();
+  const { t, lang, dir, viewMode, setViewMode, books } = useWorkspace();
   const assistant = useAssistant();
   const { open, setOpen, sources, setSources, page, draft, setDraft } = assistant;
   const messages = assistant.messages as Message[];
@@ -54,6 +55,8 @@ export function GlobalAssistant() {
   const [picker, setPicker] = useState(false);
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<{ query: string; items: CorpusOption[] }>({ query: '', items: [] });
+  const [lectures, setLectures] = useState<Array<{ id: string; title: string }>>([]);
+  const [manuscripts, setManuscripts] = useState<Array<{ id: string; title: string }>>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [studyTools, setStudyTools] = useState(false);
   const [explain, setExplain] = useState<ChatSourceRef | null>(null);
@@ -67,13 +70,23 @@ export function GlobalAssistant() {
 
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages, busy, open]);
   useEffect(() => {
+    if (!picker) return;
+    let live = true;
+    void window.electronAPI?.lectures?.list?.().then(list => { if (live && Array.isArray(list)) setLectures(list); }).catch(() => {});
+    void window.electronAPI?.manuscripts?.list?.(false).then(list => { if (live && Array.isArray(list)) setManuscripts(list); }).catch(() => {});
+    return () => { live = false; };
+  }, [picker]);
+  useEffect(() => {
     const term = query.trim();
     if (term.length < 2) return;
     let live = true;
-    const timer = setTimeout(() => { void searchCorpus(['quran', 'hadith'], term, id => t(collectionKeys[id]), 6).then(items => { if (live) setFound({ query: term, items }); }).catch(() => { if (live) setFound({ query: term, items: [] }); }); }, 250);
+    const timer = setTimeout(() => { void searchCorpus(['quran', 'hadith', 'poem'], term, id => t(collectionKeys[id]), 6).then(items => { if (live) setFound({ query: term, items }); }).catch(() => { if (live) setFound({ query: term, items: [] }); }); }, 250);
     return () => { live = false; clearTimeout(timer); };
   }, [query, t]);
-  const noteHits = useMemo(() => (query.trim().length < 2 ? notes.slice(0, 6) : notes.filter(note => matchesStudyQuery(`${note.title} ${note.content}`, query)).slice(0, 6)), [notes, query]);
+  const bookHits = useMemo(() => (query.trim().length < 2 ? books.slice(0, 5) : books.filter(book => matchesStudyQuery(`${book.title} ${book.author ?? ''}`, query)).slice(0, 5)), [books, query]);
+  const noteHits = useMemo(() => (query.trim().length < 2 ? notes.slice(0, 5) : notes.filter(note => matchesStudyQuery(`${note.title} ${note.content}`, query)).slice(0, 5)), [notes, query]);
+  const lectureHits = useMemo(() => (query.trim().length < 2 ? lectures.slice(0, 4) : lectures.filter(lecture => matchesStudyQuery(lecture.title, query)).slice(0, 4)), [lectures, query]);
+  const manuscriptHits = useMemo(() => (query.trim().length < 2 ? manuscripts.slice(0, 4) : manuscripts.filter(ms => matchesStudyQuery(ms.title, query)).slice(0, 4)), [manuscripts, query]);
   const corpusHits = query.trim().length >= 2 && found.query === query.trim() ? found.items : [];
   const attach = (ref: ChatSourceRef) => setSources(current => (current.some(item => item.target === ref.target) || current.length >= 20 ? current : [...current, ref]));
   const push = (message: Message) => setMessages(current => [...current, message]);
@@ -118,17 +131,29 @@ export function GlobalAssistant() {
     setBusy(true);
     try {
       await chapter?.flush?.();
-      if (!action && actionsMode && !options?.revealFullAnswer) {
+      const actionIntent = looksLikeActionRequest(text);
+      if (!action && !options?.revealFullAnswer && (actionsMode || actionIntent)) {
         const res = await window.electronAPI.aiActions.plan({
           instruction: text.trim(),
           language: lang === 'ar' ? 'ar' : 'en',
           allowRemote,
-          context: { selectedText: selection, activeTarget: sources[0]?.target, activeLabel: sources[0]?.label },
+          context: {
+            selectedText: selection,
+            activeTarget: sources[0]?.target,
+            activeLabel: sources[0]?.label,
+            sources: sources.map(s => ({ target: s.target, label: s.label })),
+          },
         });
         if (res.ok && res.kind === 'plan') push({ id: id(), role: 'action-plan', plan: res.plan, status: 'pending' });
-        else if (res.ok && res.kind === 'unsupported') push({ id: id(), role: 'error', text: t('aiActionUnsupported') });
-        else if (res.ok && res.kind === 'message') push({ id: id(), role: 'assistant', text: res.text, citations: [], sourceCount: 0 });
-        else if (!res.ok) push({ id: id(), role: 'error', text: aiActionErrorText(res.error, res.detail, t) });
+        else if (res.ok && res.kind === 'unsupported') push({ id: id(), role: 'error', text: t('aiActionUnsupported'), settings: true });
+        else if (res.ok && res.kind === 'message') {
+          if (actionIntent && (!res.text.trim() || isUnableToolReply(res.text))) {
+            push({ id: id(), role: 'error', text: t('aiActionUnsupported'), settings: true });
+          } else {
+            push({ id: id(), role: 'assistant', text: res.text, citations: [], sourceCount: 0 });
+          }
+        }
+        else if (!res.ok) push({ id: id(), role: 'error', text: aiActionErrorText(res.error, res.detail, t), settings: ['not-configured', 'ai-disabled', 'learning-mode-off', 'provider-error'].includes(res.error) });
         return;
       }
       if (action === 'cards') {
@@ -242,33 +267,13 @@ export function GlobalAssistant() {
         </div>
       </header>
 
-      {/* What the assistant can see: the page's context and the attached sources */}
-      <div className="relative flex flex-wrap items-center gap-1.5 border-b border-subtle bg-canvas/50 px-3 py-2">
-        {page && <button type="button" data-assistant-page-context onClick={() => setUsePage(!usePage)} aria-pressed={usePage} title={page.label}
+      {/* What the assistant can see: the page's context */}
+      {page && <div className="flex flex-wrap items-center gap-1.5 border-b border-subtle bg-canvas/50 px-3 py-2">
+        <button type="button" data-assistant-page-context onClick={() => setUsePage(!usePage)} aria-pressed={usePage} title={page.label}
           className={`inline-flex max-w-[14rem] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${usePage ? 'border-primary/50 bg-primary/10 text-primary-text' : 'border-subtle text-muted line-through'}`}>
           <FileText className="size-3 shrink-0" /><span className="truncate" dir="auto">{t('assistantPageContext', { label: page.label })}</span>
-        </button>}
-        {sources.map(ref => <span key={ref.target} data-assistant-source={ref.target} className="inline-flex max-w-[12rem] items-center gap-1 rounded-full border border-subtle bg-surface px-2 py-0.5 text-[11px]">
-          {ref.target.startsWith('note:') ? <NotebookPen className="size-3 shrink-0" /> : <BookOpenText className="size-3 shrink-0" />}
-          <span className="truncate" dir="auto">{ref.label}</span>
-          <button type="button" onClick={() => setSources(current => current.filter(item => item.target !== ref.target))} aria-label={t('assistantRemoveSource', { label: ref.label })} className="rounded-full hover:text-main"><X className="size-3" /></button>
-        </span>)}
-        <button type="button" data-assistant-add-source onClick={() => setPicker(!picker)} aria-expanded={picker} className="inline-flex items-center gap-1 rounded-full border border-dashed border-subtle px-2 py-0.5 text-[11px] text-muted hover:border-primary/50 hover:text-main">
-          <Plus className="size-3" />{t('assistantAddSource')}
         </button>
-        {picker && <div className="absolute inset-x-3 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-xl border border-subtle bg-surface p-2 shadow-xl">
-          <input type="search" autoFocus dir="auto" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('assistantSourceSearch')} aria-label={t('assistantSourceSearch')} data-assistant-source-search
-            className="mb-1.5 w-full rounded-lg border border-subtle bg-canvas px-2.5 py-1.5 text-xs focus:border-primary focus:outline-none" />
-          <ul className="space-y-0.5 text-xs">
-            {noteHits.map(note => <li key={note.id}><button type="button" data-assistant-pick={`note:${note.id}`} onClick={() => { attach({ target: `note:${note.id}`, label: note.title || note.content.slice(0, 60) }); setPicker(false); setQuery(''); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-canvas">
-              <NotebookPen className="size-3.5 shrink-0 text-muted" /><span dir="auto" className="truncate">{note.title || note.content.slice(0, 60)}</span>
-            </button></li>)}
-            {corpusHits.map(option => <li key={option.target}><button type="button" data-assistant-pick={option.target} onClick={() => { attach({ target: option.target, label: option.label }); setPicker(false); setQuery(''); }} className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-canvas">
-              <BookOpenText className="mt-0.5 size-3.5 shrink-0 text-muted" /><span className="min-w-0"><b dir="auto" className="block">{t(option.kind === 'quran' ? 'studyLinkKindAyah' : 'studyLinkKindHadith')} · {option.label}</b><span dir="auto" className="block truncate text-muted">{option.snippet}</span></span>
-            </button></li>)}
-          </ul>
-        </div>}
-      </div>
+      </div>}
 
       {/* Conversation */}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3" aria-live="polite">
@@ -388,7 +393,46 @@ export function GlobalAssistant() {
 
       <p data-ai-recall-nudge className="px-3 py-2 text-[11px] leading-loose text-muted">{t('aiRecallNudge')}</p>
       {/* Composer */}
-      <div className="border-t border-subtle bg-surface p-2.5">
+      <div className="relative border-t border-subtle bg-surface p-2.5">
+        {/* Attached source chips + Add source button above the composer */}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5" data-assistant-sources-bar>
+          {sources.map(ref => <span key={ref.target} data-assistant-source={ref.target} className="inline-flex max-w-[12rem] items-center gap-1 rounded-full border border-subtle bg-canvas px-2 py-0.5 text-[11px]">
+            {ref.target.startsWith('note:') ? <NotebookPen className="size-3 shrink-0" /> : ref.target.startsWith('media:') ? <Headphones className="size-3 shrink-0" /> : ref.target.startsWith('poetry:') ? <Feather className="size-3 shrink-0" /> : ref.target.startsWith('manuscript:') ? <FileText className="size-3 shrink-0" /> : <BookOpenText className="size-3 shrink-0" />}
+            <span className="truncate" dir="auto">{ref.label}</span>
+            <button type="button" onClick={() => setSources(current => current.filter(item => item.target !== ref.target))} aria-label={t('assistantRemoveSource', { label: ref.label })} className="rounded-full hover:text-main"><X className="size-3" /></button>
+          </span>)}
+          <button type="button" data-assistant-add-source onClick={() => setPicker(!picker)} aria-expanded={picker} className="inline-flex items-center gap-1 rounded-full border border-dashed border-subtle px-2 py-0.5 text-[11px] text-muted hover:border-primary/50 hover:text-main">
+            <Plus className="size-3" />{t('assistantAddSource')}
+          </button>
+        </div>
+        {picker && <div className="absolute inset-x-2.5 bottom-full z-20 mb-1 max-h-72 overflow-y-auto rounded-xl border border-subtle bg-surface p-2 shadow-xl" data-assistant-source-picker>
+          <input type="search" autoFocus dir="auto" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('assistantSourceSearch')} aria-label={t('assistantSourceSearch')} data-assistant-source-search
+            className="mb-1.5 w-full rounded-lg border border-subtle bg-canvas px-2.5 py-1.5 text-xs focus:border-primary focus:outline-none" />
+          <ul className="space-y-0.5 text-xs">
+            {bookHits.map(book => {
+              const target = bookStudyTarget({ id: book.id, sourceId: book.sourceId });
+              return <li key={target}><button type="button" data-assistant-pick={target} onClick={() => { attach({ target, label: book.title }); setPicker(false); setQuery(''); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-canvas">
+                <BookOpenText className="size-3.5 shrink-0 text-muted" /><span className="min-w-0"><b dir="auto" className="block truncate">{t('assistantSourceKindBook')} · {book.title}</b>{book.author && <span dir="auto" className="block truncate text-muted">{book.author}</span>}</span>
+              </button></li>;
+            })}
+            {noteHits.map(note => <li key={note.id}><button type="button" data-assistant-pick={`note:${note.id}`} onClick={() => { attach({ target: `note:${note.id}`, label: note.title || note.content.slice(0, 60) }); setPicker(false); setQuery(''); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-canvas">
+              <NotebookPen className="size-3.5 shrink-0 text-muted" /><span dir="auto" className="truncate">{t('assistantSourceKindNote')} · {note.title || note.content.slice(0, 60)}</span>
+            </button></li>)}
+            {manuscriptHits.map(ms => <li key={ms.id}><button type="button" data-assistant-pick={`manuscript:${ms.id}`} onClick={() => { attach({ target: `manuscript:${ms.id}`, label: ms.title }); setPicker(false); setQuery(''); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-canvas">
+              <FileText className="size-3.5 shrink-0 text-muted" /><span dir="auto" className="truncate">{t('assistantSourceKindManuscript')} · {ms.title}</span>
+            </button></li>)}
+            {lectureHits.map(lecture => <li key={lecture.id}><button type="button" data-assistant-pick={`media:${lecture.id}`} onClick={() => { attach({ target: `media:${lecture.id}`, label: lecture.title }); setPicker(false); setQuery(''); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-canvas">
+              <Headphones className="size-3.5 shrink-0 text-muted" /><span dir="auto" className="truncate">{t('assistantSourceKindLecture')} · {lecture.title}</span>
+            </button></li>)}
+            {corpusHits.map(option => <li key={option.target}><button type="button" data-assistant-pick={option.target} onClick={() => { attach({ target: option.target, label: option.label }); setPicker(false); setQuery(''); }} className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-canvas">
+              {option.kind === 'poem' ? <Feather className="mt-0.5 size-3.5 shrink-0 text-muted" /> : <BookOpenText className="mt-0.5 size-3.5 shrink-0 text-muted" />}
+              <span className="min-w-0"><b dir="auto" className="block">{t(option.kind === 'quran' ? 'studyLinkKindAyah' : option.kind === 'poem' ? 'assistantSourceKindPoem' : 'studyLinkKindHadith')} · {option.label}</b><span dir="auto" className="block truncate text-muted">{option.snippet}</span></span>
+            </button></li>)}
+            {query.trim().length >= 2 && !bookHits.length && !noteHits.length && !manuscriptHits.length && !lectureHits.length && !corpusHits.length && (
+              <li className="px-2 py-2 text-center text-muted">{t('assistantNoSourcesMatch')}</li>
+            )}
+          </ul>
+        </div>}
         {learningMode === 'off' && (
           <div data-assistant-learning-mode-off className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed">
             <span>{t('aiLearningModeOffNotice')}</span>

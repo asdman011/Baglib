@@ -8,12 +8,15 @@ import Database from 'better-sqlite3';
 import {
   AI_ACTION_TOOLS,
   AI_ACTION_TOOL_NAMES,
+  isUnableToolReply,
+  looksLikeActionRequest,
   normalizeNaturalQuranTarget,
   parseBookPageRef,
   parseNaturalHadithRef,
   parsePageRanges,
   validateToolCallArguments,
 } from '../../src/shared/ai-actions';
+import { buildChatPrompt, CHAT_LIMITS, validateChatRequest } from '../../src/shared/assistant-chat';
 import { aiActionErrorText } from '../../src/renderer/components/ai/AiActionsPreview';
 import { callModelWithTools } from '../../src/main/services/ai/actions/tool-calling';
 import { AiActionsService } from '../../src/main/services/ai/actions/tool-executor';
@@ -655,4 +658,93 @@ test('KEY-445: PDF and book tools resolve titles, reject invented IDs, list cand
     db.close();
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('KEY-446: action intent detection, unable-tool reply detection, attached book targeting, and multi-source chat limits', async () => {
+  // 1. Natural action intent detection in English & Arabic
+  assert.equal(looksLikeActionRequest('extract pages 8 to 12 from the master and his emissary'), true);
+  assert.equal(looksLikeActionRequest('استخرج الصفحات 8 إلى 12 من كتاب الرسالة'), true);
+  assert.equal(looksLikeActionRequest('split this pdf every 5 pages'), true);
+  assert.equal(looksLikeActionRequest('افصل ملف PDF إلى ملفات'), true);
+  assert.equal(looksLikeActionRequest('open ayah 2:255'), true);
+  assert.equal(looksLikeActionRequest('create a note from this selection'), true);
+  assert.equal(looksLikeActionRequest('make flashcards from this passage'), true);
+  assert.equal(looksLikeActionRequest('add this book to my reading list'), true);
+
+  // Regular chat questions should NOT be misrouted as actions
+  assert.equal(looksLikeActionRequest('What does Ibn Khaldun say about asabiyyah?'), false);
+  assert.equal(looksLikeActionRequest('اشرح معنى هذه الآية الكريمة'), false);
+  assert.equal(looksLikeActionRequest('Summarize the main arguments'), false);
+
+  // 2. Plain-text refusal/no-tool reply detection
+  assert.equal(isUnableToolReply('I cannot extract pages from the PDF. Please use the Add source feature.'), true);
+  assert.equal(isUnableToolReply('لا أستطيع استخراج الصفحات من الملف.'), true);
+  assert.equal(isUnableToolReply('The book discusses the divided brain.'), false);
+
+  // 3. Attached book fallback in AiActionsService.planFromInstruction
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'baglib-key446-'));
+  const db = new Database(':memory:');
+  try {
+    runMigrations(db, migrations);
+    const settingsRepo = new SqliteSettingsRepository(db);
+    const pdfPath = path.join(tempDir, 'master.pdf');
+    writeFileSync(pdfPath, '%PDF-1.4\n%fake\n');
+    db.prepare('INSERT INTO work (id, title) VALUES (?, ?)').run('w-attached', 'The Master and His Emissary');
+    db.prepare('INSERT INTO edition (id, work_id) VALUES (?, ?)').run('e-attached', 'w-attached');
+    db.prepare('INSERT INTO source (id, edition_id, source_type) VALUES (?, ?, ?)').run('s-attached', 'e-attached', 'file');
+    db.prepare('INSERT INTO file_source_detail (source_id, file_path, file_format, file_size_bytes) VALUES (?, ?, ?, ?)').run('s-attached', pdfPath, 'PDF', 100);
+
+    const service = new AiActionsService({
+      db,
+      settingsRepo,
+      getAiSettings: () => ({ enabled: true, provider: 'ollama', ollamaEndpoint: 'http://127.0.0.1:11434', ollamaModel: 'llama3.2', learningMode: { globalChat: 'full' } }),
+      completeWithTools: async () => ({
+        ok: true,
+        kind: 'tool_calls',
+        calls: [{ name: 'extract_pdf_pages', arguments: { bookTitle: 'this book', pages: '8-12' } }],
+      }),
+      inspectPdf: async () => ({ totalPages: 20, hasTextLayer: true, textPages: 20 }),
+    });
+
+    const planRes = await service.planFromInstruction({
+      instruction: 'extract pages 8 to 12',
+      language: 'en',
+      allowRemote: false,
+      context: {
+        sources: [{ target: 'book:w-attached@s-attached', label: 'The Master and His Emissary' }],
+      },
+    });
+    assert.equal(planRes.ok, true);
+    if (!planRes.ok || planRes.kind !== 'plan') assert.fail('Expected plan from attached book');
+    assert.equal(planRes.plan.steps[0].tool, 'extract_pdf_pages');
+    assert.ok(planRes.plan.steps[0].summary.includes('The Master and His Emissary'));
+    assert.equal(planRes.plan.steps[0].details.outputPaths?.length, 1);
+  } finally {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+
+  // 4. Multi-source chat validation & bounded excerpt limits
+  const validated = validateChatRequest({
+    messages: [{ role: 'user', text: 'Summarize these attached materials.' }],
+    sources: [
+      { target: 'book:w1@s1', label: 'Book 1' },
+      { target: 'quran:hafs:2:255-257', label: '2:255-257' },
+      { target: 'poetry:ashaar:12:0:3', label: 'Poem' },
+      { target: 'media:11111111-1111-1111-1111-111111111111', label: 'Lecture' },
+      { target: 'manuscript:ms-1', label: 'Manuscript' },
+    ],
+    lang: 'en',
+    allowRemote: false,
+  });
+  assert.notEqual(validated, 'invalid-request');
+  if (typeof validated === 'string') assert.fail('Expected valid ChatRequest');
+  assert.equal(validated.sources.length, 5);
+
+  const hugeText = 'x'.repeat(CHAT_LIMITS.sourceText + 5000);
+  const prompt = buildChatPrompt({
+    request: validated,
+    sources: [{ n: 1, ref: 'book:w1@s1', label: 'Book 1', text: hugeText }],
+  });
+  assert.ok(prompt.userPrompt.length < CHAT_LIMITS.sourceText + 1000);
 });

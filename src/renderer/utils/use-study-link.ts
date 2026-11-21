@@ -1,6 +1,7 @@
 'use client';
 import React, { useCallback } from 'react';
-import { ArrowRight, ExternalLink } from 'lucide-react';
+import { ArrowRight, ExternalLink, Sparkles } from 'lucide-react';
+import { requestAssistant } from '../components/ai/AssistantContext';
 import { parseBookTarget, validStudyTarget } from '../../shared/study-notes';
 import { linkOpensNewTab } from '../../shared/workspace-tabs';
 import { useTabsOptional, useWorkspace } from '../components/context/WorkspaceContext';
@@ -110,6 +111,12 @@ export function useOpenStudyLink() {
         label: t('ctxOpenHere'),
         icon: React.createElement(ArrowRight, { className: 'size-4 rtl:rotate-180' }),
         onClick: () => run(false),
+      },
+      {
+        id: 'add-to-ai',
+        label: t('ctxAddToAiConversation'),
+        icon: React.createElement(Sparkles, { className: 'size-4' }),
+        onClick: () => requestAssistant({ sources: [{ target, label: options?.title || target }] }),
       },
     ];
   }, [openLink, t]);

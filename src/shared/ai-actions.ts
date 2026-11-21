@@ -420,6 +420,7 @@ export interface AiActionPlanRequest {
     selectedText?: string;
     activeTarget?: string;
     activeLabel?: string;
+    sources?: Array<{ target: string; label: string }>;
   };
 }
 
@@ -971,4 +972,31 @@ export function validateToolCallArguments(
       };
     }
   }
+}
+
+const ACTION_INTENT_EN_RE =
+  /(?:\b(?:extract|split|merge|rotate)\b.*\b(?:page|pages|pdf|book|file|document)\b|\b(?:page|pages|pdf)\b.*\b(?:extract|split|merge|rotate)\b|\bocr\b|\b(?:open|go to|jump to)\s+(?:book|pdf|page|ayah|surah|sura|hadith|note|poem|quran|bukhari|muslim|[\d٠-٩]+:[\d٠-٩]+)|\b(?:create|make|write|save|append|add)\s+(?:a\s+|to\s+(?:the\s+|a\s+)?)?(?:study\s+)?note\b|\b(?:create|make|generate)\s+(?:flash\s*)?cards?\b|\badd\s+.+\s+to\s+(?:my\s+|a\s+)?(?:(?:\w+)\s+)?list\b)/iu;
+
+const ACTION_INTENT_AR_RE =
+  /(?:(?:استخرج|استخراج|افصل|فصل|ادمج|دمج|دوّر|دور|تدوير)\s+(?:صفح|الصفح|ملف|كتاب|الكتاب|pdf)|(?:تعرف\s+ضوئي|استخراج\s+النص\s+من\s+(?:صفح|صورة))|(?:افتح|اذهب\s+إلى|انتقل\s+إلى)\s+(?:كتاب|الكتاب|صفحة|الصفحة|آية|سورة|حديث|ملاحظة|قصيدة)|(?:أنشئ|انشئ|اكتب|احفظ|أضف\s+إلى|اضف\s+الى)\s+ملاحظة|(?:أنشئ|انشئ|اصنع|ولّد|ولد)\s+بطاقات|(?:أضف|اضف)\s+.+\s+(?:إلى|الى|لـ?)\s*(?:قائمة|القائمة))/iu;
+
+/**
+ * KEY-446: Detect natural-language action requests in English or Arabic so they
+ * reach `ai-actions:plan` even when the user has not toggled "Actions" mode.
+ */
+export function looksLikeActionRequest(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > 4000) return false;
+  return ACTION_INTENT_EN_RE.test(trimmed) || ACTION_INTENT_AR_RE.test(trimmed);
+}
+
+const UNABLE_TOOL_REPLY_RE =
+  /(?:i\s+(?:cannot|can't|am unable to|do not have|don't have)\s+(?:extract|split|merge|rotate|ocr|open|create|access|modify|perform)|does not support tool|no tool|add source|لا أستطيع|لا يمكنني|لا أملك صلاحية|غير متاح لي)/iu;
+
+/**
+ * KEY-446: Detect when a model without tool-calling support ignores `tools` and
+ * responds with plain text saying it cannot perform the action.
+ */
+export function isUnableToolReply(text: string): boolean {
+  return UNABLE_TOOL_REPLY_RE.test(text.trim());
 }

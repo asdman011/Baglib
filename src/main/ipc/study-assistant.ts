@@ -10,7 +10,11 @@ import { AssistantBookError, readAssistantBookSources } from '../services/assist
 import { bookPdfFile } from '../services/book-files';
 import { readAyahTexts, readQuranSources } from './quran';
 import { readHadithText } from './sunnah';
-import { bookStudyTarget, parseQuranTarget } from '../../shared/study-notes';
+import { readPoemForSync } from './poetry';
+import { deriveManuscriptSnapshot } from '../../shared/manuscript-snapshot';
+import { LectureLibrary } from '../services/lectures/lecture-library';
+import { LectureSubtitles } from '../services/lectures/subtitles';
+import { bookStudyTarget, parseBookTarget, parseQuranTarget } from '../../shared/study-notes';
 import { providerErrorCode, providerErrorDetail } from '../../shared/ai-errors';
 import { isLocalAi, aiPrivacyError } from '../../shared/ai-consent';
 import { applyHintsPrompt, moduleFromStudyTarget, resolveLearningMode } from '../../shared/ai-learning-mode';
@@ -169,7 +173,22 @@ export function registerStudyAssistantIpc(): void {
             const note = new StudyNotesService(settingsRepository, db).list(target.slice(5).split('#')[0])[0];
             return note ? [{ label: note.title || label, text: note.content }] : [];
           }
-          if (target.startsWith('book:')) return (await readAssistantBookSources(target)).map(source => ({ label: source.label || label, text: source.text }));
+          if (target.startsWith('book:')) {
+            const parsed = parseBookTarget(target);
+            if (!parsed) return [];
+            if (parsed.page || parsed.cfi) {
+              return (await readAssistantBookSources(target)).map(source => ({ label: source.label || label, text: source.text }));
+            }
+            const sourceId = parsed.sourceId ?? bookPdfFile(parsed.id)?.sourceId;
+            if (sourceId) {
+              try {
+                const excerpt = await readAssistantBookSources(bookStudyTarget({ id: parsed.id, sourceId }, 1), 3);
+                if (excerpt.length) return excerpt.map(source => ({ label: source.label || label, text: source.text }));
+              } catch { /* fall back to work metadata if scanned/EPUB */ }
+            }
+            const workRow = db.prepare('SELECT title FROM work WHERE id = ? AND deleted_at IS NULL').get(parsed.id) as { title?: string } | undefined;
+            return workRow?.title ? [{ label: workRow.title, text: workRow.title }] : [];
+          }
           const quran = parseQuranTarget(target);
           if (quran) {
             const ayahs = await readAyahTexts(quran.surah, quran.from, quran.to, { profile: quran.profile });
@@ -177,7 +196,44 @@ export function registerStudyAssistantIpc(): void {
           }
           const sunnah = /^sunnah:([^:]+):(\d+):(.+)$/u.exec(target);
           const hadith = sunnah ? await readHadithText(sunnah[1], +sunnah[2], sunnah[3]).catch(() => null) : null;
-          return hadith?.text ? [{ label, text: hadith.text }] : [];
+          if (hadith?.text) return [{ label, text: hadith.text }];
+          const poetry = /^poetry:ashaar:(\d+):(\d+):(\d+)$/u.exec(target);
+          if (poetry) {
+            const poem = await readPoemForSync(+poetry[1]).catch(() => null);
+            if (!poem) return [];
+            const from = Math.max(0, +poetry[2]);
+            const to = Math.min(poem.verses.length - 1, Math.max(from, +poetry[3]));
+            const lines = poem.verses.slice(from, Math.min(to + 1, from + 24));
+            const text = lines.length ? lines.join('\n') : poem.verses.slice(0, 12).join('\n');
+            return text ? [{ label: [poem.poetName, poem.title].filter(Boolean).join(' — ') || label, text }] : [];
+          }
+          const media = /^media:([0-9a-f-]{36})(?::(\d+))?/u.exec(target);
+          if (media) {
+            const lecture = new LectureLibrary(db, '').list().find(item => item.id === media[1]);
+            if (!lecture) return [];
+            const loaded = await new LectureSubtitles(db).load(lecture.id, lecture.path).catch(() => null);
+            const cues = loaded?.cues ?? [];
+            const at = media[2] ? +media[2] : 0;
+            const nearby = cues.length
+              ? cues.filter(c => c.start >= Math.max(0, at - 60)).slice(0, 20).map(c => c.text).join('\n')
+              : '';
+            return [{ label: lecture.title || label, text: nearby || lecture.title }];
+          }
+          const ms = /^manuscript:([^\s:]+)(?::([^\s:]+))?$/u.exec(target);
+          if (ms) {
+            const docRow = ms[2]
+              ? (db.prepare('SELECT d.title, d.snapshot FROM manuscript_document d JOIN manuscript m ON m.id = d.manuscript_id WHERE d.id = ? AND d.deleted_at IS NULL AND m.deleted_at IS NULL').get(ms[2]) as { title: string; snapshot: string } | undefined)
+              : (db.prepare('SELECT d.title, d.snapshot FROM manuscript_document d JOIN manuscript m ON m.id = d.manuscript_id WHERE m.id = ? AND d.deleted_at IS NULL AND m.deleted_at IS NULL ORDER BY d.sort_order ASC, d.created_at ASC LIMIT 1').get(ms[1]) as { title: string; snapshot: string } | undefined);
+            if (docRow) {
+              try {
+                const derived = deriveManuscriptSnapshot(docRow.snapshot);
+                return [{ label: derived.title || docRow.title || label, text: derived.plainText.slice(0, 4000) || docRow.title }];
+              } catch { /* fall through to manuscript title */ }
+            }
+            const msRow = db.prepare('SELECT title FROM manuscript WHERE id = ? AND deleted_at IS NULL').get(ms[1]) as { title?: string } | undefined;
+            return msRow?.title ? [{ label: msRow.title, text: msRow.title }] : [];
+          }
+          return [];
         },
       });
     } finally { chatting = false; }

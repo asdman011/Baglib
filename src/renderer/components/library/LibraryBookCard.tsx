@@ -15,6 +15,8 @@ import { getCardActions } from './library-card-actions';
 
 import { ContextMenu } from '../ui/ContextMenu';
 import { Menu, type MenuItemProps } from '../ui/Menu';
+import { requestAssistant } from '../ai/AssistantContext';
+import { bookStudyTarget } from '../../../shared/study-notes';
 
 export type CardDensity = 'compact' | 'comfortable' | 'spacious';
 
@@ -61,7 +63,10 @@ export const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
   );
 
   const [openedItems, setOpenedItems] = useState<MenuItemProps[]>([]);
-  const defaultItems = actions.map(action => ({ id: action.id, label: action.label, danger: action.danger, onClick: action.onSelect }));
+  const defaultItems: MenuItemProps[] = [
+    ...actions.map(action => ({ id: action.id, label: action.label, danger: action.danger, onClick: action.onSelect })),
+    { id: 'add-to-ai', label: t('ctxAddToAiConversation'), onClick: () => requestAssistant({ sources: [{ target: bookStudyTarget({ id: book.id, sourceId: book.sourceId }), label: book.title }] }) },
+  ];
   // Single Subject / Category Chip (or physical/digital fallback)
   const singleChipLabel: string | null = (() => {
     if (book.primaryCategory) {

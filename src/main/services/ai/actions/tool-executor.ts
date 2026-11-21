@@ -218,7 +218,7 @@ export class AiActionsService {
       return { ok: true, kind: 'message', text: result.text };
     }
 
-    return this.buildPreviewPlan(result.calls, language);
+    return this.buildPreviewPlan(result.calls, language, request.context);
   }
 
   private workTitle(workId: string | null, fallbackPath: string): string {
@@ -302,30 +302,57 @@ export class AiActionsService {
     };
   }
 
+  private attachedBookRef(context?: AiActionPlanRequest['context']): { workId: string; sourceId?: string } | null {
+    const candidates = [
+      ...(context?.sources?.map(item => item.target) ?? []),
+      ...(context?.activeTarget ? [context.activeTarget] : []),
+    ];
+    for (const target of candidates) {
+      const parsed = parseBookTarget(target);
+      if (parsed?.id) return { workId: parsed.id, ...(parsed.sourceId ? { sourceId: parsed.sourceId } : {}) };
+    }
+    return null;
+  }
+
   private async resolvePdfCandidates(
-    ref: BookLookupRef
+    ref: BookLookupRef,
+    context?: AiActionPlanRequest['context']
   ): Promise<
     | { kind: 'one'; source: PdfSource; title: string }
     | { kind: 'multiple'; candidates: PdfCandidateEntry[] }
     | { kind: 'not-found'; detail: string }
   > {
     let works: Array<{ id: string; title: string; authors?: string }>;
-    const labelForError = ref.bookTitle || ref.author || ref.workId || '';
+    const genericTitle = /^(?:this book|the book|attached book|current book|book|pdf|هذا الكتاب|الكتاب|الكتاب المرفق|الملف)$/iu;
+    const attached = this.attachedBookRef(context);
+    const effectiveWorkId = ref.workId || (!ref.bookTitle || genericTitle.test(ref.bookTitle.trim()) ? attached?.workId : undefined);
+    const effectiveSourceId = ref.sourceId || (effectiveWorkId === attached?.workId ? attached?.sourceId : undefined);
+    const labelForError = ref.bookTitle || ref.author || effectiveWorkId || '';
 
-    if (ref.workId) {
+    if (effectiveWorkId) {
       const row = this.deps.db
         .prepare(
           `SELECT w.id, w.title,
             (SELECT GROUP_CONCAT(a.name, '، ') FROM work_author wa JOIN author a ON a.id = wa.author_id WHERE wa.work_id = w.id) AS authors
            FROM work w WHERE w.id = ? AND w.deleted_at IS NULL`
         )
-        .get(ref.workId) as { id: string; title: string; authors: string | null } | undefined;
+        .get(effectiveWorkId) as { id: string; title: string; authors: string | null } | undefined;
       if (!row) {
-        return { kind: 'not-found', detail: `book:${ref.workId}` };
+        return { kind: 'not-found', detail: `book:${effectiveWorkId}` };
       }
       works = [{ id: row.id, title: row.title, ...(row.authors ? { authors: row.authors } : {}) }];
     } else {
       works = this.searchLibraryWorks(ref.bookTitle ?? '', ref.author);
+      if (works.length === 0 && attached) {
+        const row = this.deps.db
+          .prepare(
+            `SELECT w.id, w.title,
+              (SELECT GROUP_CONCAT(a.name, '، ') FROM work_author wa JOIN author a ON a.id = wa.author_id WHERE wa.work_id = w.id) AS authors
+             FROM work w WHERE w.id = ? AND w.deleted_at IS NULL`
+          )
+          .get(attached.workId) as { id: string; title: string; authors: string | null } | undefined;
+        if (row) works = [{ id: row.id, title: row.title, ...(row.authors ? { authors: row.authors } : {}) }];
+      }
       if (works.length === 0) {
         return { kind: 'not-found', detail: `book:${labelForError}` };
       }
@@ -339,9 +366,9 @@ export class AiActionsService {
            FROM edition e
            JOIN source s ON s.edition_id = e.id
            JOIN file_source_detail f ON f.source_id = s.id
-           WHERE e.work_id = ? AND upper(f.file_format) = 'PDF' ${ref.sourceId ? 'AND s.id = ?' : ''}`
+           WHERE e.work_id = ? AND upper(f.file_format) = 'PDF' ${effectiveSourceId ? 'AND s.id = ?' : ''}`
         )
-        .all(...(ref.sourceId ? [work.id, ref.sourceId] : [work.id])) as Array<{ sourceId: string }>;
+        .all(...(effectiveSourceId ? [work.id, effectiveSourceId] : [work.id])) as Array<{ sourceId: string }>;
 
       for (const row of rows) {
         const source = await this.resolveLibraryPdf(work.id, row.sourceId);
@@ -464,7 +491,11 @@ export class AiActionsService {
     }
   }
 
-  public async buildPreviewPlan(rawCalls: RawToolCall[], language: 'ar' | 'en'): Promise<AiActionPlanResponse> {
+  public async buildPreviewPlan(
+    rawCalls: RawToolCall[],
+    language: 'ar' | 'en',
+    context?: AiActionPlanRequest['context']
+  ): Promise<AiActionPlanResponse> {
     if (!Array.isArray(rawCalls) || rawCalls.length === 0 || rawCalls.length > 10) {
       return { ok: false, error: 'invalid-arguments', detail: 'empty-or-too-many-tool-calls' };
     }
@@ -695,7 +726,7 @@ export class AiActionsService {
         case 'extract_pdf_pages':
         case 'rotate_pdf_pages':
         case 'ocr_pdf_page': {
-          const pdfLookup = await this.resolvePdfCandidates(call.args);
+          const pdfLookup = await this.resolvePdfCandidates(call.args, context);
           if (pdfLookup.kind === 'not-found') {
             return { ok: false, error: 'not-found', detail: pdfLookup.detail };
           }
@@ -765,7 +796,7 @@ export class AiActionsService {
           const mergeCandidateGroups: Array<{ index: number; query: string; candidates: AiActionBookCandidate[] }> = [];
           for (let idx = 0; idx < call.args.sources.length; idx++) {
             const item = call.args.sources[idx];
-            const pdfLookup = await this.resolvePdfCandidates(item);
+            const pdfLookup = await this.resolvePdfCandidates(item, context);
             if (pdfLookup.kind === 'not-found') {
               return { ok: false, error: 'not-found', detail: pdfLookup.detail };
             }

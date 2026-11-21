@@ -23,7 +23,7 @@ export type ToolCallingResult =
 
 type FetchLike = typeof fetch;
 
-const UNSUPPORTED_TOOL_RE = /(does not support tools|tool[_\s-]?call(ing)?.*not support|function[_\s-]?call(ing)?.*not support|tools.*unsupported|unknown field.*tools|invalid parameter.*tools)/iu;
+const UNSUPPORTED_TOOL_RE = /(does not support tools|tool[_\s-]?call(ing)?.*not support|function[_\s-]?call(ing)?.*not support|not support.*tools|tools.*not.*support|tools.*unsupported|unknown field.*tools|invalid parameter.*tools)/iu;
 
 function parseArguments(raw: unknown): unknown {
   if (raw && typeof raw === 'object') return raw;
@@ -55,6 +55,11 @@ function buildActionPrompts(request: AiActionPlanRequest): { systemPrompt: strin
   const ctx = request.context;
   const contextParts: string[] = [];
   if (ctx?.activeTarget) contextParts.push(`Active target: ${ctx.activeTarget}${ctx.activeLabel ? ` (${ctx.activeLabel})` : ''}`);
+  if (ctx?.sources?.length) {
+    contextParts.push(
+      `Attached sources:\n${ctx.sources.map(source => `- ${source.target} (${source.label})`).join('\n')}`
+    );
+  }
   if (ctx?.selectedText) contextParts.push(`Selected passage:\n"""\n${ctx.selectedText.slice(0, 6000)}\n"""`);
   const userPrompt = contextParts.length
     ? `${contextParts.join('\n\n')}\n\nUser instruction:\n${request.instruction.trim()}`

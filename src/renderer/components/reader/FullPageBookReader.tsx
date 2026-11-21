@@ -3237,6 +3237,13 @@ const SourceBookReader: React.FC = () => {
       const label = `${activeBook.title} · ${t('page')} ${page}`;
       openExplainBack({ kind: 'passage', target, label, sourceText: selectedText });
     } : undefined,
+    addToAi: activeBook && selectedText ? () => {
+      const page = pendingSelection?.pageNumber ?? pdfSelectionInfo?.pageNumber ?? readingPage;
+      const epub = isReflowable && activeRange ? selectionStudyLocation(paginatedPages, activeRange, readingPage) : null;
+      const target = epub ? bookCfiTarget(activeBook, epub.cfi) : bookStudyTarget(activeBook, page);
+      const label = epub ? `${activeBook.title} — ${epub.chapter}` : t('readerStudyPage', { title: activeBook.title, page });
+      openAssistant({ sources: [{ target, label }] });
+    } : undefined,
     practice: () => studySelection('practice'), review: () => studySelection('review'),
     note: () => setSelectionEditor(current => ({ key: current.key + 1, tab: 'note' })),
     colors: { children: HIGHLIGHT_COLORS.map(color => ({id:color.id,label:t(colorKeys[color.id]),icon:<span className="inline-block size-3 rounded-full" style={{backgroundColor:color.hex}} />,onClick:()=>handleSaveKnowledge('highlight',color.id)})) },

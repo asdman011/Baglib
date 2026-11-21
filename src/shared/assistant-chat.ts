@@ -34,7 +34,7 @@ export type ChatResponse = { ok: true; text: string; citations: ResearchAiCitati
 export const CHAT_LIMITS = { turns: 12, turn: 4000, sources: 20, selection: 8000, chapter: 20000, sourceText: 4000, total: 60000 };
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const clip = (value: string, max: number) => (value.length > max ? value.slice(0, max) + ' …' : value);
-const TARGET = /^(note|quran|sunnah|book):[^\s]{1,400}$/u;
+const TARGET = /^(note|quran|sunnah|book|poetry|media|manuscript):[^\s]{1,400}$/u;
 
 export function validateChatRequest(input: unknown): ChatRequest | 'invalid-request' | 'needs-selection' {
   if (!object(input)) return 'invalid-request';

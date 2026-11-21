@@ -1,4 +1,32 @@
-﻿## KEY-445: AI actions natural book/reference resolution, candidate picker & honest error messages (epic KEY-434) — 2026-11-21T10:55+02:00 - Agent: Antigravity
+﻿## KEY-446: AI chat "Add source", right-click "Add to AI conversation", and action-planner routing (epic KEY-434) — 2026-11-21T11:29+02:00 - Agent: Antigravity
+
+**Done:**
+- **Action-planner routing & unsupported-tool feedback**:
+  - `src/shared/ai-actions.ts`: added `looksLikeActionRequest(text)` (English & Arabic action intent detection), `isUnableToolReply(text)`, and optional `sources` on `AiActionPlanRequest.context`.
+  - `src/renderer/components/ai/GlobalAssistant.tsx`: routed action-like requests (`actionsMode || looksLikeActionRequest(text)`) to `aiActions.plan` even when the manual Actions toggle is off; surfaced `t('aiActionUnsupported')` with `settings: true` (AI Settings button) and a clear hint to choose a tool-capable model whenever `res.kind === 'unsupported'` or a non-tool model replies with an inability message.
+  - `src/main/services/ai/actions/{tool-calling,tool-executor}.ts`: included attached `context.sources` in `buildActionPrompts`, expanded `UNSUPPORTED_TOOL_RE`, and added `attachedBookRef` fallback so PDF actions target an attached `book:` chip directly.
+- **"Add source" in the chat composer & multi-source resolution**:
+  - `src/renderer/components/ai/GlobalAssistant.tsx`: moved removable source chips and `Add source` button (`data-assistant-add-source`) above the composer, with a searchable picker covering books/PDFs, Quran ranges, hadith, poems, notes, lectures, and manuscripts.
+  - `src/shared/assistant-chat.ts` & `src/main/ipc/study-assistant.ts`: extended `TARGET` and `assistant:chat` `resolve()` to support `book:` (bounded 3-page excerpt for whole books, never whole-book transfer), `note:`, `quran:`, `sunnah:`, `poetry:`, `media:`, and `manuscript:`.
+- **Right-click "Add to AI conversation" everywhere**:
+  - Added `ctxAddToAiConversation` to `src/renderer/components/actions/{context-actions,quran-actions}.ts`, `src/renderer/components/sunnah/SunnahChapterView.tsx`, `src/renderer/components/notes/NotesOverviewView.tsx`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/library/{LibraryGridView,LibraryBookCard}.tsx`, `src/renderer/components/poetry/PoetryReader.tsx`, `src/renderer/components/lectures/LectureSeriesList.tsx`, `src/renderer/utils/use-study-link.ts`, and `src/renderer/components/layout/WorkspaceTabs.tsx`.
+- **Translations & tests**:
+  - `src/renderer/translations.ts`: updated `aiActionUnsupported` and added 7 bilingual (`ar` + `en`) keys.
+  - `tests/services/ai-actions.test.ts` & `scripts/key446-live/{main.cjs,run.mjs}`: unit tests and live Electron verification in `ar` and `en`.
+
+**Tests:**
+- Focused (`tests/services/ai-actions.test.ts`): 9/9 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,909/2,909 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key446-live/run.mjs`): PASS in `en` and `ar` (`errors: []`, real Arabic & English PDFs in throwaway profile, right-click book -> Add to AI conversation -> `extract pages 8 to 12` / `استخرج الصفحات 8 إلى 12` -> preview -> confirm -> new extracted PDF files created; Add source -> cited answer; Gemini unsupported provider -> clear error with AI Settings button; throwaway profile deleted).
+
+**Jira:**
+- `KEY-446` In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-446.md`, `scripts/key446-live/main.cjs`, `scripts/key446-live/run.mjs`, `src/main/ipc/study-assistant.ts`, `src/main/services/ai/actions/tool-calling.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/renderer/components/actions/context-actions.ts`, `src/renderer/components/actions/quran-actions.ts`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/components/layout/WorkspaceTabs.tsx`, `src/renderer/components/lectures/LectureSeriesList.tsx`, `src/renderer/components/library/LibraryBookCard.tsx`, `src/renderer/components/library/LibraryGridView.tsx`, `src/renderer/components/notes/NotesOverviewView.tsx`, `src/renderer/components/poetry/PoetryReader.tsx`, `src/renderer/components/reader/FullPageBookReader.tsx`, `src/renderer/components/sunnah/SunnahChapterView.tsx`, `src/renderer/translations.ts`, `src/renderer/utils/use-study-link.ts`, `src/shared/ai-actions.ts`, `src/shared/assistant-chat.ts`, `tests/services/ai-actions.test.ts`.
+
+## KEY-445: AI actions natural book/reference resolution, candidate picker & honest error messages (epic KEY-434) — 2026-11-21T10:55+02:00 - Agent: Antigravity
 
 **Done:**
 - `src/shared/ai-actions.ts`: added `bookTitle` and `author` alongside optional `workId` on PDF/book tools (`split_pdf`, `merge_pdfs`, `extract_pdf_pages`, `rotate_pdf_pages`, `ocr_pdf_page`, `create_note`, `create_cards_from_selection`, `open_source`), plus optional `page` on `open_source`. Added `toAsciiDigits`, `normalizeNaturalQuranTarget` (`"2:11"`, `"ayah 2:11"`, `"Quran 2:11"`, `"البقرة 11"`, `"سورة البقرة آية 11"` → `quran:hafs:2:11`), `parseNaturalHadithRef` (`"Bukhari 1"`, `"البخاري ١"`), and `parseBookPageRef` (`"page 40 of <book>"`, `"صفحة ٤٠ من <كتاب>"`). Added `AiActionBookCandidate`, `candidates` / `mergeCandidateGroups` on `AiActionPreviewStep.details`, and `selections` on `AiActionConfirmRequest`.
@@ -13,7 +41,7 @@
 - Live Electron (`node scripts/key445-live/run.mjs`): PASS in `ar` and `en` (`errors: []`, screenshots in `.baglib-data/key445-evidence/`, throwaway profile deleted).
 
 **Jira:**
-- `KEY-445` In Progress (`21`); Done (`41`) pending commit & push.
+- `KEY-445` Done (`41`); commit `d8c5bdf36baed0bf901a4a01d257822da3af58c6` pushed to `origin/feature/library-domain`.
 
 **Files:**
 `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-445.md`, `scripts/key445-live/main.cjs`, `scripts/key445-live/run.mjs`, `src/main/ipc/ai-actions.ts`, `src/main/ipc/sunnah.ts`, `src/main/services/ai/actions/tool-calling.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/main/services/sunnah/research-corpus.ts`, `src/main/services/sunnah/sunnah.service.ts`, `src/renderer/components/ai/AiActionsPreview.tsx`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/translations.ts`, `src/shared/ai-actions.ts`, `tests/services/ai-actions.test.ts`.
