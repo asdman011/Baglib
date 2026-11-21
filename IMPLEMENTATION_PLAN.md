@@ -60,6 +60,8 @@ User explicitly authorizes one owned-file commit and normal push per task. KEY-4
 
 ## Recent Agent Updates
 
+- [2026-11-21T13:50+02:00, Agent: Antigravity KEY-450] VERIFIED Research Editor link embeds (thumbnails & YouTube/Vimeo playback, epic KEY-361): main-process `fetchResearchLinkPreview` behind `http`/`https` allow-list (`allowedLinkPreviewUrl`, 5s timeout, 256 KB limit, redirect check), scoped CSP in `research-editor/app/index.html`, `ContentShieldService` Referer for `www.youtube.com/embed/*`, and numbered vendor patch `0010-link-embeds-and-youtube.patch` (`npm run check:vendor` OK across 2,899 files). 4/4 focused unit tests, 2,915/2,915 full suite, `build:research-editor`/`build:main`/`build:renderer`/`tsc --noEmit` pass, and live Electron `scripts/key450-live` `ar` & `en` PASS (`naturalWidth > 0`, YouTube iframe loaded, 0 CSP violations).
+
 - [2026-11-21T00:27+02:00, Agent: Antigravity KEY-444] VERIFIED AI-assisted vs other card retention comparison in `StatisticsWorkspace` using existing FSRS `srs_state`/`srs_review_log`/`knowledge_tag` (`'ai-generated'`) with honest sample-size note (no new storage, no summary memory claims) and optional "Try first" nudge in `PdfReviewPanel`. 4/4 focused, 2,904/2,904 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass.
 
 - [2026-11-21T00:19+02:00, Agent: Antigravity KEY-443] VERIFIED AI-generated marker preservation on saved curriculum templates (`pathways.templates.v1`, `copyTemplate`, `templateFromPathway`, `PathwayTemplateGallery`), pathway Markdown/BibTeX exports, and older saved material (`exportableStudyNotes`), without labeling user-written text as AI or changing DB schema. 10/10 focused, 2,902/2,902 full suite, `tsc --noEmit` 0, `build:main` & `build:renderer` pass.

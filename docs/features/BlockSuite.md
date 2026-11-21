@@ -111,3 +111,37 @@ Investigation: pinned BlockSuite v0.27.4 in `research-editor/vendor/blocksuite`,
 Implementation: `app/src/canvas/links.ts` captures canvas pointer/mouse events before BlockSuite, inspects the clicked block (including masks/open shadow roots), and opens the canonical target through the existing bridge. Plain gestures suppress selection/drag; movement of 5px or more cancels activation. A 400ms single-click delay disambiguates double-click editing; modifier gestures reach BlockSuite. Page view retains its prior click handler. No vendor edits, dependencies, database fields or relationships. ADR-016 and the data dictionary's manuscript contracts remain unchanged, as does Work -> Edition -> Source.
 
 Verification is recorded in the local KEY-433 report and `scripts/key433-live/`: real Arabic/English PDFs, mixed-script links, exact shell arguments stubbed in main, selection/position checks, modifier/double-click, unsafe direct IPC requests and BagLib source opening. Do not interpret stubbed shell verification as testing the user's OS browser/mail-client configuration. Native keyboard/IME testing is outside this click-focused change. Only BlockSuite was investigated; no new cross-application comparison is warranted. See [Research Editor Plan](feature%20-%20Research%20Editor%20Plan.md).
+
+## Link embeds, thumbnails, and YouTube/Vimeo playback (KEY-450) — 2026-11-21, Agent: Antigravity
+
+### Investigation and verified root causes
+
+Static inspection of vendored BlockSuite v0.27.4 (`research-editor/vendor/blocksuite`), the research-editor shell (`research-editor/app/`), and Electron main (`src/main/`) identified four distinct causes preventing link embed thumbnails and online video embeds from loading:
+
+1. **Restrictive iframe CSP (`research-editor/app/index.html`)**:
+   - The `<meta http-equiv="Content-Security-Policy">` tag had `default-src 'self' app: blob: data:` with no `frame-src`, `media-src`, or `connect-src`, and `img-src 'self' app: blob: data:`.
+   - Any remote `https:` thumbnail `<img src="https://...">` and any `<iframe src="https://www.youtube.com/embed/...">` or `https://player.vimeo.com/video/...` was blocked by Chromium's CSP.
+2. **External AFFiNE cloud worker endpoints (`LinkPreviewService` and `ImageProxyService`)**:
+   - `affine/shared/src/services/link-preview-service/link-preview-service.ts` defaults to `POST https://affine-worker.toeverything.workers.dev/api/worker/link-preview`.
+   - `affine/shared/src/adapters/middlewares/proxy.ts` (`ImageProxyService.buildUrl`) rewrites every `<img src>` in `bookmark-card.ts`, `embed-youtube-block.ts`, `embed-github-block.ts`, `embed-loom-block.ts`, and `footnote-popup.ts` to `https://affine-worker.toeverything.workers.dev/api/worker/image-proxy?url=...`.
+3. **YouTube embed iframe attributes and Referer header (`embed-youtube-block.ts`, `content-shield.service.ts`)**:
+   - `affine/blocks/embed/src/embed-youtube-block/embed-youtube-block.ts` rendered `<iframe id="ytplayer" src="https://www.youtube.com/embed/${videoId}" sandbox="allow-scripts allow-same-origin allow-presentation" loading="lazy" credentialless>`.
+   - In Electron, `credentialless` on the YouTube embed iframe prevents player storage/cookie initialization, and `ContentShieldService` only injected a `Referer` header for `*://www.youtube-nocookie.com/embed/*` (not `*://www.youtube.com/embed/*`), causing YouTube Error 153 when loaded from `app://-`.
+4. **Generic web links switched to Embed view (`generic.ts`, `embed-iframe-block.ts`, `schemas.ts`)**:
+   - `affine/blocks/embed/src/embed-iframe-block/configs/providers/generic.ts` (`genericConfig`) matched every `https:` URL with `useOEmbedUrlDirectly: true`, turning any normal web link switched to "Embed view" into an `affine:embed-iframe` attempting to frame the raw webpage `<iframe src="https://...">` (which violates `frame-src` CSP and displays no link preview thumbnail).
+   - In addition, `EmbedIframeBlockSchema` was missing from `AffineSchemas` (`affine/all/src/schemas.ts`), causing `docToSnapshot` to fail when saving a document containing `affine:embed-iframe`.
+
+### BagLib implementation and trade-offs
+
+- **Main-process link preview service (`src/shared/link-preview.ts`, `src/main/services/link-preview.service.ts`, `src/main/ipc/research-editor.ts`)**:
+  - `researchEditor.linkPreview` fetches link metadata in main behind `allowedLinkPreviewUrl` (`http:` and `https:` only; blocks userinfo credentials, control characters, `localhost`, loopback, link-local, RFC1918 private IPs, and `.local`/`.internal` hosts on the initial URL and across up to 3 redirects).
+  - Enforces a 5-second timeout (`AbortSignal.timeout(5000)`) and a 256 KB streaming response cap (`readBoundedText`).
+  - Uses YouTube/Vimeo oEmbed endpoints (with `https://i.ytimg.com/vi/<id>/hqdefault.jpg` fallback) and HTML OpenGraph / Twitter / `<title>` / `<link rel="icon">` parsing. Offline or unreachable links return null fields without throwing.
+- **Scoped CSP (`research-editor/app/index.html`) and Referer shield (`src/main/services/shield/content-shield.service.ts`)**:
+  - `img-src` allows `https:` (plus `http://127.0.0.1:* http://localhost:*` for local dev); `frame-src` allows only `'self' app: https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com`; `media-src` and `connect-src` allow only the required YouTube/Vimeo/GitHub hosts. No blanket `*` and no `unsafe-eval`.
+  - `ContentShieldService` injects a valid `Referer` header for both `www.youtube.com/embed/*` and `www.youtube-nocookie.com/embed/*`.
+- **Numbered vendor patch (`research-editor/patches/0010-link-embeds-and-youtube.patch`) & bridge wiring (`research-editor/app/src/main.ts`)**:
+  - Overrides `LinkPreviewServiceIdentifier` in `research-editor/app/src/main.ts` to call `bridge.linkPreview(url)` and disables `ImageProxyService` rewriting so `<img src>` uses the real thumbnail URL directly.
+  - Registers `EmbedIframeBlockSchema` in `AffineSchemas`.
+  - Removes `credentialless` and `loading="lazy"` from YouTube/Vimeo player iframes, adds `referrerpolicy="strict-origin-when-cross-origin"` and `allow-popups allow-forms` to the sandbox, and renders a thumbnail `<img>` in `affine:embed-youtube`.
+  - Maps Vimeo links in `generic.ts` to `https://player.vimeo.com/video/<id>`, while rendering normal non-video web links in `affine:embed-iframe` as a rich embed preview card (banner thumbnail `<img>`, favicon, title, description, and hostname) that opens in the system browser (`KEY-433`) and falls back gracefully to a plain card when offline.

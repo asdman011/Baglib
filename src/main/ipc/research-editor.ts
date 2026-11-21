@@ -1,5 +1,6 @@
 import { app, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { getDatabasePath } from '../database/connection';
+import { fetchResearchLinkPreview } from '../services/link-preview.service';
 import { researchEditorAssets } from '../services/research-editor-assets';
 import { researchEditorAvailable, researchEditorDirectory } from '../services/research-editor-serving';
 
@@ -16,4 +17,5 @@ export function registerResearchEditorIpc(): void {
   ipcMain.handle('researchEditor.blob.set', (event, id, value) => { authorize(event); return researchEditorAssets(getDatabasePath()).set(id, value); });
   ipcMain.handle('researchEditor.blob.delete', (event, id) => { authorize(event); return researchEditorAssets(getDatabasePath()).delete(id); });
   ipcMain.handle('researchEditor.blob.list', event => { authorize(event); return researchEditorAssets(getDatabasePath()).list(); });
+  ipcMain.handle('researchEditor.linkPreview', (event, url: unknown) => { authorize(event); return fetchResearchLinkPreview(url); });
 }

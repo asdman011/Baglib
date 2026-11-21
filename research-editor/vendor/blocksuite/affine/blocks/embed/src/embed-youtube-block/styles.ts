@@ -80,6 +80,14 @@ export const styles = css`
     align-items: center;
   }
 
+  .affine-embed-youtube-thumbnail {
+    width: 48px;
+    height: 27px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
   .affine-embed-youtube-content-title-icon img,
   .affine-embed-youtube-content-title-icon object,
   .affine-embed-youtube-content-title-icon svg {

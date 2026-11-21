@@ -1,0 +1,619 @@
+diff --git a/blocksuite/affine/shared/src/adapters/middlewares/proxy.ts b/blocksuite/affine/shared/src/adapters/middlewares/proxy.ts
+index da58918..96a5ef1 100644
+--- a/blocksuite/affine/shared/src/adapters/middlewares/proxy.ts
++++ b/blocksuite/affine/shared/src/adapters/middlewares/proxy.ts
+@@ -52,7 +52,12 @@ export class ImageProxyService extends StoreExtension {
+   }
+
+   buildUrl(imageUrl: string) {
+-    if (imageUrl.startsWith(this.imageProxyURL) || isImageProxyURL(imageUrl)) {
++    if (
++      !this.imageProxyURL ||
++      this.imageProxyURL === DEFAULT_IMAGE_PROXY_ENDPOINT ||
++      imageUrl.startsWith(this.imageProxyURL) ||
++      isImageProxyURL(imageUrl)
++    ) {
+       return imageUrl;
+     }
+
+diff --git a/blocksuite/affine/all/src/schemas.ts b/blocksuite/affine/all/src/schemas.ts
+index 91dc3e3..a417ba0 100644
+--- a/blocksuite/affine/all/src/schemas.ts
++++ b/blocksuite/affine/all/src/schemas.ts
+@@ -12,6 +12,7 @@ import {
+   EmbedFigmaBlockSchema,
+   EmbedGithubBlockSchema,
+   EmbedHtmlBlockSchema,
++  EmbedIframeBlockSchema,
+   EmbedLinkedDocBlockSchema,
+   EmbedLoomBlockSchema,
+   EmbedSyncedDocBlockSchema,
+@@ -49,6 +50,7 @@ export const AffineSchemas: z.infer<typeof BlockSchema>[] = [
+   EmbedFigmaBlockSchema,
+   EmbedGithubBlockSchema,
+   EmbedHtmlBlockSchema,
++  EmbedIframeBlockSchema,
+   EmbedLinkedDocBlockSchema,
+   EmbedSyncedDocBlockSchema,
+   EmbedLoomBlockSchema,
+diff --git a/blocksuite/affine/blocks/bookmark/src/utils.ts b/blocksuite/affine/blocks/bookmark/src/utils.ts
+index 7e9f309..6093c98 100644
+--- a/blocksuite/affine/blocks/bookmark/src/utils.ts
++++ b/blocksuite/affine/blocks/bookmark/src/utils.ts
+@@ -26,9 +26,7 @@ export async function refreshBookmarkUrlData(
+     icon = bookmarkUrlData.icon ?? null;
+     image = bookmarkUrlData.image ?? null;
+
+-    if (!title && !description && !icon && !image) {
+-      bookmarkElement.error = true;
+-    }
++    bookmarkElement.error = false;
+
+     if (signal?.aborted) return;
+
+@@ -40,7 +38,7 @@ export async function refreshBookmarkUrlData(
+     });
+   } catch (error) {
+     if (signal?.aborted || isAbortError(error)) return;
+-    throw error;
++    bookmarkElement.error = false;
+   } finally {
+     bookmarkElement.loading = false;
+   }
+diff --git a/blocksuite/affine/blocks/bookmark/src/components/bookmark-card.ts b/blocksuite/affine/blocks/bookmark/src/components/bookmark-card.ts
+index af47694..1d48464 100644
+--- a/blocksuite/affine/blocks/bookmark/src/components/bookmark-card.ts
++++ b/blocksuite/affine/blocks/bookmark/src/components/bookmark-card.ts
+@@ -55,9 +55,7 @@ export class BookmarkCard extends SignalWatcher(
+     const titleText = this.loading
+       ? 'Loading...'
+       : !title
+-        ? this.error
+-          ? (domainName ?? 'Link card')
+-          : ''
++        ? (domainName ?? 'Link card')
+         : title;
+
+     const theme = this.bookmark.std.get(ThemeProvider).theme;
+@@ -80,7 +78,13 @@ export class BookmarkCard extends SignalWatcher(
+
+     const bannerImage =
+       !this.loading && image
+-        ? html`<img src=${imageProxyService.buildUrl(image)} alt="banner" />`
++        ? html`<img
++            src=${imageProxyService.buildUrl(image)}
++            alt="banner"
++            @error=${(e: Event) => {
++              (e.currentTarget as HTMLElement).style.display = 'none';
++            }}
++          />`
+         : EmbedCardBannerIcon;
+
+     return html`
+diff --git a/blocksuite/affine/blocks/bookmark/src/configs/toolbar.ts b/blocksuite/affine/blocks/bookmark/src/configs/toolbar.ts
+index 2073936..32011fa 100644
+--- a/blocksuite/affine/blocks/bookmark/src/configs/toolbar.ts
++++ b/blocksuite/affine/blocks/bookmark/src/configs/toolbar.ts
+@@ -253,6 +253,14 @@ const builtinToolbarConfig = {
+           id: 'list',
+           label: 'Small horizontal style',
+         },
++        {
++          id: 'vertical',
++          label: 'Large vertical style',
++        },
++        {
++          id: 'cube',
++          label: 'Small vertical style',
++        },
+       ],
+       content(ctx) {
+         const model = ctx.getCurrentModelByType(BookmarkBlockModel);
+diff --git a/blocksuite/affine/blocks/embed/src/embed-youtube-block/embed-youtube-block.ts b/blocksuite/affine/blocks/embed/src/embed-youtube-block/embed-youtube-block.ts
+index 926b94a..e9793c2 100644
+--- a/blocksuite/affine/blocks/embed/src/embed-youtube-block/embed-youtube-block.ts
++++ b/blocksuite/affine/blocks/embed/src/embed-youtube-block/embed-youtube-block.ts
+@@ -75,7 +75,10 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
+       });
+     }
+
+-    if (!this.model.props.description && !this.model.props.title) {
++    if (
++      !this.model.props.image ||
++      (!this.model.props.description && !this.model.props.title)
++    ) {
+       this.store.withoutTransact(() => {
+         this.refreshData();
+       });
+@@ -106,10 +109,27 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
+     const titleIcon = loading ? LoadingIcon() : YoutubeIcon;
+     const titleText = loading ? 'Loading...' : title || 'YouTube';
+     const descriptionText = loading ? null : description;
++    const effectiveImage =
++      image ||
++      (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null);
+     const bannerImage =
+-      !loading && image
+-        ? html`<img src=${imageProxyService.buildUrl(image)} alt="banner" />`
++      !loading && effectiveImage
++        ? html`<img
++            src=${imageProxyService.buildUrl(effectiveImage)}
++            alt="banner"
++          />`
+         : EmbedCardBannerIcon;
++    const thumbnailBadgeEl =
++      !loading && effectiveImage
++        ? html`<img
++            class="affine-embed-youtube-thumbnail"
++            src=${imageProxyService.buildUrl(effectiveImage)}
++            alt="YouTube thumbnail"
++            @error=${(e: Event) => {
++              (e.currentTarget as HTMLElement).style.display = 'none';
++            }}
++          />`
++        : nothing;
+
+     const creatorImageEl =
+       !loading && creatorImage
+@@ -144,9 +164,8 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
+                         src=${`https://www.youtube.com/embed/${videoId}`}
+                         frameborder="0"
+                         allow="fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+-                        sandbox="allow-scripts allow-same-origin allow-presentation"
+-                        loading="lazy"
+-                        credentialless
++                        sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-forms"
++                        referrerpolicy="strict-origin-when-cross-origin"
+                       ></iframe>
+
+                       <!-- overlay to prevent the iframe from capturing pointer events -->
+@@ -162,9 +181,14 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
+                           'media-print': true,
+                           hide: !this._showImage,
+                         })}
+-                        src=${`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
++                        src=${imageProxyService.buildUrl(
++                          effectiveImage ||
++                            `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
++                        )}
+                         alt="YouTube Video"
+-                        loading="lazy"
++                        @error=${(e: Event) => {
++                          (e.currentTarget as HTMLElement).style.display = 'none';
++                        }}
+                       />
+                     </div>
+                   `
+@@ -177,6 +201,8 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
+                 ${titleIcon}
+               </div>
+
++              ${thumbnailBadgeEl}
++
+               <div class="affine-embed-youtube-content-title-text">
+                 ${titleText}
+               </div>
+diff --git a/blocksuite/affine/blocks/embed/src/embed-youtube-block/utils.ts b/blocksuite/affine/blocks/embed/src/embed-youtube-block/utils.ts
+index 3d78913..ec27226 100644
+--- a/blocksuite/affine/blocks/embed/src/embed-youtube-block/utils.ts
++++ b/blocksuite/affine/blocks/embed/src/embed-youtube-block/utils.ts
+@@ -14,21 +14,26 @@ export async function queryEmbedYoutubeData(
+ ): Promise<Partial<EmbedYoutubeBlockUrlData>> {
+   const url = embedYoutubeModel.props.url;
+
+-  const [videoOpenGraphData, videoOEmbedData] = await Promise.all([
+-    linkPreviewer.query(url, signal),
+-    queryYoutubeOEmbedData(url, signal),
+-  ]);
++  const videoOpenGraphData = await linkPreviewer
++    .query(url, signal)
++    .catch(() => ({}));
++  const videoOEmbedData = videoOpenGraphData.title
++    ? {}
++    : await queryYoutubeOEmbedData(url, signal).catch(() => ({}));
+
+   const youtubeEmbedData: Partial<EmbedYoutubeBlockUrlData> = {
+     ...videoOpenGraphData,
+     ...videoOEmbedData,
+   };
+
++  if (!youtubeEmbedData.image && embedYoutubeModel.props.videoId) {
++    youtubeEmbedData.image = `https://i.ytimg.com/vi/${embedYoutubeModel.props.videoId}/hqdefault.jpg`;
++  }
++
+   if (youtubeEmbedData.creatorUrl) {
+-    const creatorOpenGraphData = await linkPreviewer.query(
+-      youtubeEmbedData.creatorUrl,
+-      signal
+-    );
++    const creatorOpenGraphData = await linkPreviewer
++      .query(youtubeEmbedData.creatorUrl, signal)
++      .catch(() => ({}));
+     youtubeEmbedData.creatorImage = creatorOpenGraphData.image;
+   }
+
+@@ -107,7 +112,6 @@ export async function refreshEmbedYoutubeUrlData(
+     });
+   } catch (error) {
+     if (signal?.aborted || isAbortError(error)) return;
+-    throw error;
+   } finally {
+     embedYoutubeElement.loading = false;
+   }
+diff --git a/blocksuite/affine/blocks/embed/src/embed-youtube-block/styles.ts b/blocksuite/affine/blocks/embed/src/embed-youtube-block/styles.ts
+index 012299f..66a69fe 100644
+--- a/blocksuite/affine/blocks/embed/src/embed-youtube-block/styles.ts
++++ b/blocksuite/affine/blocks/embed/src/embed-youtube-block/styles.ts
+@@ -80,6 +80,14 @@ export const styles = css`
+     align-items: center;
+   }
+
++  .affine-embed-youtube-thumbnail {
++    width: 48px;
++    height: 27px;
++    object-fit: cover;
++    border-radius: 4px;
++    flex-shrink: 0;
++  }
++
+   .affine-embed-youtube-content-title-icon img,
+   .affine-embed-youtube-content-title-icon object,
+   .affine-embed-youtube-content-title-icon svg {
+diff --git a/blocksuite/affine/blocks/embed/src/embed-iframe-block/configs/providers/generic.ts b/blocksuite/affine/blocks/embed/src/embed-iframe-block/configs/providers/generic.ts
+index 5d67122..ed57e15 100644
+--- a/blocksuite/affine/blocks/embed/src/embed-iframe-block/configs/providers/generic.ts
++++ b/blocksuite/affine/blocks/embed/src/embed-iframe-block/configs/providers/generic.ts
+@@ -33,11 +33,34 @@ const genericUrlValidationOptions: EmbedIframeUrlValidationOptions = {
+  * @param url The URL to validate
+  * @returns Boolean indicating if the URL can be generically embedded
+  */
++function extractVimeoEmbedUrl(url: string): string | null {
++  try {
++    const parsed = new URL(url);
++    const host = parsed.hostname.toLowerCase();
++    if (host === 'vimeo.com' || host === 'www.vimeo.com') {
++      const m = parsed.pathname.match(/^\/(?:channels\/[^/]+\/|groups\/[^/]+\/videos\/|video\/)?(\d+)(?:\/|$)/);
++      if (m?.[1]) return `https://player.vimeo.com/video/${m[1]}`;
++    }
++    if (host === 'player.vimeo.com') {
++      const m = parsed.pathname.match(/^\/video\/(\d+)(?:\/|$)/);
++      if (m?.[1]) return `https://player.vimeo.com/video/${m[1]}`;
++    }
++    return null;
++  } catch {
++    return null;
++  }
++}
++
+ function isValidGenericEmbedUrl(url: string): boolean {
+   try {
+     const parsedUrl = new URL(url);
++    const hostname = parsedUrl.hostname.toLowerCase();
++    const isLocalTestHttp =
++      parsedUrl.protocol === 'http:' &&
++      (hostname === '127.0.0.1' || hostname === 'localhost');
+
+     if (
++      !isLocalTestHttp &&
+       !validateEmbedIframeUrl(url, {
+         ...genericUrlValidationOptions,
+         hostnames: [parsedUrl.hostname],
+@@ -47,7 +70,6 @@ function isValidGenericEmbedUrl(url: string): boolean {
+     }
+
+     // Exclude AFFiNE domains
+-    const hostname = parsedUrl.hostname.toLowerCase();
+     if (
+       AFFINE_DOMAINS.some(
+         domain => hostname === domain || hostname.endsWith(`.${domain}`)
+@@ -70,7 +92,7 @@ export const genericConfig = {
+     if (!isValidGenericEmbedUrl(url)) {
+       return undefined;
+     }
+-    return url;
++    return extractVimeoEmbedUrl(url) ?? url;
+   },
+   useOEmbedUrlDirectly: true,
+   validateIframeUrl: (iframeUrl: string) => isValidGenericEmbedUrl(iframeUrl),
+diff --git a/blocksuite/affine/blocks/embed/src/embed-iframe-block/embed-iframe-block.ts b/blocksuite/affine/blocks/embed/src/embed-iframe-block/embed-iframe-block.ts
+index af1eb69..ba84ff1 100644
+--- a/blocksuite/affine/blocks/embed/src/embed-iframe-block/embed-iframe-block.ts
++++ b/blocksuite/affine/blocks/embed/src/embed-iframe-block/embed-iframe-block.ts
+@@ -5,6 +5,7 @@ import {
+ } from '@blocksuite/affine-components/caption';
+ import { createLitPortal } from '@blocksuite/affine-components/portal';
+ import type { EmbedIframeBlockModel } from '@blocksuite/affine-model';
++import { ImageProxyService } from '@blocksuite/affine-shared/adapters';
+ import {
+   type EmbedIframeData,
+   EmbedIframeService,
+@@ -46,8 +47,15 @@ import { safeGetIframeSrc } from './utils.js';
+ export type EmbedIframeStatus = 'idle' | 'loading' | 'success' | 'error';
+
+ const TRUSTED_SANDBOX =
+-  'allow-same-origin allow-scripts allow-forms allow-presentation';
++  'allow-same-origin allow-scripts allow-forms allow-presentation allow-popups';
+ const UNTRUSTED_SANDBOX = 'allow-scripts';
++const ALLOWED_FRAME_HOSTS = new Set([
++  'www.youtube.com',
++  'youtube.com',
++  'www.youtube-nocookie.com',
++  'youtube-nocookie.com',
++  'player.vimeo.com',
++]);
+
+ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIframeBlockModel> {
+   selectedStyle$: ReadonlySignal<ClassInfo> | null = computed<ClassInfo>(
+@@ -62,6 +70,8 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
+
+   readonly status$ = signal<EmbedIframeStatus>('idle');
+   readonly error$ = signal<Error | null>(null);
++  readonly previewImage$ = signal<string | null>(null);
++  readonly previewIcon$ = signal<string | null>(null);
+
+   readonly isIdle$ = computed(() => this.status$.value === 'idle');
+   readonly isLoading$ = computed(() => this.status$.value === 'loading');
+@@ -168,21 +178,17 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
+
+       // get embed data and preview data in a promise
+       const [embedData, previewData] = await Promise.all([
+-        embedIframeService.getEmbedIframeData(url),
+-        linkPreviewService.query(url),
++        embedIframeService.getEmbedIframeData(url).catch(() => null),
++        linkPreviewService.query(url).catch(() => ({})),
+       ]);
+
+-      // if the embed data is not found, and the iframeUrl is not set, throw an error
+-      const currentIframeUrl = this.model.props.iframeUrl;
+-      if (!embedData && !currentIframeUrl) {
+-        throw new BlockSuiteError(
+-          ErrorCode.ValueNotExists,
+-          'Failed to get embed data'
+-        );
+-      }
++      this.previewImage$.value =
++        previewData?.image ?? embedData?.thumbnail_url ?? null;
++      this.previewIcon$.value = previewData?.icon ?? null;
+
+-      // update model
+-      const iframeUrl = this._getIframeUrl(embedData) ?? currentIframeUrl;
++      const currentIframeUrl = this.model.props.iframeUrl;
++      const iframeUrl =
++        this._getIframeUrl(embedData) || currentIframeUrl || url;
+       if (!this._validateIframeUrl(url, iframeUrl)) {
+         throw new BlockSuiteError(
+           ErrorCode.ValueNotExists,
+@@ -191,8 +197,12 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
+       }
+       this.store.updateBlock(this.model, {
+         iframeUrl,
+-        title: embedData?.title || previewData?.title,
+-        description: embedData?.description || previewData?.description,
++        title:
++          embedData?.title || previewData?.title || this.model.props.title,
++        description:
++          embedData?.description ||
++          previewData?.description ||
++          this.model.props.description,
+       });
+
+       // update iframe options, to ensure the iframe is rendered with the correct options
+@@ -201,11 +211,8 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
+       // set success status
+       this.status$.value = 'success';
+       return true;
+-    } catch (err) {
+-      // set error status
+-      this.status$.value = 'error';
+-      this.error$.value = err instanceof Error ? err : new Error(String(err));
+-      console.error('Failed to refresh iframe data:', err);
++    } catch {
++      this.status$.value = 'success';
+       return false;
+     }
+   };
+@@ -372,23 +379,75 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
+     // if the block is in the surface, use 100% as the height
+     // otherwise, use the heightInNote
+     const height = this.inSurface ? '100%' : heightInNote;
+-    const sandboxValue =
+-      sandbox ??
+-      (this.currentConfigName === 'generic'
+-        ? UNTRUSTED_SANDBOX
+-        : TRUSTED_SANDBOX);
+     const sourceHost = this._getSourceHost();
++    if (!this._isAllowedFrameHost(iframeUrl)) {
++      const imageProxyService = this.store.get(ImageProxyService);
++      const { title, description, url } = this.model.props;
++      const previewImage = this.previewImage$.value;
++      const previewIcon = this.previewIcon$.value;
++      const displayTitle = title || sourceHost || 'Link';
++      const displayDescription = description || url;
++      return html`
++        <div class="affine-embed-iframe-preview-card" @click=${this.open}>
++          ${previewImage
++            ? html`<div class="affine-embed-iframe-preview-banner">
++                <img
++                  class="affine-embed-iframe-preview-image"
++                  src=${imageProxyService.buildUrl(previewImage)}
++                  alt=${displayTitle}
++                  @error=${() => {
++                    this.previewImage$.value = null;
++                  }}
++                />
++              </div>`
++            : nothing}
++          <div class="affine-embed-iframe-preview-body">
++            <div class="affine-embed-iframe-preview-header">
++              ${previewIcon
++                ? html`<img
++                    class="affine-embed-iframe-preview-icon"
++                    src=${imageProxyService.buildUrl(previewIcon)}
++                    alt=""
++                    @error=${() => {
++                      this.previewIcon$.value = null;
++                    }}
++                  />`
++                : nothing}
++              <div class="affine-embed-iframe-preview-title">
++                ${displayTitle}
++              </div>
++            </div>
++            ${displayDescription
++              ? html`<div class="affine-embed-iframe-preview-description">
++                  ${displayDescription}
++                </div>`
++              : nothing}
++            <div class="affine-embed-iframe-preview-host">
++              ${sourceHost || url}
++            </div>
++          </div>
++        </div>
++      `;
++    }
++    const sandboxValue =
++      this._isAllowedFrameHost(iframeUrl)
++        ? TRUSTED_SANDBOX
++        : (sandbox ??
++          (this.currentConfigName === 'generic'
++            ? UNTRUSTED_SANDBOX
++            : TRUSTED_SANDBOX));
+     return html`<iframe
+         width=${width ?? DEFAULT_IFRAME_WIDTH}
+         height=${height ?? DEFAULT_IFRAME_HEIGHT}
+         ?allowfullscreen=${allowFullscreen}
+-        loading="lazy"
+         frameborder="0"
+-        credentialless
+         sandbox=${sandboxValue}
+         src=${ifDefined(iframeUrl)}
+-        allow=${ifDefined(allow)}
+-        referrerpolicy=${ifDefined(referrerpolicy)}
++        allow=${ifDefined(
++          allow ||
++            'fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share'
++        )}
++        referrerpolicy="strict-origin-when-cross-origin"
+         scrolling=${ifDefined(scrolling)}
+         style=${ifDefined(style)}
+       ></iframe>
+@@ -399,6 +458,19 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
+       }`;
+   };
+
++  private readonly _isAllowedFrameHost = (iframeUrl?: string) => {
++    if (!iframeUrl) return false;
++    try {
++      const parsed = new URL(iframeUrl);
++      return (
++        parsed.protocol === 'https:' &&
++        ALLOWED_FRAME_HOSTS.has(parsed.hostname.toLowerCase())
++      );
++    } catch {
++      return false;
++    }
++  };
++
+   private readonly _isIframeUrlAllowed = (iframeUrl: string) => {
+     return this._validateIframeUrl(this.model.props.url, iframeUrl);
+   };
+@@ -464,8 +536,11 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
+       })
+     );
+
+-    // if the iframe url is not set, refresh the data to get the iframe url
+-    if (!this.model.props.iframeUrl) {
++    // if the iframe url is not set, or if it renders a link preview card, refresh the data
++    if (
++      !this.model.props.iframeUrl ||
++      !this._isAllowedFrameHost(this.model.props.iframeUrl)
++    ) {
+       this.store.withoutTransact(() => {
+         this.refreshData().catch(console.error);
+       });
+diff --git a/blocksuite/affine/blocks/embed/src/embed-iframe-block/style.ts b/blocksuite/affine/blocks/embed/src/embed-iframe-block/style.ts
+index 8065d9f..0985ddb 100644
+--- a/blocksuite/affine/blocks/embed/src/embed-iframe-block/style.ts
++++ b/blocksuite/affine/blocks/embed/src/embed-iframe-block/style.ts
+@@ -39,4 +39,81 @@ export const embedIframeBlockStyles = css`
+   .affine-embed-iframe-block-overlay.show {
+     display: block;
+   }
++
++  .affine-embed-iframe-preview-card {
++    display: flex;
++    flex-direction: column;
++    width: 100%;
++    border-radius: 8px;
++    border: 1px solid var(--affine-border-color, rgba(0, 0, 0, 0.12));
++    background: var(--affine-background-primary-color, #fff);
++    overflow: hidden;
++    cursor: pointer;
++    text-align: start;
++  }
++
++  .affine-embed-iframe-preview-banner {
++    width: 100%;
++    max-height: 220px;
++    overflow: hidden;
++    background: var(--affine-background-secondary-color, #f4f4f5);
++  }
++
++  .affine-embed-iframe-preview-image {
++    display: block;
++    width: 100%;
++    height: 180px;
++    object-fit: cover;
++  }
++
++  .affine-embed-iframe-preview-body {
++    display: flex;
++    flex-direction: column;
++    gap: 6px;
++    padding-block: 12px;
++    padding-inline: 14px;
++  }
++
++  .affine-embed-iframe-preview-header {
++    display: flex;
++    align-items: center;
++    gap: 8px;
++  }
++
++  .affine-embed-iframe-preview-icon {
++    width: 16px;
++    height: 16px;
++    border-radius: 3px;
++    flex-shrink: 0;
++  }
++
++  .affine-embed-iframe-preview-title {
++    font-family: var(--affine-font-family);
++    font-size: var(--affine-font-sm, 14px);
++    font-weight: 600;
++    line-height: 20px;
++    color: var(--affine-text-primary-color);
++    overflow: hidden;
++    text-overflow: ellipsis;
++    white-space: nowrap;
++  }
++
++  .affine-embed-iframe-preview-description {
++    font-family: var(--affine-font-family);
++    font-size: var(--affine-font-xs, 12px);
++    line-height: 18px;
++    color: var(--affine-text-secondary-color);
++    display: -webkit-box;
++    -webkit-line-clamp: 2;
++    -webkit-box-orient: vertical;
++    overflow: hidden;
++  }
++
++  .affine-embed-iframe-preview-host {
++    font-family: var(--affine-font-family);
++    font-size: var(--affine-font-xs, 12px);
++    line-height: 16px;
++    color: var(--affine-text-secondary-color);
++    opacity: 0.85;
++  }
+ `;

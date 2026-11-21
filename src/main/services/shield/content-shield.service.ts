@@ -147,18 +147,24 @@ export class ContentShieldService {
         {
           urls: [
             ...mirrorRequestPatterns(file),
-            // Al-Bayan human-narration embeds: packaged app:// and file:// pages send no Referer,
-            // which YouTube rejects with player configuration error 153.
+            // YouTube embeds (Al-Bayan human-narration & research editor): packaged app:// and file:// pages
+            // send no Referer, which YouTube rejects with player configuration error 153.
             '*://www.youtube-nocookie.com/embed/*',
+            '*://www.youtube.com/embed/*',
           ],
         },
         (details, callback) => {
           const requestHeaders = { ...details.requestHeaders };
-          if (details.url.startsWith('https://www.youtube-nocookie.com/embed/')) {
+          if (
+            details.url.startsWith('https://www.youtube-nocookie.com/embed/') ||
+            details.url.startsWith('https://www.youtube.com/embed/')
+          ) {
             const referer = requestHeaders['Referer'] ?? requestHeaders['referer'];
             if (!referer || !/^https?:\/\//iu.test(referer)) {
               delete requestHeaders['referer'];
-              requestHeaders['Referer'] = 'https://www.youtube-nocookie.com/';
+              requestHeaders['Referer'] = details.url.startsWith('https://www.youtube-nocookie.com/embed/')
+                ? 'https://www.youtube-nocookie.com/'
+                : 'https://www.youtube.com/';
             }
             callback({ requestHeaders });
             return;

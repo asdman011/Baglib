@@ -1,5 +1,5 @@
 import { installCanvasLinks } from './canvas/links';
-import { MarkdownAdapter, HtmlAdapter } from '@blocksuite/affine/shared/adapters';
+import { MarkdownAdapter, HtmlAdapter, ImageProxyService } from '@blocksuite/affine/shared/adapters';
 import { GfxControllerIdentifier } from '@blocksuite/affine/std/gfx';
 import { sourceSchemas, sourceStoreExtensions, sourceViewExtensions } from './blocks';
 import { noteEmbedSchema, noteEmbedStoreExtensions, noteEmbedViewExtensions } from './blocks/note-embed';
@@ -26,6 +26,8 @@ import {
   FeatureFlagService,
   FontConfigExtension,
   GeneralSettingSchema,
+  LinkPreviewServiceIdentifier,
+  type LinkPreviewProvider,
   ParseDocUrlExtension,
 } from '@blocksuite/affine/shared/services';
 import {
@@ -97,6 +99,51 @@ function editorSettings() {
   return new Signal<EditorSetting>(initial);
 }
 
+function baglibLinkPreviewProvider(): LinkPreviewProvider {
+  const cache = new Map<string, Record<string, unknown>>();
+  const pending = new Map<string, Promise<Record<string, unknown>>>();
+  let endpoint = '';
+  return {
+    get endpoint() {
+      return endpoint;
+    },
+    setEndpoint(next: string) {
+      endpoint = next;
+    },
+    async query(url: string) {
+      if (!url) return {};
+      const cached = cache.get(url);
+      if (cached) return cached;
+      const inFlight = pending.get(url);
+      if (inFlight) return inFlight;
+      const promise = (async () => {
+        try {
+          if (!bridge?.linkPreview) return {};
+          const res = await bridge.linkPreview(url);
+          if (!res) return {};
+          const data: Record<string, unknown> = {};
+          if (res.title) data.title = res.title;
+          if (res.description) data.description = res.description;
+          if (res.icon) data.icon = res.icon;
+          if (res.image) data.image = res.image;
+          if (res.creator) data.creator = res.creator;
+          if (res.creatorUrl) data.creatorUrl = res.creatorUrl;
+          if (Object.keys(data).length > 0) {
+            cache.set(url, data);
+          }
+          return data;
+        } catch {
+          return {};
+        } finally {
+          pending.delete(url);
+        }
+      })();
+      pending.set(url, promise);
+      return promise;
+    },
+  };
+}
+
 function docModeProvider(editor: TestAffineEditorContainer): DocModeProvider {
   const primary = new Map<string, DocMode>();
   const changes = new Map<string, Subject<DocMode>>();
@@ -129,11 +176,13 @@ async function mount() {
   let workspace = createWorkspace();
   const store = createEmptyDoc(workspace, 'doc:home');
   store.get(FeatureFlagService).setFlag('enable_advanced_block_visibility', true);
+  store.get(ImageProxyService).setImageProxyURL('');
 
   const editor = document.createElement('affine-editor-container') as TestAffineEditorContainer;
   editor.autofocus = true;
   editor.doc = store;
 
+  const linkPreviewProvider = baglibLinkPreviewProvider();
   const common: ExtensionType[] = [
     ...sourceViewExtensions(),
     ...noteEmbedViewExtensions(),
@@ -142,7 +191,12 @@ async function mount() {
     FontConfigExtension(BaglibCanvasTextFonts),
     EditorSettingExtension({ setting$: editorSettings() }),
     ParseDocUrlExtension({ parseDocUrl: () => undefined }),
-    { setup: di => di.override(DocModeProvider, docModeProvider(editor)) },
+    {
+      setup: di => {
+        di.override(DocModeProvider, docModeProvider(editor));
+        di.override(LinkPreviewServiceIdentifier, linkPreviewProvider);
+      },
+    },
   ];
 
   editor.pageSpecs = [...viewManager.get('page'), ...common];
@@ -216,6 +270,7 @@ async function mount() {
         if (!loaded) throw new Error('snapshot-import-failed');
         workspace.meta.setDocMeta(value.id, snapshot.meta);
         loaded.get(FeatureFlagService).setFlag('enable_advanced_block_visibility', true);
+        loaded.get(ImageProxyService).setImageProxyURL('');
         loaded.resetHistory();
         await loadApparatus(loaded, value.manuscript_id);
         editor.doc = loaded;

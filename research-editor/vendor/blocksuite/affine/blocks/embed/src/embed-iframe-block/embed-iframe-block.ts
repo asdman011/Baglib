@@ -5,6 +5,7 @@ import {
 } from '@blocksuite/affine-components/caption';
 import { createLitPortal } from '@blocksuite/affine-components/portal';
 import type { EmbedIframeBlockModel } from '@blocksuite/affine-model';
+import { ImageProxyService } from '@blocksuite/affine-shared/adapters';
 import {
   type EmbedIframeData,
   EmbedIframeService,
@@ -46,8 +47,15 @@ import { safeGetIframeSrc } from './utils.js';
 export type EmbedIframeStatus = 'idle' | 'loading' | 'success' | 'error';
 
 const TRUSTED_SANDBOX =
-  'allow-same-origin allow-scripts allow-forms allow-presentation';
+  'allow-same-origin allow-scripts allow-forms allow-presentation allow-popups';
 const UNTRUSTED_SANDBOX = 'allow-scripts';
+const ALLOWED_FRAME_HOSTS = new Set([
+  'www.youtube.com',
+  'youtube.com',
+  'www.youtube-nocookie.com',
+  'youtube-nocookie.com',
+  'player.vimeo.com',
+]);
 
 export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIframeBlockModel> {
   selectedStyle$: ReadonlySignal<ClassInfo> | null = computed<ClassInfo>(
@@ -62,6 +70,8 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
 
   readonly status$ = signal<EmbedIframeStatus>('idle');
   readonly error$ = signal<Error | null>(null);
+  readonly previewImage$ = signal<string | null>(null);
+  readonly previewIcon$ = signal<string | null>(null);
 
   readonly isIdle$ = computed(() => this.status$.value === 'idle');
   readonly isLoading$ = computed(() => this.status$.value === 'loading');
@@ -168,21 +178,17 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
 
       // get embed data and preview data in a promise
       const [embedData, previewData] = await Promise.all([
-        embedIframeService.getEmbedIframeData(url),
-        linkPreviewService.query(url),
+        embedIframeService.getEmbedIframeData(url).catch(() => null),
+        linkPreviewService.query(url).catch(() => ({})),
       ]);
 
-      // if the embed data is not found, and the iframeUrl is not set, throw an error
-      const currentIframeUrl = this.model.props.iframeUrl;
-      if (!embedData && !currentIframeUrl) {
-        throw new BlockSuiteError(
-          ErrorCode.ValueNotExists,
-          'Failed to get embed data'
-        );
-      }
+      this.previewImage$.value =
+        previewData?.image ?? embedData?.thumbnail_url ?? null;
+      this.previewIcon$.value = previewData?.icon ?? null;
 
-      // update model
-      const iframeUrl = this._getIframeUrl(embedData) ?? currentIframeUrl;
+      const currentIframeUrl = this.model.props.iframeUrl;
+      const iframeUrl =
+        this._getIframeUrl(embedData) || currentIframeUrl || url;
       if (!this._validateIframeUrl(url, iframeUrl)) {
         throw new BlockSuiteError(
           ErrorCode.ValueNotExists,
@@ -191,8 +197,12 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
       }
       this.store.updateBlock(this.model, {
         iframeUrl,
-        title: embedData?.title || previewData?.title,
-        description: embedData?.description || previewData?.description,
+        title:
+          embedData?.title || previewData?.title || this.model.props.title,
+        description:
+          embedData?.description ||
+          previewData?.description ||
+          this.model.props.description,
       });
 
       // update iframe options, to ensure the iframe is rendered with the correct options
@@ -201,11 +211,8 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
       // set success status
       this.status$.value = 'success';
       return true;
-    } catch (err) {
-      // set error status
-      this.status$.value = 'error';
-      this.error$.value = err instanceof Error ? err : new Error(String(err));
-      console.error('Failed to refresh iframe data:', err);
+    } catch {
+      this.status$.value = 'success';
       return false;
     }
   };
@@ -372,23 +379,75 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
     // if the block is in the surface, use 100% as the height
     // otherwise, use the heightInNote
     const height = this.inSurface ? '100%' : heightInNote;
-    const sandboxValue =
-      sandbox ??
-      (this.currentConfigName === 'generic'
-        ? UNTRUSTED_SANDBOX
-        : TRUSTED_SANDBOX);
     const sourceHost = this._getSourceHost();
+    if (!this._isAllowedFrameHost(iframeUrl)) {
+      const imageProxyService = this.store.get(ImageProxyService);
+      const { title, description, url } = this.model.props;
+      const previewImage = this.previewImage$.value;
+      const previewIcon = this.previewIcon$.value;
+      const displayTitle = title || sourceHost || 'Link';
+      const displayDescription = description || url;
+      return html`
+        <div class="affine-embed-iframe-preview-card" @click=${this.open}>
+          ${previewImage
+            ? html`<div class="affine-embed-iframe-preview-banner">
+                <img
+                  class="affine-embed-iframe-preview-image"
+                  src=${imageProxyService.buildUrl(previewImage)}
+                  alt=${displayTitle}
+                  @error=${() => {
+                    this.previewImage$.value = null;
+                  }}
+                />
+              </div>`
+            : nothing}
+          <div class="affine-embed-iframe-preview-body">
+            <div class="affine-embed-iframe-preview-header">
+              ${previewIcon
+                ? html`<img
+                    class="affine-embed-iframe-preview-icon"
+                    src=${imageProxyService.buildUrl(previewIcon)}
+                    alt=""
+                    @error=${() => {
+                      this.previewIcon$.value = null;
+                    }}
+                  />`
+                : nothing}
+              <div class="affine-embed-iframe-preview-title">
+                ${displayTitle}
+              </div>
+            </div>
+            ${displayDescription
+              ? html`<div class="affine-embed-iframe-preview-description">
+                  ${displayDescription}
+                </div>`
+              : nothing}
+            <div class="affine-embed-iframe-preview-host">
+              ${sourceHost || url}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    const sandboxValue =
+      this._isAllowedFrameHost(iframeUrl)
+        ? TRUSTED_SANDBOX
+        : (sandbox ??
+          (this.currentConfigName === 'generic'
+            ? UNTRUSTED_SANDBOX
+            : TRUSTED_SANDBOX));
     return html`<iframe
         width=${width ?? DEFAULT_IFRAME_WIDTH}
         height=${height ?? DEFAULT_IFRAME_HEIGHT}
         ?allowfullscreen=${allowFullscreen}
-        loading="lazy"
         frameborder="0"
-        credentialless
         sandbox=${sandboxValue}
         src=${ifDefined(iframeUrl)}
-        allow=${ifDefined(allow)}
-        referrerpolicy=${ifDefined(referrerpolicy)}
+        allow=${ifDefined(
+          allow ||
+            'fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share'
+        )}
+        referrerpolicy="strict-origin-when-cross-origin"
         scrolling=${ifDefined(scrolling)}
         style=${ifDefined(style)}
       ></iframe>
@@ -397,6 +456,19 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
           ? html`<div class="affine-embed-iframe-source">${sourceHost}</div>`
           : nothing
       }`;
+  };
+
+  private readonly _isAllowedFrameHost = (iframeUrl?: string) => {
+    if (!iframeUrl) return false;
+    try {
+      const parsed = new URL(iframeUrl);
+      return (
+        parsed.protocol === 'https:' &&
+        ALLOWED_FRAME_HOSTS.has(parsed.hostname.toLowerCase())
+      );
+    } catch {
+      return false;
+    }
   };
 
   private readonly _isIframeUrlAllowed = (iframeUrl: string) => {
@@ -464,8 +536,11 @@ export class EmbedIframeBlockComponent extends CaptionedBlockComponent<EmbedIfra
       })
     );
 
-    // if the iframe url is not set, refresh the data to get the iframe url
-    if (!this.model.props.iframeUrl) {
+    // if the iframe url is not set, or if it renders a link preview card, refresh the data
+    if (
+      !this.model.props.iframeUrl ||
+      !this._isAllowedFrameHost(this.model.props.iframeUrl)
+    ) {
       this.store.withoutTransact(() => {
         this.refreshData().catch(console.error);
       });

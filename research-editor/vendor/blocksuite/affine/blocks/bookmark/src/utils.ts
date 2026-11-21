@@ -26,9 +26,7 @@ export async function refreshBookmarkUrlData(
     icon = bookmarkUrlData.icon ?? null;
     image = bookmarkUrlData.image ?? null;
 
-    if (!title && !description && !icon && !image) {
-      bookmarkElement.error = true;
-    }
+    bookmarkElement.error = false;
 
     if (signal?.aborted) return;
 
@@ -40,7 +38,7 @@ export async function refreshBookmarkUrlData(
     });
   } catch (error) {
     if (signal?.aborted || isAbortError(error)) return;
-    throw error;
+    bookmarkElement.error = false;
   } finally {
     bookmarkElement.loading = false;
   }

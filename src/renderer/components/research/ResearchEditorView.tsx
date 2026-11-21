@@ -208,6 +208,7 @@ export function ResearchEditorView() {
         },
         () => current.current.lang
       ),
+      linkPreview: url => window.electronAPI.researchEditor.linkPreview?.(url) ?? Promise.resolve({ title: null, description: null, icon: null, image: null }),
       async connect(session) {
         await host.bridge.connect(session);
         setReady(true);

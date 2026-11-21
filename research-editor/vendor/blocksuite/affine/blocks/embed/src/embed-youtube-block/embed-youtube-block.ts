@@ -75,7 +75,10 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
       });
     }
 
-    if (!this.model.props.description && !this.model.props.title) {
+    if (
+      !this.model.props.image ||
+      (!this.model.props.description && !this.model.props.title)
+    ) {
       this.store.withoutTransact(() => {
         this.refreshData();
       });
@@ -106,10 +109,27 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
     const titleIcon = loading ? LoadingIcon() : YoutubeIcon;
     const titleText = loading ? 'Loading...' : title || 'YouTube';
     const descriptionText = loading ? null : description;
+    const effectiveImage =
+      image ||
+      (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null);
     const bannerImage =
-      !loading && image
-        ? html`<img src=${imageProxyService.buildUrl(image)} alt="banner" />`
+      !loading && effectiveImage
+        ? html`<img
+            src=${imageProxyService.buildUrl(effectiveImage)}
+            alt="banner"
+          />`
         : EmbedCardBannerIcon;
+    const thumbnailBadgeEl =
+      !loading && effectiveImage
+        ? html`<img
+            class="affine-embed-youtube-thumbnail"
+            src=${imageProxyService.buildUrl(effectiveImage)}
+            alt="YouTube thumbnail"
+            @error=${(e: Event) => {
+              (e.currentTarget as HTMLElement).style.display = 'none';
+            }}
+          />`
+        : nothing;
 
     const creatorImageEl =
       !loading && creatorImage
@@ -144,9 +164,8 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
                         src=${`https://www.youtube.com/embed/${videoId}`}
                         frameborder="0"
                         allow="fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-                        sandbox="allow-scripts allow-same-origin allow-presentation"
-                        loading="lazy"
-                        credentialless
+                        sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-forms"
+                        referrerpolicy="strict-origin-when-cross-origin"
                       ></iframe>
 
                       <!-- overlay to prevent the iframe from capturing pointer events -->
@@ -162,9 +181,14 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
                           'media-print': true,
                           hide: !this._showImage,
                         })}
-                        src=${`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
+                        src=${imageProxyService.buildUrl(
+                          effectiveImage ||
+                            `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+                        )}
                         alt="YouTube Video"
-                        loading="lazy"
+                        @error=${(e: Event) => {
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                        }}
                       />
                     </div>
                   `
@@ -176,6 +200,8 @@ export class EmbedYoutubeBlockComponent extends EmbedBlockComponent<
               <div class="affine-embed-youtube-content-title-icon">
                 ${titleIcon}
               </div>
+
+              ${thumbnailBadgeEl}
 
               <div class="affine-embed-youtube-content-title-text">
                 ${titleText}

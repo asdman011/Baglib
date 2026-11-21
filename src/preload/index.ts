@@ -134,6 +134,7 @@ export const API = {
       delete: id => ipcRenderer.invoke('researchEditor.blob.delete', id),
       list: () => ipcRenderer.invoke('researchEditor.blob.list'),
     },
+    linkPreview: (url: string) => ipcRenderer.invoke('researchEditor.linkPreview', url),
   } satisfies ResearchEditorAPI,
   manuscripts,
   athan,

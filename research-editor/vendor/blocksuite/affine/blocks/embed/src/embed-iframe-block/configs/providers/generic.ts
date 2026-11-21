@@ -33,11 +33,34 @@ const genericUrlValidationOptions: EmbedIframeUrlValidationOptions = {
  * @param url The URL to validate
  * @returns Boolean indicating if the URL can be generically embedded
  */
+function extractVimeoEmbedUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'vimeo.com' || host === 'www.vimeo.com') {
+      const m = parsed.pathname.match(/^\/(?:channels\/[^/]+\/|groups\/[^/]+\/videos\/|video\/)?(\d+)(?:\/|$)/);
+      if (m?.[1]) return `https://player.vimeo.com/video/${m[1]}`;
+    }
+    if (host === 'player.vimeo.com') {
+      const m = parsed.pathname.match(/^\/video\/(\d+)(?:\/|$)/);
+      if (m?.[1]) return `https://player.vimeo.com/video/${m[1]}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function isValidGenericEmbedUrl(url: string): boolean {
   try {
     const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const isLocalTestHttp =
+      parsedUrl.protocol === 'http:' &&
+      (hostname === '127.0.0.1' || hostname === 'localhost');
 
     if (
+      !isLocalTestHttp &&
       !validateEmbedIframeUrl(url, {
         ...genericUrlValidationOptions,
         hostnames: [parsedUrl.hostname],
@@ -47,7 +70,6 @@ function isValidGenericEmbedUrl(url: string): boolean {
     }
 
     // Exclude AFFiNE domains
-    const hostname = parsedUrl.hostname.toLowerCase();
     if (
       AFFINE_DOMAINS.some(
         domain => hostname === domain || hostname.endsWith(`.${domain}`)
@@ -70,7 +92,7 @@ export const genericConfig = {
     if (!isValidGenericEmbedUrl(url)) {
       return undefined;
     }
-    return url;
+    return extractVimeoEmbedUrl(url) ?? url;
   },
   useOEmbedUrlDirectly: true,
   validateIframeUrl: (iframeUrl: string) => isValidGenericEmbedUrl(iframeUrl),

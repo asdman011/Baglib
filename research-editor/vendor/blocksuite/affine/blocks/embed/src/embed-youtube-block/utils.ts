@@ -14,21 +14,26 @@ export async function queryEmbedYoutubeData(
 ): Promise<Partial<EmbedYoutubeBlockUrlData>> {
   const url = embedYoutubeModel.props.url;
 
-  const [videoOpenGraphData, videoOEmbedData] = await Promise.all([
-    linkPreviewer.query(url, signal),
-    queryYoutubeOEmbedData(url, signal),
-  ]);
+  const videoOpenGraphData = await linkPreviewer
+    .query(url, signal)
+    .catch(() => ({}));
+  const videoOEmbedData = videoOpenGraphData.title
+    ? {}
+    : await queryYoutubeOEmbedData(url, signal).catch(() => ({}));
 
   const youtubeEmbedData: Partial<EmbedYoutubeBlockUrlData> = {
     ...videoOpenGraphData,
     ...videoOEmbedData,
   };
 
+  if (!youtubeEmbedData.image && embedYoutubeModel.props.videoId) {
+    youtubeEmbedData.image = `https://i.ytimg.com/vi/${embedYoutubeModel.props.videoId}/hqdefault.jpg`;
+  }
+
   if (youtubeEmbedData.creatorUrl) {
-    const creatorOpenGraphData = await linkPreviewer.query(
-      youtubeEmbedData.creatorUrl,
-      signal
-    );
+    const creatorOpenGraphData = await linkPreviewer
+      .query(youtubeEmbedData.creatorUrl, signal)
+      .catch(() => ({}));
     youtubeEmbedData.creatorImage = creatorOpenGraphData.image;
   }
 
@@ -107,7 +112,6 @@ export async function refreshEmbedYoutubeUrlData(
     });
   } catch (error) {
     if (signal?.aborted || isAbortError(error)) return;
-    throw error;
   } finally {
     embedYoutubeElement.loading = false;
   }

@@ -1,5 +1,6 @@
 import type { ResearchSourceSearch } from './research-editor-sources';
 import type { ManuscriptDocument, ManuscriptMode } from './manuscripts';
+import type { ResearchLinkPreview } from './link-preview';
 
 export interface ResearchEditorAppearance {
   theme: 'dark' | 'light';
@@ -17,6 +18,7 @@ export interface ResearchEditorAssets {
 export interface ResearchEditorAPI {
   available(): Promise<boolean>;
   blobs: ResearchEditorAssets;
+  linkPreview(url: string): Promise<ResearchLinkPreview>;
 }
 export interface ResearchEditorSession {
   load(document: ManuscriptDocument): Promise<void>;
@@ -62,6 +64,7 @@ export interface ResearchEditorBridge {
   explicitSave(): Promise<void>;
   error(error: unknown): void;
   blobs: ResearchEditorAssets;
+  linkPreview?(url: string): Promise<ResearchLinkPreview>;
 }
 export function validateResearchBlobId(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]{1,128}={0,2}$/.test(value)) throw new Error('invalid-blob-id');

@@ -253,6 +253,14 @@ const builtinToolbarConfig = {
           id: 'list',
           label: 'Small horizontal style',
         },
+        {
+          id: 'vertical',
+          label: 'Large vertical style',
+        },
+        {
+          id: 'cube',
+          label: 'Small vertical style',
+        },
       ],
       content(ctx) {
         const model = ctx.getCurrentModelByType(BookmarkBlockModel);

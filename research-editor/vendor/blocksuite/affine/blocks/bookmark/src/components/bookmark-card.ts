@@ -55,9 +55,7 @@ export class BookmarkCard extends SignalWatcher(
     const titleText = this.loading
       ? 'Loading...'
       : !title
-        ? this.error
-          ? (domainName ?? 'Link card')
-          : ''
+        ? (domainName ?? 'Link card')
         : title;
 
     const theme = this.bookmark.std.get(ThemeProvider).theme;
@@ -80,7 +78,13 @@ export class BookmarkCard extends SignalWatcher(
 
     const bannerImage =
       !this.loading && image
-        ? html`<img src=${imageProxyService.buildUrl(image)} alt="banner" />`
+        ? html`<img
+            src=${imageProxyService.buildUrl(image)}
+            alt="banner"
+            @error=${(e: Event) => {
+              (e.currentTarget as HTMLElement).style.display = 'none';
+            }}
+          />`
         : EmbedCardBannerIcon;
 
     return html`
