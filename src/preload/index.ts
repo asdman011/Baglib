@@ -597,6 +597,14 @@ export const API = {
       ipcRenderer.invoke('ai-actions:confirm', request),
     undo: (request: import('../shared/ai-actions').AiActionUndoRequest): Promise<import('../shared/ai-actions').AiActionUndoResponse> =>
       ipcRenderer.invoke('ai-actions:undo', request),
+    openOutput: (request: import('../shared/ai-actions').AiActionOutputRequest): Promise<import('../shared/ai-actions').AiActionOpenOutputResponse> =>
+      ipcRenderer.invoke('ai-actions:open-output', request),
+    showOutputInFolder: (request: import('../shared/ai-actions').AiActionOutputRequest): Promise<import('../shared/ai-actions').AiActionShowOutputResponse> =>
+      ipcRenderer.invoke('ai-actions:show-in-folder', request),
+    addOutputToLibrary: (request: import('../shared/ai-actions').AiActionOutputRequest): Promise<import('../shared/ai-actions').AiActionAddOutputToLibraryResponse> =>
+      ipcRenderer.invoke('ai-actions:add-to-library', request),
+    chooseOutputFolder: (): Promise<{ canceled: boolean; folderPath?: string }> =>
+      ipcRenderer.invoke('ai-actions:choose-output-folder'),
   },
 
   // Text-to-Speech (TTS), Audiobook Playback & SMIL Overlays (KEY-145)

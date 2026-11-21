@@ -472,6 +472,53 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </div>
 
+          {/* KEY-449: Optional AI action output folder setting */}
+          <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 space-y-3">
+            <label className="block font-semibold text-zinc-900 dark:text-zinc-100">
+              {t('aiActionOutputFolderSettingTitle')}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {(['next-to-source', 'custom'] as const).map(mode => {
+                const active = (settings.aiActionOutputMode ?? 'next-to-source') === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    data-ai-output-mode={mode}
+                    onClick={() => setSettings({ ...settings, aiActionOutputMode: mode })}
+                    className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                      active
+                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold'
+                        : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    {t(mode === 'next-to-source' ? 'aiActionOutputModeNextToSource' : 'aiActionOutputModeCustom')}
+                  </button>
+                );
+              })}
+            </div>
+            {(settings.aiActionOutputMode ?? 'next-to-source') === 'custom' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span dir="ltr" className="min-w-0 flex-1 truncate rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-1.5 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                  {settings.aiActionOutputDir || t('aiActionOutputNoFolderChosen')}
+                </span>
+                <button
+                  type="button"
+                  data-ai-output-choose-folder
+                  onClick={async () => {
+                    const picked = await window.electronAPI.aiActions.chooseOutputFolder();
+                    if (!picked.canceled && picked.folderPath) {
+                      setSettings({ ...settings, aiActionOutputDir: picked.folderPath });
+                    }
+                  }}
+                  className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  {t('aiActionOutputChooseFolder')}
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Test Connection Banner */}
           {testResult && (
             <div

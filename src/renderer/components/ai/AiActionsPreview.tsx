@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
-import { BookOpenText, Check, FileOutput, Layers, ListPlus, Merge, NotebookPen, RotateCcw, RotateCw, ScanText, Scissors, Sparkles, X } from 'lucide-react';
-import type { AiActionBookCandidate, AiActionErrorCode, AiActionPlan, AiActionPreviewStep } from '../../../shared/ai-actions';
+import { BookOpenText, Check, ExternalLink, FileOutput, FolderOpen, Layers, LibraryBig, ListPlus, Merge, NotebookPen, RotateCcw, RotateCw, ScanText, Scissors, Sparkles, X } from 'lucide-react';
+import type { AiActionBookCandidate, AiActionErrorCode, AiActionExecutedStep, AiActionPlan, AiActionPreviewStep } from '../../../shared/ai-actions';
 import { PERSONAL_LISTS_CHANGED } from '../../../shared/personal-lists';
 import type { TranslationKey } from '../../translations';
 
@@ -13,6 +13,9 @@ export type ActionPlanMessage = {
   plan: AiActionPlan;
   status: 'pending' | 'running' | 'executed' | 'cancelled' | 'undone';
   executionId?: string;
+  executedSteps?: AiActionExecutedStep[];
+  openTargets?: string[];
+  importedWorkIds?: Record<string, string>;
   previousView?: string;
   error?: string;
 };
@@ -29,6 +32,9 @@ interface AiActionsPreviewCardProps {
   onConfirm: (message: ActionPlanMessage, selections?: ActionSelections) => void;
   onCancel: (message: ActionPlanMessage) => void;
   onUndo: (message: ActionPlanMessage) => void;
+  onOpenOutput?: (message: ActionPlanMessage, outputPath: string) => void;
+  onShowOutputInFolder?: (message: ActionPlanMessage, outputPath: string) => void;
+  onAddOutputToLibrary?: (message: ActionPlanMessage, outputPath: string) => void;
 }
 
 function StepIcon({ tool }: { tool: AiActionPreviewStep['tool'] }) {
@@ -120,9 +126,22 @@ export function AiActionsPreviewCard({
   onConfirm,
   onCancel,
   onUndo,
+  onOpenOutput,
+  onShowOutputInFolder,
+  onAddOutputToLibrary,
 }: AiActionsPreviewCardProps) {
   const { plan, status, error } = message;
   const [selections, setSelections] = React.useState<ActionSelections>({});
+  const executedOutputs = React.useMemo(
+    () =>
+      (message.executedSteps ?? []).flatMap(step =>
+        (step.outputPaths ?? []).map(outPath => ({
+          stepId: step.stepId,
+          outPath,
+        }))
+      ),
+    [message.executedSteps]
+  );
 
   const selectCandidate = (key: string, pick: { workId: string; sourceId?: string }) => {
     setSelections(current => ({ ...current, [key]: pick }));
@@ -303,21 +322,91 @@ export function AiActionsPreviewCard({
       )}
 
       {status === 'executed' && (
-        <div data-ai-action-executed className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-            {t('aiActionExecuted', { count: plan.steps.length })}
-          </span>
-          {message.executionId && (
-            <button
-              type="button"
-              data-ai-action-undo
-              onClick={() => onUndo(message)}
-              className="inline-flex items-center gap-1 rounded-md border border-subtle px-2 py-0.5 text-[11px] hover:border-primary/40 hover:bg-surface"
-            >
-              <RotateCcw className="size-3" />
-              {t('aiActionUndo')}
-            </button>
+        <div data-ai-action-executed className="space-y-2 pt-1">
+          {executedOutputs.length > 0 && (
+            <div className="space-y-1.5">
+              {executedOutputs.map(({ outPath }) => {
+                const normalized = outPath.replace(/\\/g, '/');
+                const lastSlash = normalized.lastIndexOf('/');
+                const filename = lastSlash >= 0 ? outPath.slice(lastSlash + 1) : outPath;
+                const folder = lastSlash >= 0 ? outPath.slice(0, lastSlash) : '';
+                const isPdf = filename.toLowerCase().endsWith('.pdf');
+                const isImported = Boolean(message.importedWorkIds?.[outPath]);
+                return (
+                  <div
+                    key={outPath}
+                    data-ai-output-card={outPath}
+                    className="space-y-1 rounded-lg border border-emerald-500/30 bg-surface p-2 text-[11px]"
+                  >
+                    <p dir="ltr" className="truncate font-mono font-medium text-ink">
+                      {filename}
+                    </p>
+                    {folder && (
+                      <p dir="ltr" className="break-all font-mono text-[10px] text-muted">
+                        {t('aiActionOutputFolderLabel')}: {folder}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {onOpenOutput && (
+                        <button
+                          type="button"
+                          data-ai-output-open={outPath}
+                          onClick={() => onOpenOutput(message, outPath)}
+                          className="inline-flex items-center gap-1 rounded-md border border-subtle bg-canvas px-2 py-0.5 text-[11px] hover:border-primary/40 hover:text-primary-text"
+                        >
+                          <ExternalLink className="size-3" />
+                          {t('aiActionOutputOpen')}
+                        </button>
+                      )}
+                      {onShowOutputInFolder && (
+                        <button
+                          type="button"
+                          data-ai-output-show={outPath}
+                          onClick={() => onShowOutputInFolder(message, outPath)}
+                          className="inline-flex items-center gap-1 rounded-md border border-subtle bg-canvas px-2 py-0.5 text-[11px] hover:border-primary/40 hover:text-primary-text"
+                        >
+                          <FolderOpen className="size-3" />
+                          {t('aiActionOutputShowInFolder')}
+                        </button>
+                      )}
+                      {isPdf && onAddOutputToLibrary && (
+                        <button
+                          type="button"
+                          data-ai-output-add-library={outPath}
+                          disabled={isImported}
+                          onClick={() => onAddOutputToLibrary(message, outPath)}
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] ${
+                            isImported
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                              : 'border-subtle bg-canvas hover:border-primary/40 hover:text-primary-text'
+                          }`}
+                        >
+                          {isImported ? <Check className="size-3" /> : <LibraryBig className="size-3" />}
+                          {isImported ? t('aiActionOutputAddedToLibrary') : t('aiActionOutputAddToLibrary')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+              {t('aiActionExecuted', { count: plan.steps.length })}
+            </span>
+            {message.executionId && (
+              <button
+                type="button"
+                data-ai-action-undo
+                onClick={() => onUndo(message)}
+                className="inline-flex items-center gap-1 rounded-md border border-subtle px-2 py-0.5 text-[11px] hover:border-primary/40 hover:bg-surface"
+              >
+                <RotateCcw className="size-3" />
+                {t('aiActionUndo')}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -1,4 +1,33 @@
-﻿## KEY-448: Native tool calling for Gemini and Claude providers (epic KEY-434) — 2026-11-21T11:45+02:00 - Agent: Antigravity
+﻿## KEY-449: AI actions output result cards, recorded-path guard, chat action memory & output folder setting (epic KEY-434) — 2026-11-21T13:02+02:00 - Agent: Antigravity
+
+**Done:**
+- **Output result cards & main-process recorded-paths-only guard**:
+  - `src/main/services/ai/actions/tool-executor.ts`: added `openOutput`, `showOutputInFolder`, and `addOutputToLibrary` on `AiActionsService`. Each validates `executionId` (rejects missing/undone executions) and requires `outputPath` to be in that execution's recorded `UndoRecord` `outputPaths` (`invalid-arguments` / `unrecorded-output-path`). `openOutput` opens in BagLib's reader (`book:<workId>`) once imported or `shell.openPath` otherwise; `showOutputInFolder` calls `shell.showItemInFolder`; `addOutputToLibrary` imports `.pdf` outputs via `DigitalImportPipelineService.importFile` (`tags: ['ai-generated']`).
+  - `src/main/ipc/ai-actions.ts` & `src/preload/index.ts`: exposed `openOutput`, `showOutputInFolder`, `addOutputToLibrary`, and `chooseOutputFolder`.
+  - `src/renderer/components/ai/AiActionsPreview.tsx`: rendered a per-output result card (`data-ai-output-card`) with filename, full folder (`dir="ltr"`), and **Open**, **Show in folder**, and **Add to library** buttons.
+- **Chat memory of actions & follow-ups**:
+  - `src/shared/ai-actions.ts`, `src/shared/assistant-chat.ts`, `src/main/services/ai/actions/tool-calling.ts`: added `AiActionHistoryEntry`, `formatExecutedActionsBlock` (`<EXECUTED_ACTIONS>`), `matchActionFollowUp` (`open it`, `undo that`, `add it to my library`, and Arabic equivalents), and explicit prompt instructions that attached `<SOURCES>` and books in `<EXECUTED_ACTIONS>` are available.
+  - `src/renderer/components/ai/GlobalAssistant.tsx`: passed `actionHistory` to `studyAssistant.chat` and `aiActions.plan`, wired follow-up commands and output card buttons, and refreshed the library (`refreshBooks()`) after `addOutputToLibrary`.
+- **Optional output folder setting**:
+  - `src/shared/types/ai.ts`, `src/main/services/ai/actions/pdf-actions.ts`, `src/renderer/components/ai/AISettingsModal.tsx`: added `aiActionOutputMode` (`'next-to-source'` default or `'custom'`) and `aiActionOutputDir` in `ai_settings` JSON, folder picker UI, and `uniqueOutputPaths(..., outputDir)`.
+- **Translations, tests & live verification**:
+  - `src/renderer/translations.ts`: added 13 bilingual (`ar` + `en`) keys.
+  - `tests/services/ai-actions.test.ts` & `scripts/key449-live/{main.cjs,run.mjs}`: unit tests and live Electron verification in `en` and `ar`.
+
+**Tests:**
+- Focused (`tests/services/ai-actions.test.ts`): 11/11 pass.
+- Translation parity (`tests/ui/translation-keys.test.ts`): 2/2 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,911/2,911 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key449-live/run.mjs`): PASS in `en` and `ar` (`geminiActionCalls: 2`, `geminiChatCalls: 2`, `shownInFolder: 2`, `openedPaths: 2`, `errors: []`, throwaway profile deleted).
+
+**Jira:**
+- `KEY-449` In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-449.md`, `scripts/key449-live/main.cjs`, `scripts/key449-live/run.mjs`, `src/main/ipc/ai-actions.ts`, `src/main/services/ai/actions/pdf-actions.ts`, `src/main/services/ai/actions/tool-calling.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/preload/index.ts`, `src/renderer/components/ai/AISettingsModal.tsx`, `src/renderer/components/ai/AiActionsPreview.tsx`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/translations.ts`, `src/shared/ai-actions.ts`, `src/shared/assistant-chat.ts`, `src/shared/types/ai.ts`, `tests/services/ai-actions.test.ts`.
+
+## KEY-448: Native tool calling for Gemini and Claude providers (epic KEY-434) — 2026-11-21T11:45+02:00 - Agent: Antigravity
 
 **Done:**
 - `src/main/services/ai/actions/tool-calling.ts`: implemented native tool calling for **Gemini** (`generateContent` with `tools.functionDeclarations`, `toolConfig.functionCallingConfig.mode = 'AUTO'`, `x-goog-api-key` header, `redirect: 'error'`, `toGeminiSchema` reducing `AI_ACTION_TOOLS` JSON schemas to Gemini's supported subset, and `extractGeminiResult` reading `functionCall` parts while ignoring `thought` parts) and **Claude** (`https://api.anthropic.com/v1/messages` with `tools` using `input_schema`, `x-api-key` + `anthropic-version: '2023-06-01'`, `redirect: 'error'`, and `extractClaudeResult` reading `tool_use` blocks). Both map to `RawToolCall[]` so validation, preview, confirm, and undo are unchanged, while preserving honest `unsupported` detection for models that lack tool support.
@@ -13,7 +42,7 @@
 - Live Electron (`node scripts/key448-live/run.mjs`): PASS in `en` and `ar` (`stubStats: {"geminiCalls":4,"claudeCalls":4}`, `errors: []`, throwaway profile deleted).
 
 **Jira:**
-- `KEY-448` In Progress (`21`); Done (`41`) pending commit & push.
+- `KEY-448` Done (`41`); commit `3ce94481a6fa7ba5eef73022f6e0704b22be9d5d` pushed to `origin/feature/library-domain`.
 
 **Files:**
 `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-448.md`, `scripts/key448-live/main.cjs`, `scripts/key448-live/run.mjs`, `src/main/services/ai/actions/tool-calling.ts`, `src/shared/ai-actions.ts`, `tests/services/ai-actions.test.ts`.

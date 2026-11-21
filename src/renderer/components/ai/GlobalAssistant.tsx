@@ -19,7 +19,7 @@ import { splitCitedTextParts } from '../../../shared/cited-answer';
 import { cardSourceKind, passageKind, type AssistantCard } from '../../../shared/study-assistant';
 import type { ChatAction, ChatSourceRef } from '../../../shared/assistant-chat';
 import { bookStudyTarget, matchesStudyQuery, parseBookTarget } from '../../../shared/study-notes';
-import { isUnableToolReply, looksLikeActionRequest } from '../../../shared/ai-actions';
+import { isUnableToolReply, looksLikeActionRequest, matchActionFollowUp, type AiActionHistoryEntry } from '../../../shared/ai-actions';
 import { searchCorpus, type CorpusOption } from '../../utils/corpus-lookup';
 import { collectionKeys } from '../../utils/sunnah-collections';
 import { openStudyNote } from '../../utils/study-navigation';
@@ -39,7 +39,7 @@ type CardsMessage = { id: number; role: 'cards'; cards: AssistantCard[]; state: 
 type Message = AssistantMessage | CardsMessage | ActionPlanMessage | ActionUndoneMessage;
 
 export function GlobalAssistant() {
-  const { t, lang, dir, viewMode, setViewMode, books } = useWorkspace();
+  const { t, lang, dir, viewMode, setViewMode, books, refreshBooks } = useWorkspace();
   const assistant = useAssistant();
   const { open, setOpen, sources, setSources, page, draft, setDraft } = assistant;
   const messages = assistant.messages as Message[];
@@ -122,6 +122,37 @@ export function GlobalAssistant() {
     });
   };
 
+  const buildActionHistory = (): AiActionHistoryEntry[] => {
+    const entries: AiActionHistoryEntry[] = [];
+    for (const msg of messages) {
+      if (msg.role !== 'action-plan' || !msg.executionId) continue;
+      if (msg.status !== 'executed' && msg.status !== 'undone') continue;
+      const stepsById = new Map((msg.executedSteps ?? []).map(step => [step.stepId, step]));
+      entries.push({
+        executionId: msg.executionId,
+        status: msg.status,
+        steps: msg.plan.steps.map(step => {
+          const exec = stepsById.get(step.stepId);
+          const importedWorkIds = exec?.outputPaths?.reduce<Record<string, string>>((acc, p) => {
+            const wid = msg.importedWorkIds?.[p];
+            if (wid) acc[p] = wid;
+            return acc;
+          }, {});
+          return {
+            tool: step.tool,
+            summary: step.summary,
+            ...(exec?.sourceLabel || step.details.sourceLabel ? { sourceLabel: exec?.sourceLabel || step.details.sourceLabel } : {}),
+            ...(exec?.sourceWorkId ? { sourceWorkId: exec.sourceWorkId } : {}),
+            ...(exec?.outputPaths?.length ? { outputPaths: exec.outputPaths } : {}),
+            ...(exec?.openTarget ? { openTarget: exec.openTarget } : {}),
+            ...(importedWorkIds && Object.keys(importedWorkIds).length > 0 ? { importedWorkIds } : {}),
+          };
+        }),
+      });
+    }
+    return entries;
+  };
+
   const run = async (text: string, action: QuickAction | undefined, label: string, allowRemote: boolean, options?: { revealFullAnswer?: boolean; attempt?: string; hintMessageId?: number }) => {
     const selection = chapter?.selectedText?.() || undefined;
     if (!options?.revealFullAnswer) {
@@ -131,6 +162,47 @@ export function GlobalAssistant() {
     setBusy(true);
     try {
       await chapter?.flush?.();
+      const actionHistory = buildActionHistory();
+      const followUp = !action && !options?.revealFullAnswer ? matchActionFollowUp(text) : null;
+      if (followUp) {
+        const latestExecuted = [...messages].reverse().find(
+          (item): item is ActionPlanMessage => item.role === 'action-plan' && item.status === 'executed' && Boolean(item.executionId)
+        );
+        if (followUp === 'undo' && latestExecuted) {
+          await undoActionPlan(latestExecuted);
+          return;
+        }
+        const firstOutput = latestExecuted?.executedSteps?.flatMap(s => s.outputPaths ?? [])[0];
+        if (followUp === 'open' && latestExecuted) {
+          if (firstOutput) {
+            await openActionOutput(latestExecuted, firstOutput);
+            const name = firstOutput.split(/[\\/]/u).pop() || firstOutput;
+            push({ id: id(), role: 'assistant', text: t('aiActionOutputOpenedConfirm', { name }), citations: [], sourceCount: 0 });
+            return;
+          }
+          if (latestExecuted.openTargets?.[0]) {
+            openSource(latestExecuted.openTargets[0]);
+            push({ id: id(), role: 'assistant', text: t('aiActionOutputOpenedConfirm', { name: latestExecuted.openTargets[0] }), citations: [], sourceCount: 0 });
+            return;
+          }
+        }
+        if (followUp === 'add-to-library' && latestExecuted) {
+          const firstPdf = latestExecuted.executedSteps?.flatMap(s => s.outputPaths ?? []).find(p => p.toLowerCase().endsWith('.pdf'));
+          if (firstPdf) {
+            const added = await addActionOutputToLibrary(latestExecuted, firstPdf);
+            if (added) {
+              const name = firstPdf.split(/[\\/]/u).pop() || firstPdf;
+              push({ id: id(), role: 'assistant', text: t('aiActionOutputAddedConfirm', { name }), citations: [], sourceCount: 0 });
+            }
+            return;
+          }
+        }
+        if (followUp !== 'undo') {
+          push({ id: id(), role: 'assistant', text: t('aiActionNoRecentOutput'), citations: [], sourceCount: 0 });
+          return;
+        }
+      }
+
       const actionIntent = looksLikeActionRequest(text);
       if (!action && !options?.revealFullAnswer && (actionsMode || actionIntent)) {
         const res = await window.electronAPI.aiActions.plan({
@@ -142,6 +214,7 @@ export function GlobalAssistant() {
             activeTarget: sources[0]?.target,
             activeLabel: sources[0]?.label,
             sources: sources.map(s => ({ target: s.target, label: s.label })),
+            ...(actionHistory.length > 0 ? { actionHistory } : {}),
           },
         });
         if (res.ok && res.kind === 'plan') push({ id: id(), role: 'action-plan', plan: res.plan, status: 'pending' });
@@ -173,6 +246,7 @@ export function GlobalAssistant() {
         messages: [...history, ...(text.trim() ? [{ role: 'user' as const, text: text.trim() }] : [])],
         sources, chapterId: chapter?.chapterId, selection, action, lang: lang === 'ar' ? 'ar' : 'en', allowRemote,
         module: activeModule, inRevisionOrTest: assistant.inRevisionOrTest, revealFullAnswer: options?.revealFullAnswer, attempt: options?.attempt,
+        ...(actionHistory.length > 0 ? { actionHistory } : {}),
       });
       if (result.ok) {
         const msgId = id();
@@ -221,7 +295,40 @@ export function GlobalAssistant() {
     }
     dispatchAiActionEvents(message.plan.steps.map(step => step.tool));
     for (const target of res.openTargets) openSource(target);
-    setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'executed', executionId: res.executionId, previousView: prevView } : item)));
+    setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'executed', executionId: res.executionId, executedSteps: res.executed, openTargets: res.openTargets, previousView: prevView } : item)));
+  };
+  const openActionOutput = async (message: ActionPlanMessage, outputPath: string) => {
+    if (!message.executionId) return;
+    const res = await window.electronAPI.aiActions.openOutput({ executionId: message.executionId, outputPath });
+    if (!res.ok) {
+      setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, error: aiActionErrorText(res.error, res.detail, t) } : item)));
+      return;
+    }
+    if (res.mode === 'reader') openSource(res.openTarget);
+  };
+  const showActionOutputInFolder = async (message: ActionPlanMessage, outputPath: string) => {
+    if (!message.executionId) return;
+    const res = await window.electronAPI.aiActions.showOutputInFolder({ executionId: message.executionId, outputPath });
+    if (!res.ok) {
+      setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, error: aiActionErrorText(res.error, res.detail, t) } : item)));
+    }
+  };
+  const addActionOutputToLibrary = async (message: ActionPlanMessage, outputPath: string): Promise<boolean> => {
+    if (!message.executionId) return false;
+    const res = await window.electronAPI.aiActions.addOutputToLibrary({ executionId: message.executionId, outputPath });
+    if (!res.ok) {
+      setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, error: aiActionErrorText(res.error, res.detail, t) } : item)));
+      return false;
+    }
+    setMessages(current =>
+      current.map(item =>
+        item.id === message.id && item.role === 'action-plan'
+          ? { ...item, importedWorkIds: { ...(item.importedWorkIds ?? {}), [outputPath]: res.workId } }
+          : item
+      )
+    );
+    await refreshBooks();
+    return true;
   };
   const cancelActionPlan = (message: ActionPlanMessage) => {
     setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'cancelled' } : item)));
@@ -282,7 +389,7 @@ export function GlobalAssistant() {
           <p className="max-w-[260px] leading-relaxed">{chapter ? t('researchAiSelectionHint') : t('assistantChatEmpty')}</p>
         </div>}
         {messages.map(message => {
-          if (message.role === 'action-plan') return <AiActionsPreviewCard key={message.id} message={message} t={t} onConfirm={item => void confirmActionPlan(item)} onCancel={cancelActionPlan} onUndo={item => void undoActionPlan(item)} />;
+          if (message.role === 'action-plan') return <AiActionsPreviewCard key={message.id} message={message} t={t} onConfirm={(item, selections) => void confirmActionPlan(item, selections)} onCancel={cancelActionPlan} onUndo={item => void undoActionPlan(item)} onOpenOutput={(item, outPath) => void openActionOutput(item, outPath)} onShowOutputInFolder={(item, outPath) => void showActionOutputInFolder(item, outPath)} onAddOutputToLibrary={(item, outPath) => void addActionOutputToLibrary(item, outPath)} />;
           if (message.role === 'action-undone') return <div key={message.id} data-ai-action-undone-entry className="me-4 rounded-xl border border-subtle bg-surface px-3 py-2 text-[11px] text-muted">{message.text}</div>;
           if (message.role === 'cards') return <div key={message.id} data-research-ai-message="cards" className="me-4 space-y-2 rounded-xl border border-subtle bg-canvas p-3 text-xs">
             <span className="text-[10px] font-semibold text-muted">{t('assistantCardsTitle')}</span>

@@ -43,6 +43,9 @@ export interface AISettings {
   targetLanguage: string;
   /** KEY-436: Per-module learning mode ('off' | 'hints' | 'full') stored in ai_settings JSON. */
   learningModes?: Partial<Record<import('../ai-learning-mode').AiLearningModule, import('../ai-learning-mode').AiLearningMode>>;
+  /** KEY-449: Optional output folder mode for AI action file outputs ('next-to-source' default or 'custom'). */
+  aiActionOutputMode?: 'next-to-source' | 'custom';
+  aiActionOutputDir?: string;
 }
 
 export interface BookPassage {

@@ -8,7 +8,7 @@
 import { AI_SCHOLARLY_POLICY } from '../../../../shared/ai-principles';
 import { customProviderSettings, normaliseBaseUrl } from '../../../../shared/ai-providers';
 import { errorMessage } from '../../../../shared/errors';
-import { AI_ACTION_TOOLS, type AiActionPlanRequest } from '../../../../shared/ai-actions';
+import { AI_ACTION_TOOLS, formatExecutedActionsBlock, type AiActionPlanRequest } from '../../../../shared/ai-actions';
 import type { AISettings } from '../../../../shared/types/ai';
 import { geminiModelName } from '../ai-provider.service';
 
@@ -120,6 +120,8 @@ function buildActionPrompts(request: AiActionPlanRequest): { systemPrompt: strin
     'When the user names a book or PDF, pass the book title (or author) as the user said it in bookTitle (and optionally author) instead of workId.',
     'For open_source, pass the user\'s natural reference in target (e.g. "ayah 2:11", "البقرة 11", "Bukhari 1", "البخاري ١", "page 40 of <book title>") or pass bookTitle and page.',
     'For ocr_pdf_page, only OCR the single page the user names, and never set force=true unless the user explicitly asks to re-OCR a page that already has text.',
+    'Books listed in Attached sources or Executed actions are available in this session; never say you do not have access to a book that is attached or was just used.',
+    'If the request is a question about a recently executed action (e.g. "where is the output?"), answer directly using the exact file paths and status from Executed actions without calling tools.',
     'If the request cannot be mapped to the available tools, reply briefly explaining what is missing without calling tools.',
     AI_SCHOLARLY_POLICY,
   ].join('\n');
@@ -131,6 +133,10 @@ function buildActionPrompts(request: AiActionPlanRequest): { systemPrompt: strin
     contextParts.push(
       `Attached sources:\n${ctx.sources.map(source => `- ${source.target} (${source.label})`).join('\n')}`
     );
+  }
+  const actionsBlock = formatExecutedActionsBlock(ctx?.actionHistory);
+  if (actionsBlock) {
+    contextParts.push(actionsBlock);
   }
   if (ctx?.selectedText) contextParts.push(`Selected passage:\n"""\n${ctx.selectedText.slice(0, 6000)}\n"""`);
   const userPrompt = contextParts.length

@@ -28,13 +28,16 @@ import {
   parseNaturalHadithRef,
   parsePageRanges,
   validateToolCallArguments,
+  type AiActionAddOutputToLibraryResponse,
   type AiActionBookCandidate,
   type AiActionConfirmResponse,
   type AiActionExecutedStep,
+  type AiActionOpenOutputResponse,
   type AiActionPlan,
   type AiActionPlanRequest,
   type AiActionPlanResponse,
   type AiActionPreviewStep,
+  type AiActionShowOutputResponse,
   type AiActionUndoResponse,
   type BookLookupRef,
   type ExtractPdfPagesArgs,
@@ -139,12 +142,15 @@ type UndoRecord =
       stepId: string;
       tool: 'split_pdf' | 'merge_pdfs' | 'extract_pdf_pages' | 'rotate_pdf_pages' | 'ocr_pdf_page';
       outputPaths: string[];
+      sourceWorkId?: string | null;
+      sourceLabel?: string;
     };
 
 interface StoredExecution {
   executionId: string;
   records: UndoRecord[];
   undone: boolean;
+  importedWorkIds: Map<string, string>;
 }
 
 export interface AiActionsServiceDeps {
@@ -155,6 +161,9 @@ export interface AiActionsServiceDeps {
   pdfRunner?: PdfActionsRunner;
   inspectPdf?: (pdfPath: string, checkTextPage?: number) => Promise<PdfInspectionSummary>;
   resolveSunnahHadith?: (collection: SunnahCollectionId, hadithNumber: string) => Promise<{ target: string; label: string } | null>;
+  openPath?: (filePath: string) => Promise<string>;
+  showItemInFolder?: (filePath: string) => void;
+  importPdfToLibrary?: (params: { filePath: string; sourceWorkId?: string | null; title?: string; author?: string }) => Promise<{ ok: boolean; workId?: string; error?: string }>;
 }
 
 const MAX_PLANS = 50;
@@ -227,6 +236,15 @@ export class AiActionsService {
       if (row?.title) return row.title;
     }
     return path.basename(fallbackPath);
+  }
+
+  private configuredOutputDir(): string | undefined {
+    const settings = this.deps.getAiSettings();
+    if (settings.aiActionOutputMode === 'custom') {
+      const dir = settings.aiActionOutputDir?.trim();
+      if (dir) return path.resolve(dir);
+    }
+    return undefined;
   }
 
   private async resolveLibraryPdf(workId: string, sourceId?: string): Promise<PdfSource | null> {
@@ -416,7 +434,7 @@ export class AiActionsService {
         if (expectedOutputs > 200) {
           return { ok: false, error: 'invalid-arguments', detail: 'too-many-split-outputs' };
         }
-        const outputPaths = uniqueOutputPaths(source.path, expectedOutputs, 'split', '.pdf', reservedOutputPaths);
+        const outputPaths = uniqueOutputPaths(source.path, expectedOutputs, 'split', '.pdf', reservedOutputPaths, this.configuredOutputDir());
         return {
           ok: true,
           resolved: {
@@ -433,7 +451,7 @@ export class AiActionsService {
         const info = await inspectPdf(source.path);
         const parsed = parsePageRanges(call.args.pages, info.totalPages);
         if (!parsed.ok) return { ok: false, error: 'invalid-arguments', detail: parsed.reason };
-        const outputPaths = uniqueOutputPaths(source.path, 1, 'extracted', '.pdf', reservedOutputPaths);
+        const outputPaths = uniqueOutputPaths(source.path, 1, 'extracted', '.pdf', reservedOutputPaths, this.configuredOutputDir());
         return {
           ok: true,
           resolved: {
@@ -454,7 +472,7 @@ export class AiActionsService {
         } else {
           pages = Array.from({ length: info.totalPages }, (_, idx) => idx + 1);
         }
-        const outputPaths = uniqueOutputPaths(source.path, 1, `rotated-${call.args.angle}`, '.pdf', reservedOutputPaths);
+        const outputPaths = uniqueOutputPaths(source.path, 1, `rotated-${call.args.angle}`, '.pdf', reservedOutputPaths, this.configuredOutputDir());
         return {
           ok: true,
           resolved: {
@@ -476,7 +494,7 @@ export class AiActionsService {
           return { ok: false, error: 'invalid-arguments', detail: 'page-already-has-text-layer' };
         }
         const ocrLanguage = call.args.language ?? 'auto';
-        const outputPaths = uniqueOutputPaths(source.path, 1, `page-${call.args.page}-ocr`, '.txt', reservedOutputPaths);
+        const outputPaths = uniqueOutputPaths(source.path, 1, `page-${call.args.page}-ocr`, '.txt', reservedOutputPaths, this.configuredOutputDir());
         return {
           ok: true,
           resolved: {
@@ -838,7 +856,7 @@ export class AiActionsService {
               if (s.kind !== 'resolved') throw new Error('unexpected-pending-slot');
               return { source: s.source, totalPages: s.totalPages };
             });
-            const outputPaths = uniqueOutputPaths(resolvedSources[0].source.path, 1, 'merged', '.pdf', reservedOutputPaths);
+            const outputPaths = uniqueOutputPaths(resolvedSources[0].source.path, 1, 'merged', '.pdf', reservedOutputPaths, this.configuredOutputDir());
             steps.push({
               stepId,
               tool: 'merge_pdfs',
@@ -941,7 +959,7 @@ export class AiActionsService {
             resolvedSources.push({ source: chosen.source, totalPages: info.totalPages });
           }
         }
-        const outputPaths = uniqueOutputPaths(resolvedSources[0].source.path, 1, 'merged', '.pdf', reservedOutputPaths);
+        const outputPaths = uniqueOutputPaths(resolvedSources[0].source.path, 1, 'merged', '.pdf', reservedOutputPaths, this.configuredOutputDir());
         finalizedCalls.push({
           kind: 'pdf',
           resolved: {
@@ -1120,8 +1138,13 @@ export class AiActionsService {
             });
             break;
         }
-        records.push({ stepId, tool: pdf.tool, outputPaths: createdPaths });
-        executed.push({ stepId, tool: pdf.tool, outputPaths: createdPaths });
+        const sourceWorkId = pdf.tool === 'merge_pdfs' ? pdf.sources[0]?.source.workId ?? null : pdf.source.workId;
+        const sourceLabel =
+          pdf.tool === 'merge_pdfs'
+            ? pdf.sources.map(s => this.workTitle(s.source.workId, s.source.path)).join(' + ')
+            : this.workTitle(pdf.source.workId, pdf.source.path);
+        records.push({ stepId, tool: pdf.tool, outputPaths: createdPaths, sourceWorkId, sourceLabel });
+        executed.push({ stepId, tool: pdf.tool, outputPaths: createdPaths, sourceWorkId, sourceLabel });
       }
     } catch (err: unknown) {
       // Rollback any already-completed steps in reverse order
@@ -1134,7 +1157,7 @@ export class AiActionsService {
     }
 
     const executionId = randomUUID();
-    this.executions.set(executionId, { executionId, records, undone: false });
+    this.executions.set(executionId, { executionId, records, undone: false, importedWorkIds: new Map() });
     trimMap(this.executions, MAX_EXECUTIONS);
 
     return {
@@ -1161,6 +1184,112 @@ export class AiActionsService {
       undoneSteps,
       revertOpenSource,
     };
+  }
+
+  private findRecordedOutput(
+    executionId: string,
+    outputPath: string
+  ):
+    | { ok: true; stored: StoredExecution; resolvedPath: string; sourceWorkId?: string | null; sourceLabel?: string }
+    | { ok: false; error: 'undo-not-found' | 'already-undone' | 'invalid-arguments'; detail?: string } {
+    if (typeof executionId !== 'string' || !executionId.trim() || typeof outputPath !== 'string' || !outputPath.trim()) {
+      return { ok: false, error: 'invalid-arguments', detail: 'unrecorded-output-path' };
+    }
+    const stored = this.executions.get(executionId);
+    if (!stored) return { ok: false, error: 'undo-not-found' };
+    if (stored.undone) return { ok: false, error: 'already-undone' };
+
+    const target = path.resolve(outputPath);
+    for (const record of stored.records) {
+      if ('outputPaths' in record) {
+        const match = record.outputPaths.find(p => p === outputPath || path.resolve(p) === target);
+        if (match) {
+          return {
+            ok: true,
+            stored,
+            resolvedPath: match,
+            sourceWorkId: record.sourceWorkId,
+            sourceLabel: record.sourceLabel,
+          };
+        }
+      }
+    }
+    return { ok: false, error: 'invalid-arguments', detail: 'unrecorded-output-path' };
+  }
+
+  public async openOutput(executionId: string, outputPath: string): Promise<AiActionOpenOutputResponse> {
+    const found = this.findRecordedOutput(executionId, outputPath);
+    if (!found.ok) return found;
+
+    const importedWorkId = found.stored.importedWorkIds.get(found.resolvedPath);
+    if (importedWorkId) {
+      return { ok: true, mode: 'reader', openTarget: `book:${importedWorkId}` };
+    }
+    if (!this.deps.openPath) {
+      return { ok: false, error: 'execution-failed', detail: 'open-path-unavailable' };
+    }
+    const errText = await this.deps.openPath(found.resolvedPath);
+    if (errText) {
+      return { ok: false, error: 'execution-failed', detail: errText };
+    }
+    return { ok: true, mode: 'system' };
+  }
+
+  public showOutputInFolder(executionId: string, outputPath: string): AiActionShowOutputResponse {
+    const found = this.findRecordedOutput(executionId, outputPath);
+    if (!found.ok) return found;
+
+    if (!this.deps.showItemInFolder) {
+      return { ok: false, error: 'execution-failed', detail: 'show-in-folder-unavailable' };
+    }
+    this.deps.showItemInFolder(found.resolvedPath);
+    return { ok: true };
+  }
+
+  public async addOutputToLibrary(executionId: string, outputPath: string): Promise<AiActionAddOutputToLibraryResponse> {
+    const found = this.findRecordedOutput(executionId, outputPath);
+    if (!found.ok) return found;
+
+    const existingWorkId = found.stored.importedWorkIds.get(found.resolvedPath);
+    if (existingWorkId) {
+      return { ok: true, workId: existingWorkId, openTarget: `book:${existingWorkId}` };
+    }
+
+    if (path.extname(found.resolvedPath).toLowerCase() !== '.pdf') {
+      return { ok: false, error: 'invalid-arguments', detail: 'unsupported-library-format' };
+    }
+    if (!this.deps.importPdfToLibrary) {
+      return { ok: false, error: 'execution-failed', detail: 'library-import-unavailable' };
+    }
+
+    let author: string | undefined;
+    if (found.sourceWorkId) {
+      const row = this.deps.db
+        .prepare(
+          `SELECT (SELECT GROUP_CONCAT(a.name, '، ') FROM work_author wa JOIN author a ON a.id = wa.author_id WHERE wa.work_id = w.id) AS authors
+           FROM work w WHERE w.id = ?`
+        )
+        .get(found.sourceWorkId) as { authors?: string | null } | undefined;
+      if (row?.authors) author = row.authors;
+    }
+
+    const stem = path.basename(found.resolvedPath, path.extname(found.resolvedPath));
+    const title = found.sourceLabel && !stem.toLowerCase().includes(found.sourceLabel.toLowerCase())
+      ? `${found.sourceLabel} (${stem})`
+      : stem;
+
+    const res = await this.deps.importPdfToLibrary({
+      filePath: found.resolvedPath,
+      sourceWorkId: found.sourceWorkId,
+      title,
+      ...(author ? { author } : {}),
+    });
+    if (!res.ok || !res.workId) {
+      return { ok: false, error: 'execution-failed', detail: res.error || 'import-failed' };
+    }
+
+    found.stored.importedWorkIds.set(found.resolvedPath, res.workId);
+    return { ok: true, workId: res.workId, openTarget: `book:${res.workId}` };
   }
 
   private async revertRecords(records: UndoRecord[]): Promise<AiActionExecutedStep[]> {

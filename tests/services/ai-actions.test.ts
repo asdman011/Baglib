@@ -10,6 +10,7 @@ import {
   AI_ACTION_TOOL_NAMES,
   isUnableToolReply,
   looksLikeActionRequest,
+  matchActionFollowUp,
   normalizeNaturalQuranTarget,
   parseBookPageRef,
   parseNaturalHadithRef,
@@ -17,6 +18,7 @@ import {
   validateToolCallArguments,
 } from '../../src/shared/ai-actions';
 import { buildChatPrompt, CHAT_LIMITS, validateChatRequest } from '../../src/shared/assistant-chat';
+import { runAssistantChat } from '../../src/main/services/ai/assistant-chat';
 import { aiActionErrorText } from '../../src/renderer/components/ai/AiActionsPreview';
 import {
   callModelWithTools,
@@ -980,4 +982,186 @@ test('KEY-448: callModelWithTools supports native Gemini and Claude tool calling
   );
   assert.equal(claudeUnsupported.ok, true);
   if (claudeUnsupported.ok) assert.equal(claudeUnsupported.kind, 'unsupported');
+});
+
+test('KEY-449: recorded-paths-only guard for output buttons, custom output folder, and action follow-up chat context', async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'baglib-key449-'));
+  const customOutDir = path.join(tempDir, 'BagLib outputs');
+  const db = createTestDb();
+  try {
+    const settingsRepo = new SqliteSettingsRepository(db);
+    const pdfPath = path.join(tempDir, 'master.pdf');
+    writeFileSync(pdfPath, '%PDF-1.4\n%fake\n');
+    db.prepare('INSERT INTO work (id, title) VALUES (?, ?)').run('w-master', 'The Master and His Emissary');
+    db.prepare('INSERT INTO edition (id, work_id) VALUES (?, ?)').run('e-master', 'w-master');
+    db.prepare('INSERT INTO source (id, edition_id, source_type) VALUES (?, ?, ?)').run('s-master', 'e-master', 'file');
+    db.prepare('INSERT INTO file_source_detail (source_id, file_path, file_format, file_size_bytes) VALUES (?, ?, ?, ?)').run('s-master', pdfPath, 'PDF', 100);
+
+    const openedPaths: string[] = [];
+    const shownFolders: string[] = [];
+    const importedCalls: Array<{ filePath: string; sourceWorkId?: string | null; title?: string }> = [];
+
+    const service = new AiActionsService({
+      db,
+      settingsRepo,
+      getAiSettings: () => ({
+        ...LOCAL_OLLAMA_SETTINGS,
+        aiActionOutputMode: 'custom',
+        aiActionOutputDir: customOutDir,
+      }),
+      completeWithTools: async () => ({
+        ok: true,
+        kind: 'tool_calls',
+        calls: [{ name: 'extract_pdf_pages', arguments: { bookTitle: 'The Master and His Emissary', pages: '8-12' } }],
+      }),
+      inspectPdf: async () => ({ totalPages: 25, pageHasText: true }),
+      pdfRunner: {
+        splitPdf: async () => [],
+        mergePdfs: async () => [],
+        extractPdfPages: async ({ outputPath }) => {
+          fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+          writeFileSync(outputPath, '%PDF-1.4\n%extracted\n');
+          return [outputPath];
+        },
+        rotatePdfPages: async () => [],
+        ocrPdfPage: async () => [],
+      },
+      openPath: async filePath => {
+        openedPaths.push(filePath);
+        return '';
+      },
+      showItemInFolder: filePath => {
+        shownFolders.push(filePath);
+      },
+      importPdfToLibrary: async params => {
+        importedCalls.push(params);
+        return { ok: true, workId: 'w-extracted-1' };
+      },
+    });
+
+    const planRes = await service.planFromInstruction({
+      instruction: 'extract pages 8 to 12 from the master and his emissary',
+      language: 'en',
+    });
+    assert.equal(planRes.ok, true);
+    if (!planRes.ok || planRes.kind !== 'plan') assert.fail('Expected plan');
+    const plannedOut = planRes.plan.steps[0].details.outputPaths?.[0];
+    assert.ok(plannedOut);
+    assert.equal(path.dirname(plannedOut), customOutDir);
+
+    const confirmRes = await service.confirmPlan(planRes.plan.planId, 'en');
+    assert.equal(confirmRes.ok, true);
+    if (!confirmRes.ok) assert.fail('Expected confirm ok');
+    const recordedOut = confirmRes.executed[0].outputPaths?.[0];
+    assert.equal(recordedOut, plannedOut);
+    assert.equal(confirmRes.executed[0].sourceWorkId, 'w-master');
+    assert.equal(confirmRes.executed[0].sourceLabel, 'The Master and His Emissary');
+
+    // 1. Guard: arbitrary / unrecorded paths must be rejected
+    const arbitraryPath = path.join(tempDir, 'secret.pdf');
+    writeFileSync(arbitraryPath, '%PDF-1.4\n');
+    const badOpen = await service.openOutput(confirmRes.executionId, arbitraryPath);
+    assert.equal(badOpen.ok, false);
+    if (!badOpen.ok) {
+      assert.equal(badOpen.error, 'invalid-arguments');
+      assert.equal(badOpen.detail, 'unrecorded-output-path');
+    }
+    const badShow = service.showOutputInFolder(confirmRes.executionId, arbitraryPath);
+    assert.equal(badShow.ok, false);
+    if (!badShow.ok) assert.equal(badShow.detail, 'unrecorded-output-path');
+    const badAdd = await service.addOutputToLibrary(confirmRes.executionId, arbitraryPath);
+    assert.equal(badAdd.ok, false);
+    if (!badAdd.ok) assert.equal(badAdd.detail, 'unrecorded-output-path');
+    assert.equal(openedPaths.length, 0);
+    assert.equal(shownFolders.length, 0);
+    assert.equal(importedCalls.length, 0);
+
+    // 2. Recorded path works for Show in folder, Open (system before import), Add to library, and Open (reader after import)
+    const showRes = service.showOutputInFolder(confirmRes.executionId, recordedOut!);
+    assert.equal(showRes.ok, true);
+    assert.deepEqual(shownFolders, [recordedOut]);
+
+    const openSysRes = await service.openOutput(confirmRes.executionId, recordedOut!);
+    assert.equal(openSysRes.ok, true);
+    if (openSysRes.ok) assert.equal(openSysRes.mode, 'system');
+    assert.deepEqual(openedPaths, [recordedOut]);
+
+    const addRes = await service.addOutputToLibrary(confirmRes.executionId, recordedOut!);
+    assert.equal(addRes.ok, true);
+    if (addRes.ok) {
+      assert.equal(addRes.workId, 'w-extracted-1');
+      assert.equal(addRes.openTarget, 'book:w-extracted-1');
+    }
+    assert.equal(importedCalls.length, 1);
+    assert.equal(importedCalls[0].sourceWorkId, 'w-master');
+
+    const openReaderRes = await service.openOutput(confirmRes.executionId, recordedOut!);
+    assert.equal(openReaderRes.ok, true);
+    if (openReaderRes.ok) {
+      assert.equal(openReaderRes.mode, 'reader');
+      assert.equal(openReaderRes.openTarget, 'book:w-extracted-1');
+    }
+    assert.equal(openedPaths.length, 1); // did not call system openPath again
+
+    // 3. After undo, output buttons are blocked with already-undone
+    const undoRes = await service.undoExecution(confirmRes.executionId);
+    assert.equal(undoRes.ok, true);
+    const afterUndo = await service.openOutput(confirmRes.executionId, recordedOut!);
+    assert.equal(afterUndo.ok, false);
+    if (!afterUndo.ok) assert.equal(afterUndo.error, 'already-undone');
+
+    // 4. Follow-up context in chat: "where is the output?" includes the exact recorded path
+    let capturedPrompt = '';
+    const chatRes = await runAssistantChat(
+      {
+        messages: [{ role: 'user', text: 'where is the output?' }],
+        sources: [],
+        lang: 'en',
+        allowRemote: false,
+        actionHistory: [
+          {
+            executionId: confirmRes.executionId,
+            status: 'executed',
+            steps: [
+              {
+                tool: 'extract_pdf_pages',
+                summary: 'Extract pages (8-12) from "The Master and His Emissary"',
+                sourceLabel: 'The Master and His Emissary',
+                sourceWorkId: 'w-master',
+                outputPaths: [recordedOut!],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        db,
+        settings: LOCAL_OLLAMA_SETTINGS,
+        resolve: async () => [],
+        complete: async prompt => {
+          capturedPrompt = `${prompt.systemPrompt}\n${prompt.userPrompt}`;
+          return `The extracted file is saved at ${recordedOut!}`;
+        },
+      }
+    );
+    assert.equal(chatRes.ok, true);
+    assert.ok(capturedPrompt.includes('<EXECUTED_ACTIONS>'));
+    assert.ok(capturedPrompt.includes(recordedOut!));
+    assert.ok(capturedPrompt.includes('The Master and His Emissary'));
+    if (chatRes.ok) {
+      assert.ok(chatRes.text.includes(recordedOut!));
+    }
+
+    // 5. Follow-up intent matcher (English & Arabic)
+    assert.equal(matchActionFollowUp('open it'), 'open');
+    assert.equal(matchActionFollowUp('افتحه'), 'open');
+    assert.equal(matchActionFollowUp('undo that'), 'undo');
+    assert.equal(matchActionFollowUp('تراجع عن ذلك'), 'undo');
+    assert.equal(matchActionFollowUp('add it to my library'), 'add-to-library');
+    assert.equal(matchActionFollowUp('أضفه إلى مكتبتي'), 'add-to-library');
+    assert.equal(matchActionFollowUp('where is the output?'), null);
+  } finally {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });

@@ -410,6 +410,24 @@ export interface AiActionExecutedStep {
   itemRef?: string;
   openTarget?: string;
   outputPaths?: string[];
+  sourceWorkId?: string | null;
+  sourceLabel?: string;
+}
+
+export interface AiActionHistoryStep {
+  tool: AiActionToolName;
+  summary: string;
+  sourceLabel?: string;
+  sourceWorkId?: string | null;
+  outputPaths?: string[];
+  openTarget?: string;
+  importedWorkIds?: Record<string, string>;
+}
+
+export interface AiActionHistoryEntry {
+  executionId: string;
+  status: 'executed' | 'undone';
+  steps: AiActionHistoryStep[];
 }
 
 export interface AiActionPlanRequest {
@@ -421,6 +439,7 @@ export interface AiActionPlanRequest {
     activeTarget?: string;
     activeLabel?: string;
     sources?: Array<{ target: string; label: string }>;
+    actionHistory?: AiActionHistoryEntry[];
   };
 }
 
@@ -459,10 +478,32 @@ export type AiActionUndoResponse =
     }
   | { ok: false; error: AiActionErrorCode; detail?: string };
 
+export interface AiActionOutputRequest {
+  executionId: string;
+  outputPath: string;
+}
+
+export type AiActionOpenOutputResponse =
+  | { ok: true; mode: 'reader'; openTarget: string }
+  | { ok: true; mode: 'system' }
+  | { ok: false; error: AiActionErrorCode; detail?: string };
+
+export type AiActionShowOutputResponse =
+  | { ok: true }
+  | { ok: false; error: AiActionErrorCode; detail?: string };
+
+export type AiActionAddOutputToLibraryResponse =
+  | { ok: true; workId: string; openTarget: string }
+  | { ok: false; error: AiActionErrorCode; detail?: string };
+
 export interface AiActionsAPI {
   plan(request: AiActionPlanRequest): Promise<AiActionPlanResponse>;
   confirm(request: AiActionConfirmRequest): Promise<AiActionConfirmResponse>;
   undo(request: AiActionUndoRequest): Promise<AiActionUndoResponse>;
+  openOutput(request: AiActionOutputRequest): Promise<AiActionOpenOutputResponse>;
+  showOutputInFolder(request: AiActionOutputRequest): Promise<AiActionShowOutputResponse>;
+  addOutputToLibrary(request: AiActionOutputRequest): Promise<AiActionAddOutputToLibraryResponse>;
+  chooseOutputFolder(): Promise<{ canceled: boolean; folderPath?: string }>;
 }
 
 const SAFE_ID = /^[\w-]{1,180}$/u;
@@ -999,4 +1040,47 @@ const UNABLE_TOOL_REPLY_RE =
  */
 export function isUnableToolReply(text: string): boolean {
   return UNABLE_TOOL_REPLY_RE.test(text.trim());
+}
+
+const FOLLOWUP_OPEN_RE = /^(?:open\s+(?:it|that|the\s+(?:file|output|pdf|result))|افتح(?:ه|ها|\s+(?:الملف|الناتج|النتيجة)))\s*[.!?؟]*$/iu;
+const FOLLOWUP_UNDO_RE = /^(?:undo\s+(?:it|that|this|the\s+action)|تراجع(?:\s+عن\s+(?:ذلك|هذا|الإجراء))?)\s*[.!?؟]*$/iu;
+const FOLLOWUP_ADD_LIBRARY_RE = /^(?:add\s+(?:it|that|the\s+(?:file|output|pdf|result))\s+to\s+(?:my\s+|the\s+)?library|import\s+(?:it|that)\s+(?:to|into)\s+(?:my\s+|the\s+)?library|أضف(?:ه|ها)\s+(?:إلى|الى|لـ?)\s*(?:مكتبتي|المكتبة)|اضف(?:ه|ها)\s+(?:إلى|الى|لـ?)\s*(?:مكتبتي|المكتبة))\s*[.!?؟]*$/iu;
+
+/**
+ * KEY-449: Match direct follow-up commands referencing the most recent executed AI action.
+ */
+export function matchActionFollowUp(text: string): 'open' | 'undo' | 'add-to-library' | null {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > 200) return null;
+  if (FOLLOWUP_UNDO_RE.test(trimmed)) return 'undo';
+  if (FOLLOWUP_ADD_LIBRARY_RE.test(trimmed)) return 'add-to-library';
+  if (FOLLOWUP_OPEN_RE.test(trimmed)) return 'open';
+  return null;
+}
+
+/**
+ * KEY-449: Format executed/undone AI actions into a compact context block for chat & action-planner prompts.
+ */
+export function formatExecutedActionsBlock(actionHistory?: AiActionHistoryEntry[]): string {
+  if (!actionHistory || actionHistory.length === 0) return '';
+  const lines: string[] = [];
+  for (const entry of actionHistory.slice(-10)) {
+    const state = entry.status === 'undone' ? 'undone' : 'executed';
+    for (const step of entry.steps) {
+      const parts = [`tool=${step.tool}`, `status=${state}`, `summary="${step.summary}"`];
+      if (step.sourceLabel) parts.push(`source="${step.sourceLabel}"`);
+      if (step.sourceWorkId) parts.push(`sourceWorkId=${step.sourceWorkId}`);
+      if (step.openTarget) parts.push(`openTarget=${step.openTarget}`);
+      if (step.outputPaths?.length) parts.push(`outputPaths=${step.outputPaths.join(', ')}`);
+      if (step.importedWorkIds && Object.keys(step.importedWorkIds).length > 0) {
+        parts.push(
+          `importedWorkIds=${Object.entries(step.importedWorkIds)
+            .map(([p, id]) => `${p} -> ${id}`)
+            .join(', ')}`
+        );
+      }
+      lines.push(`- [${entry.executionId}] ${parts.join(' | ')}`);
+    }
+  }
+  return lines.length ? `<EXECUTED_ACTIONS>\n${lines.join('\n')}\n</EXECUTED_ACTIONS>` : '';
 }

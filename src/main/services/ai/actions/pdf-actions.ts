@@ -95,9 +95,10 @@ export function uniqueOutputPaths(
   count: number,
   suffix: string,
   ext = '.pdf',
-  reserved: Set<string> = new Set()
+  reserved: Set<string> = new Set(),
+  outputDir?: string
 ): string[] {
-  const dir = path.dirname(sourcePath);
+  const dir = outputDir?.trim() ? path.resolve(outputDir.trim()) : path.dirname(sourcePath);
   const stem = path.basename(sourcePath, path.extname(sourcePath));
   const paths: string[] = [];
 
@@ -117,6 +118,11 @@ export function uniqueOutputPaths(
     paths.push(candidate);
   }
   return paths;
+}
+
+async function copyOutputFile(src: string, dest: string): Promise<void> {
+  await mkdir(path.dirname(dest), { recursive: true });
+  await copyFile(src, dest);
 }
 
 function mapOcrLanguage(lang?: 'ara' | 'eng' | 'ara+eng' | 'auto'): OcrLanguage {
@@ -152,7 +158,7 @@ export function createDefaultPdfActionsRunner(): PdfActionsRunner {
             );
             const first = res.outputs?.[0];
             if (!first) throw new Error('invalid-output');
-            await copyFile(path.join(jobDir, first.filename), outputPaths[i]);
+            await copyOutputFile(path.join(jobDir, first.filename), outputPaths[i]);
             created.push(outputPaths[i]);
           }
           return created;
@@ -176,12 +182,13 @@ export function createDefaultPdfActionsRunner(): PdfActionsRunner {
         const outputs = res.outputs ?? [];
         if (outputs.length === 0) throw new Error('invalid-output');
         const reserved = new Set<string>();
+        const targetDir = outputPaths[0] ? path.dirname(outputPaths[0]) : undefined;
         const targets =
           outputs.length === outputPaths.length
             ? outputPaths
-            : uniqueOutputPaths(sourcePath, outputs.length, 'split', '.pdf', reserved);
+            : uniqueOutputPaths(sourcePath, outputs.length, 'split', '.pdf', reserved, targetDir);
         for (let i = 0; i < outputs.length; i++) {
-          await copyFile(path.join(tempDir, outputs[i].filename), targets[i]);
+          await copyOutputFile(path.join(tempDir, outputs[i].filename), targets[i]);
           created.push(targets[i]);
         }
         return created;
@@ -221,7 +228,7 @@ export function createDefaultPdfActionsRunner(): PdfActionsRunner {
         );
         const first = res.outputs?.[0];
         if (!first) throw new Error('invalid-output');
-        await copyFile(path.join(tempDir, first.filename), outputPath);
+        await copyOutputFile(path.join(tempDir, first.filename), outputPath);
         return [outputPath];
       } finally {
         await rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -248,7 +255,7 @@ export function createDefaultPdfActionsRunner(): PdfActionsRunner {
         );
         const first = res.outputs?.[0];
         if (!first) throw new Error('invalid-output');
-        await copyFile(path.join(tempDir, first.filename), outputPath);
+        await copyOutputFile(path.join(tempDir, first.filename), outputPath);
         return [outputPath];
       } finally {
         await rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -280,7 +287,7 @@ export function createDefaultPdfActionsRunner(): PdfActionsRunner {
         );
         const first = res.outputs?.[0];
         if (!first) throw new Error('invalid-output');
-        await copyFile(path.join(tempDir, first.filename), outputPath);
+        await copyOutputFile(path.join(tempDir, first.filename), outputPath);
         return [outputPath];
       } finally {
         await rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -289,6 +296,7 @@ export function createDefaultPdfActionsRunner(): PdfActionsRunner {
 
     async ocrPdfPage({ sourcePath, page, ocrLanguage, outputPath }) {
       const result = await OcrService.getInstance().recognizePdfPage(sourcePath, page, ocrLanguage);
+      await mkdir(path.dirname(outputPath), { recursive: true });
       await writeFile(outputPath, result.text ?? '', 'utf8');
       return [outputPath];
     },
