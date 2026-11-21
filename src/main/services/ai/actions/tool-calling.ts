@@ -1,5 +1,7 @@
 /**
- * KEY-439 (AI Task 5, Phase 1): OpenAI-compatible tool-calling adapter for AI Actions.
+ * KEY-439 / KEY-448: Tool-calling adapter for AI Actions across OpenAI-compatible,
+ * Ollama, Google Gemini (`generateContent` + `functionDeclarations`), and Anthropic
+ * Claude (Messages API + `tools`) providers.
  * Calls the configured provider's tool-calling endpoint without executing any actions.
  * If the provider or model does not support tool calling, returns `unsupported` cleanly.
  */
@@ -8,6 +10,7 @@ import { customProviderSettings, normaliseBaseUrl } from '../../../../shared/ai-
 import { errorMessage } from '../../../../shared/errors';
 import { AI_ACTION_TOOLS, type AiActionPlanRequest } from '../../../../shared/ai-actions';
 import type { AISettings } from '../../../../shared/types/ai';
+import { geminiModelName } from '../ai-provider.service';
 
 export interface RawToolCall {
   id?: string;
@@ -23,7 +26,76 @@ export type ToolCallingResult =
 
 type FetchLike = typeof fetch;
 
-const UNSUPPORTED_TOOL_RE = /(does not support tools|tool[_\s-]?call(ing)?.*not support|function[_\s-]?call(ing)?.*not support|not support.*tools|tools.*not.*support|tools.*unsupported|unknown field.*tools|invalid parameter.*tools)/iu;
+const UNSUPPORTED_TOOL_RE = /(does not support tools|tool[_\s-]?call(ing)?.*not (support|enabled|available)|function[_\s-]?call(ing)?.*not (support|enabled|available)|not support.*tools|tools.*not.*(support|enabled)|tools.*unsupported|unknown field.*tools|invalid parameter.*tools)/iu;
+
+export interface GeminiFunctionDeclaration {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface ClaudeToolDefinition {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+/**
+ * Reduce a JSON Schema object from `AI_ACTION_TOOLS` to Gemini's supported
+ * OpenAPI 3.0 subset (`type`, `description`, string-only `enum`, `properties`,
+ * `required`, `items`), stripping `additionalProperties` and numeric/length bounds.
+ */
+export function toGeminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (typeof schema.type === 'string') out.type = schema.type;
+  let description = typeof schema.description === 'string' ? schema.description : undefined;
+
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    if (schema.type === 'string') {
+      out.enum = schema.enum.filter((v): v is string => typeof v === 'string');
+    } else {
+      const allowed = `Allowed values: ${schema.enum.join(', ')}.`;
+      description = description ? `${description} ${allowed}` : allowed;
+    }
+  }
+  if (description) out.description = description;
+
+  if (schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)) {
+    const props: Record<string, Record<string, unknown>> = {};
+    for (const [key, val] of Object.entries(schema.properties as Record<string, unknown>)) {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        props[key] = toGeminiSchema(val as Record<string, unknown>);
+      }
+    }
+    out.properties = props;
+  }
+
+  if (Array.isArray(schema.required) && schema.required.length > 0) {
+    out.required = schema.required.filter((k): k is string => typeof k === 'string');
+  }
+
+  if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
+    out.items = toGeminiSchema(schema.items as Record<string, unknown>);
+  }
+
+  return out;
+}
+
+export function toGeminiFunctionDeclarations(): GeminiFunctionDeclaration[] {
+  return AI_ACTION_TOOLS.map(tool => ({
+    name: tool.function.name,
+    description: tool.function.description,
+    parameters: toGeminiSchema(tool.function.parameters),
+  }));
+}
+
+export function toClaudeTools(): ClaudeToolDefinition[] {
+  return AI_ACTION_TOOLS.map(tool => ({
+    name: tool.function.name,
+    description: tool.function.description,
+    input_schema: tool.function.parameters,
+  }));
+}
 
 function parseArguments(raw: unknown): unknown {
   if (raw && typeof raw === 'object') return raw;
@@ -84,21 +156,149 @@ function extractToolCalls(rawCalls: unknown): RawToolCall[] {
   return out;
 }
 
+function extractGeminiResult(data: {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+        thought?: boolean;
+        functionCall?: { id?: unknown; name?: unknown; args?: unknown };
+      }>;
+    };
+  }>;
+  promptFeedback?: { blockReason?: string };
+}): ToolCallingResult {
+  if (data.promptFeedback?.blockReason) {
+    return { ok: false, error: 'provider-error', detail: `Gemini blocked: ${data.promptFeedback.blockReason}`.slice(0, 300) };
+  }
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const calls: RawToolCall[] = [];
+  const textParts: string[] = [];
+  for (const part of parts) {
+    if (!part || typeof part !== 'object' || part.thought) continue;
+    if (typeof part.text === 'string' && part.text) {
+      textParts.push(part.text);
+    }
+    if (part.functionCall && typeof part.functionCall === 'object') {
+      calls.push({
+        id: typeof part.functionCall.id === 'string' ? part.functionCall.id : undefined,
+        name: part.functionCall.name,
+        arguments: parseArguments(part.functionCall.args ?? {}),
+      });
+    }
+  }
+  const text = textParts.join('').trim();
+  if (calls.length > 0) {
+    return { ok: true, kind: 'tool_calls', calls, assistantText: text || undefined };
+  }
+  return { ok: true, kind: 'message', text };
+}
+
+function extractClaudeResult(data: {
+  content?: Array<{ type?: unknown; id?: unknown; name?: unknown; input?: unknown; text?: unknown }>;
+}): ToolCallingResult {
+  const blocks = Array.isArray(data.content) ? data.content : [];
+  const calls: RawToolCall[] = [];
+  const textParts: string[] = [];
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue;
+    if (block.type === 'text' && typeof block.text === 'string' && block.text) {
+      textParts.push(block.text);
+    } else if (block.type === 'tool_use') {
+      calls.push({
+        id: typeof block.id === 'string' ? block.id : undefined,
+        name: block.name,
+        arguments: parseArguments(block.input ?? {}),
+      });
+    }
+  }
+  const text = textParts.join('\n').trim();
+  if (calls.length > 0) {
+    return { ok: true, kind: 'tool_calls', calls, assistantText: text || undefined };
+  }
+  return { ok: true, kind: 'message', text };
+}
+
 export async function callModelWithTools(
   request: AiActionPlanRequest,
   settings: AISettings,
   fetchFn: FetchLike = fetch
 ): Promise<ToolCallingResult> {
   const provider = settings.provider || 'ollama';
-  if (provider === 'gemini' || provider === 'claude') {
-    return { ok: true, kind: 'unsupported', reason: 'provider-no-tool-support' };
-  }
-
   const { systemPrompt, userPrompt } = buildActionPrompts(request);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), provider === 'ollama' ? 90_000 : 60_000);
 
   try {
+    if (provider === 'gemini') {
+      const apiKey = settings.geminiApiKey || settings.apiKey || '';
+      if (!apiKey) {
+        return { ok: false, error: 'provider-error', detail: 'Google Gemini API key is missing.' };
+      }
+      const model = geminiModelName(settings.geminiModel);
+      const res = await fetchFn(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: 'POST',
+          redirect: 'error',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            tools: [{ functionDeclarations: toGeminiFunctionDeclarations() }],
+            toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+            generationConfig: { temperature: settings.temperature ?? 0.3 },
+          }),
+        }
+      );
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        if ([400, 404, 422, 501].includes(res.status) && UNSUPPORTED_TOOL_RE.test(text)) {
+          return { ok: true, kind: 'unsupported', reason: text.slice(0, 200) };
+        }
+        return { ok: false, error: 'provider-error', detail: `Gemini HTTP ${res.status}: ${text || res.statusText}`.slice(0, 300) };
+      }
+      const data = (await res.json()) as Parameters<typeof extractGeminiResult>[0];
+      return extractGeminiResult(data);
+    }
+
+    if (provider === 'claude') {
+      const apiKey = settings.claudeApiKey || settings.apiKey || '';
+      if (!apiKey) {
+        return { ok: false, error: 'provider-error', detail: 'Anthropic Claude API key is missing.' };
+      }
+      const model = settings.claudeModel || 'claude-3-5-sonnet-20241022';
+      const res = await fetchFn('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model,
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+          temperature: settings.temperature ?? 0.3,
+          tools: toClaudeTools(),
+          tool_choice: { type: 'auto' },
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        if ([400, 404, 422, 501].includes(res.status) && UNSUPPORTED_TOOL_RE.test(text)) {
+          return { ok: true, kind: 'unsupported', reason: text.slice(0, 200) };
+        }
+        return { ok: false, error: 'provider-error', detail: `Claude HTTP ${res.status}: ${text || res.statusText}`.slice(0, 300) };
+      }
+      const data = (await res.json()) as Parameters<typeof extractClaudeResult>[0];
+      return extractClaudeResult(data);
+    }
+
     if (provider === 'ollama') {
       const endpoint = (settings.ollamaEndpoint || 'http://127.0.0.1:11434').replace(/\/+$/, '');
       const model = settings.ollamaModel || 'llama3.2';

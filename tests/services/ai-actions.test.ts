@@ -18,7 +18,12 @@ import {
 } from '../../src/shared/ai-actions';
 import { buildChatPrompt, CHAT_LIMITS, validateChatRequest } from '../../src/shared/assistant-chat';
 import { aiActionErrorText } from '../../src/renderer/components/ai/AiActionsPreview';
-import { callModelWithTools } from '../../src/main/services/ai/actions/tool-calling';
+import {
+  callModelWithTools,
+  toClaudeTools,
+  toGeminiFunctionDeclarations,
+  toGeminiSchema,
+} from '../../src/main/services/ai/actions/tool-calling';
 import { AiActionsService } from '../../src/main/services/ai/actions/tool-executor';
 import { migrations } from '../../src/main/database/migrations';
 import { runMigrations } from '../../src/main/database/migrator';
@@ -108,13 +113,17 @@ test('validateToolCallArguments validates all 5 tools and rejects unsafe/invalid
   assert.equal(validateToolCallArguments('open_source', { target: 'quran:hafs:1:1' }).ok, true);
 });
 
-test('callModelWithTools supports OpenAI and Ollama tool_calls and handles unsupported providers cleanly', async () => {
-  const geminiRes = await callModelWithTools(
+test('callModelWithTools supports OpenAI and Ollama tool_calls and handles unsupported models cleanly', async () => {
+  const unsupportedGemini = await callModelWithTools(
     { instruction: 'Create a note', language: 'en' },
-    { ...REMOTE_OPENAI_SETTINGS, provider: 'gemini', geminiApiKey: 'g-key' }
+    { ...REMOTE_OPENAI_SETTINGS, provider: 'gemini', geminiApiKey: 'g-key', geminiModel: 'gemini-legacy' },
+    (async () =>
+      new Response(JSON.stringify({ error: { message: 'Function calling is not enabled for this model' } }), {
+        status: 400,
+      })) as typeof fetch
   );
-  assert.equal(geminiRes.ok, true);
-  if (geminiRes.ok) assert.equal(geminiRes.kind, 'unsupported');
+  assert.equal(unsupportedGemini.ok, true);
+  if (unsupportedGemini.ok) assert.equal(unsupportedGemini.kind, 'unsupported');
 
   const openaiRes = await callModelWithTools(
     { instruction: 'Create a note', language: 'en' },
@@ -747,4 +756,228 @@ test('KEY-446: action intent detection, unable-tool reply detection, attached bo
     sources: [{ n: 1, ref: 'book:w1@s1', label: 'Book 1', text: hugeText }],
   });
   assert.ok(prompt.userPrompt.length < CHAT_LIMITS.sourceText + 1000);
+});
+
+test('KEY-448: callModelWithTools supports native Gemini and Claude tool calling with recorded response fixtures', async () => {
+  // 1. Schema translation: Gemini strips unsupported JSON Schema keywords & integer enums; Claude maps input_schema
+  const geminiDecls = toGeminiFunctionDeclarations();
+  assert.equal(geminiDecls.length, AI_ACTION_TOOLS.length);
+  const rotateDecl = geminiDecls.find(d => d.name === 'rotate_pdf_pages');
+  assert.ok(rotateDecl);
+  const rotateJson = JSON.stringify(rotateDecl.parameters);
+  assert.equal(rotateJson.includes('additionalProperties'), false);
+  assert.equal(rotateJson.includes('minLength'), false);
+  assert.equal(rotateJson.includes('maxLength'), false);
+  const angleProp = (rotateDecl.parameters.properties as Record<string, Record<string, unknown>>).angle;
+  assert.equal(angleProp.enum, undefined);
+  assert.ok(String(angleProp.description).includes('90, 180, 270'));
+
+  const reduced = toGeminiSchema({
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      items: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'string', minLength: 1 } },
+      mode: { type: 'string', enum: ['a', 'b'] },
+    },
+  });
+  assert.equal((reduced.properties as Record<string, Record<string, unknown>>).mode.enum?.toString(), 'a,b');
+  assert.equal((reduced.properties as Record<string, Record<string, unknown>>).items.minItems, undefined);
+
+  const claudeTools = toClaudeTools();
+  assert.equal(claudeTools.length, AI_ACTION_TOOLS.length);
+  assert.ok(claudeTools[0].input_schema);
+
+  const geminiSettings: AISettings = {
+    ...REMOTE_OPENAI_SETTINGS,
+    provider: 'gemini',
+    geminiApiKey: 'AIza-test-key',
+    geminiModel: 'gemini-2.5-flash',
+  };
+  const claudeSettings: AISettings = {
+    ...REMOTE_OPENAI_SETTINGS,
+    provider: 'claude',
+    claudeApiKey: 'sk-ant-test-key',
+    claudeModel: 'claude-3-5-sonnet-20241022',
+  };
+
+  // 2. Gemini: single functionCall (ignoring thought parts)
+  let capturedGeminiUrl = '';
+  let capturedGeminiInit: RequestInit | undefined;
+  const geminiSingle = await callModelWithTools(
+    { instruction: 'extract pages 8 to 12 from My Book', language: 'en' },
+    geminiSettings,
+    (async (url, init) => {
+      capturedGeminiUrl = String(url);
+      capturedGeminiInit = init;
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [
+                  { thought: true, text: 'Let me call extract_pdf_pages.' },
+                  { functionCall: { name: 'extract_pdf_pages', args: { bookTitle: 'My Book', pages: '8-12' } } },
+                ],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch
+  );
+  assert.equal(
+    capturedGeminiUrl,
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+  );
+  assert.equal(capturedGeminiInit?.redirect, 'error');
+  assert.equal((capturedGeminiInit?.headers as Record<string, string>)['x-goog-api-key'], 'AIza-test-key');
+  const geminiReqBody = JSON.parse(String(capturedGeminiInit?.body));
+  assert.equal(geminiReqBody.tools[0].functionDeclarations.length, AI_ACTION_TOOLS.length);
+  assert.equal(geminiSingle.ok, true);
+  if (!geminiSingle.ok || geminiSingle.kind !== 'tool_calls') assert.fail('Expected Gemini single tool_call');
+  assert.equal(geminiSingle.calls.length, 1);
+  assert.equal(geminiSingle.calls[0].name, 'extract_pdf_pages');
+  assert.deepEqual(geminiSingle.calls[0].arguments, { bookTitle: 'My Book', pages: '8-12' });
+  assert.equal(geminiSingle.assistantText, undefined);
+
+  // 3. Gemini: multiple functionCall parts
+  const geminiMulti = await callModelWithTools(
+    { instruction: 'open ayah 2:11 and create a note', language: 'en' },
+    geminiSettings,
+    (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [
+                  { functionCall: { name: 'open_source', args: { target: 'ayah 2:11' } } },
+                  { functionCall: { name: 'create_note', args: { title: 'Al-Baqarah 2:11', content: 'Reflection' } } },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )) as typeof fetch
+  );
+  assert.equal(geminiMulti.ok, true);
+  if (!geminiMulti.ok || geminiMulti.kind !== 'tool_calls') assert.fail('Expected Gemini multiple tool_calls');
+  assert.equal(geminiMulti.calls.length, 2);
+  assert.equal(geminiMulti.calls[0].name, 'open_source');
+  assert.equal(geminiMulti.calls[1].name, 'create_note');
+
+  // 4. Gemini: text-only response
+  const geminiText = await callModelWithTools(
+    { instruction: 'what can you do?', language: 'en' },
+    geminiSettings,
+    (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [{ text: 'Please specify which book or verse you want to work with.' }],
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )) as typeof fetch
+  );
+  assert.equal(geminiText.ok, true);
+  if (!geminiText.ok || geminiText.kind !== 'message') assert.fail('Expected Gemini text-only message');
+  assert.equal(geminiText.text, 'Please specify which book or verse you want to work with.');
+
+  // 5. Claude: single tool_use block
+  let capturedClaudeUrl = '';
+  let capturedClaudeInit: RequestInit | undefined;
+  const claudeSingle = await callModelWithTools(
+    { instruction: 'open ayah 2:11', language: 'en' },
+    claudeSettings,
+    (async (url, init) => {
+      capturedClaudeUrl = String(url);
+      capturedClaudeInit = init;
+      return new Response(
+        JSON.stringify({
+          id: 'msg_01',
+          type: 'message',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Opening Al-Baqarah 2:11.' },
+            { type: 'tool_use', id: 'toolu_01', name: 'open_source', input: { target: 'ayah 2:11' } },
+          ],
+          stop_reason: 'tool_use',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch
+  );
+  assert.equal(capturedClaudeUrl, 'https://api.anthropic.com/v1/messages');
+  assert.equal(capturedClaudeInit?.redirect, 'error');
+  assert.equal((capturedClaudeInit?.headers as Record<string, string>)['x-api-key'], 'sk-ant-test-key');
+  assert.equal((capturedClaudeInit?.headers as Record<string, string>)['anthropic-version'], '2023-06-01');
+  const claudeReqBody = JSON.parse(String(capturedClaudeInit?.body));
+  assert.equal(claudeReqBody.tools.length, AI_ACTION_TOOLS.length);
+  assert.equal(claudeSingle.ok, true);
+  if (!claudeSingle.ok || claudeSingle.kind !== 'tool_calls') assert.fail('Expected Claude single tool_use');
+  assert.equal(claudeSingle.calls.length, 1);
+  assert.equal(claudeSingle.calls[0].id, 'toolu_01');
+  assert.equal(claudeSingle.calls[0].name, 'open_source');
+  assert.deepEqual(claudeSingle.calls[0].arguments, { target: 'ayah 2:11' });
+  assert.equal(claudeSingle.assistantText, 'Opening Al-Baqarah 2:11.');
+
+  // 6. Claude: multiple tool_use blocks
+  const claudeMulti = await callModelWithTools(
+    { instruction: 'extract pages 8 to 12 and create a note', language: 'en' },
+    claudeSettings,
+    (async () =>
+      new Response(
+        JSON.stringify({
+          content: [
+            { type: 'tool_use', id: 'toolu_a', name: 'extract_pdf_pages', input: { bookTitle: 'My Book', pages: '8-12' } },
+            { type: 'tool_use', id: 'toolu_b', name: 'create_note', input: { title: 'Pages 8-12', content: 'Extracted' } },
+          ],
+          stop_reason: 'tool_use',
+        }),
+        { status: 200 }
+      )) as typeof fetch
+  );
+  assert.equal(claudeMulti.ok, true);
+  if (!claudeMulti.ok || claudeMulti.kind !== 'tool_calls') assert.fail('Expected Claude multiple tool_use');
+  assert.equal(claudeMulti.calls.length, 2);
+  assert.equal(claudeMulti.calls[0].name, 'extract_pdf_pages');
+  assert.equal(claudeMulti.calls[1].name, 'create_note');
+
+  // 7. Claude: text-only response
+  const claudeText = await callModelWithTools(
+    { instruction: 'hello', language: 'en' },
+    claudeSettings,
+    (async () =>
+      new Response(
+        JSON.stringify({
+          content: [{ type: 'text', text: 'Tell me which source or pages you would like to act on.' }],
+          stop_reason: 'end_turn',
+        }),
+        { status: 200 }
+      )) as typeof fetch
+  );
+  assert.equal(claudeText.ok, true);
+  if (!claudeText.ok || claudeText.kind !== 'message') assert.fail('Expected Claude text-only message');
+  assert.equal(claudeText.text, 'Tell me which source or pages you would like to act on.');
+
+  // 8. Claude: unsupported model error returns unsupported
+  const claudeUnsupported = await callModelWithTools(
+    { instruction: 'open ayah 2:11', language: 'en' },
+    claudeSettings,
+    (async () =>
+      new Response(JSON.stringify({ error: { message: 'This model does not support tools' } }), { status: 400 })) as typeof fetch
+  );
+  assert.equal(claudeUnsupported.ok, true);
+  if (claudeUnsupported.ok) assert.equal(claudeUnsupported.kind, 'unsupported');
 });
