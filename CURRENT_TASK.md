@@ -1,4 +1,21 @@
-﻿## KEY-450: Research editor link embeds load thumbnail previews and play YouTube/Vimeo videos (epic KEY-361) — 2026-11-21T13:50+02:00 - Agent: Antigravity
+﻿## Review of KEY-450 (epic KEY-361), 2026-11-21. Agent: Claude Code (orchestrator)
+
+**Result: reviewed-pass, with notes.** Commit `b7790500` (Antigravity), pushed to `origin/feature/library-domain`. Jira KEY-450 is Done.
+- **Cause (verified in the report and checked by the reviewer):**
+  - the research editor CSP had no `frame-src` and allowed no remote images, so YouTube/Vimeo iframes and thumbnails were blocked;
+  - BlockSuite routed link previews and images through the unreachable AFFiNE cloud worker;
+  - the YouTube Referer header was injected only for youtube-nocookie.
+- **Fix:**
+  - The new CSP allows `img-src https:` and limits `frame-src`/`media-src`/`connect-src` to YouTube, Vimeo and GitHub hosts; there is no `*`.
+  - Link metadata is fetched in main behind an http/https allow-list. It rejects loopback/private addresses, checks every redirect, and has a 5 s timeout and a 256 KB cap.
+  - The vendor changes come from patch 0010, and `check:vendor` passes.
+- **Re-run by the reviewer:** `tsc --noEmit` exit 0, `check:vendor` OK, `tests/services/link-preview.test.ts` 4/4 pass. The full suite, the builds and the live ar/en run come from Antigravity's report.
+- **Notes:**
+  1. The live run used local stub servers (64 px images, a stubbed player frame), so real YouTube playback over the network is not yet proven. The user should check it in the real app.
+  2. The shipped CSP still allows `img-src http://127.0.0.1:* http://localhost:*` for the harness. This is low risk (images only) but could be dropped later.
+  3. The private-address check is on the hostname only (no DNS-rebinding guard). This is acceptable for previews.
+
+## KEY-450: Research editor link embeds load thumbnail previews and play YouTube/Vimeo videos (epic KEY-361) — 2026-11-21T13:50+02:00 - Agent: Antigravity
 
 **Done:**
 - **Root-cause investigation (`docs/agent-ops/reports/KEY-450.md`, `docs/features/BlockSuite.md`)**:
