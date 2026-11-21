@@ -1,9 +1,11 @@
 'use client';
 import React from 'react';
 import { BookOpenText, Check, FileOutput, Layers, ListPlus, Merge, NotebookPen, RotateCcw, RotateCw, ScanText, Scissors, Sparkles, X } from 'lucide-react';
-import type { AiActionPlan, AiActionPreviewStep } from '../../../shared/ai-actions';
+import type { AiActionBookCandidate, AiActionErrorCode, AiActionPlan, AiActionPreviewStep } from '../../../shared/ai-actions';
 import { PERSONAL_LISTS_CHANGED } from '../../../shared/personal-lists';
 import type { TranslationKey } from '../../translations';
+
+export type ActionSelections = Record<string, { workId: string; sourceId?: string }>;
 
 export type ActionPlanMessage = {
   id: number;
@@ -24,7 +26,7 @@ export type ActionUndoneMessage = {
 interface AiActionsPreviewCardProps {
   message: ActionPlanMessage;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  onConfirm: (message: ActionPlanMessage) => void;
+  onConfirm: (message: ActionPlanMessage, selections?: ActionSelections) => void;
   onCancel: (message: ActionPlanMessage) => void;
   onUndo: (message: ActionPlanMessage) => void;
 }
@@ -53,6 +55,65 @@ function StepIcon({ tool }: { tool: AiActionPreviewStep['tool'] }) {
   }
 }
 
+function CandidatePicker({
+  selectionKey,
+  candidates,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  selectionKey: string;
+  candidates: AiActionBookCandidate[];
+  selected?: { workId: string; sourceId?: string };
+  disabled: boolean;
+  onSelect: (key: string, pick: { workId: string; sourceId?: string }) => void;
+}) {
+  return (
+    <div className="mt-1 space-y-1" role="radiogroup">
+      {candidates.map(candidate => {
+        const isSelected =
+          selected?.workId === candidate.workId &&
+          (!candidate.sourceId || selected?.sourceId === candidate.sourceId);
+        return (
+          <label
+            key={`${candidate.workId}:${candidate.sourceId ?? ''}`}
+            data-ai-action-candidate={candidate.workId}
+            className={`flex cursor-pointer items-start gap-2 rounded border px-2 py-1 text-[11px] transition-colors ${
+              isSelected
+                ? 'border-primary bg-primary/10 text-ink'
+                : 'border-subtle/70 bg-canvas hover:border-primary/40'
+            }`}
+          >
+            <input
+              type="radio"
+              name={`ai-candidate-${selectionKey}`}
+              checked={isSelected}
+              disabled={disabled}
+              onChange={() =>
+                onSelect(selectionKey, {
+                  workId: candidate.workId,
+                  ...(candidate.sourceId ? { sourceId: candidate.sourceId } : {}),
+                })
+              }
+              className="mt-0.5 shrink-0 accent-primary"
+            />
+            <span className="min-w-0 flex-1 text-start">
+              <span dir="auto" className="block font-medium text-ink">
+                {candidate.title}
+              </span>
+              {(candidate.author || candidate.subtitle) && (
+                <span dir="auto" className="block text-[10px] text-muted">
+                  {[candidate.author, candidate.subtitle].filter(Boolean).join(' · ')}
+                </span>
+              )}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AiActionsPreviewCard({
   message,
   t,
@@ -61,6 +122,25 @@ export function AiActionsPreviewCard({
   onUndo,
 }: AiActionsPreviewCardProps) {
   const { plan, status, error } = message;
+  const [selections, setSelections] = React.useState<ActionSelections>({});
+
+  const selectCandidate = (key: string, pick: { workId: string; sourceId?: string }) => {
+    setSelections(current => ({ ...current, [key]: pick }));
+  };
+
+  const missingSelection = plan.steps.some(step => {
+    if (step.details.candidates && step.details.candidates.length > 1 && !selections[step.stepId]) {
+      return true;
+    }
+    if (
+      step.details.mergeCandidateGroups?.some(
+        group => group.candidates.length > 1 && !selections[`${step.stepId}:${group.index}`]
+      )
+    ) {
+      return true;
+    }
+    return false;
+  });
 
   return (
     <div
@@ -127,6 +207,44 @@ export function AiActionsPreviewCard({
               </p>
             )}
 
+            {step.details.candidates && step.details.candidates.length > 1 && (
+              <div className="mt-1.5 rounded border border-amber-500/30 bg-amber-500/5 p-1.5">
+                <p className="text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                  {t('aiActionPickBook')}
+                </p>
+                <CandidatePicker
+                  selectionKey={step.stepId}
+                  candidates={step.details.candidates}
+                  selected={selections[step.stepId]}
+                  disabled={status !== 'pending'}
+                  onSelect={selectCandidate}
+                />
+              </div>
+            )}
+
+            {step.details.mergeCandidateGroups && step.details.mergeCandidateGroups.length > 0 && (
+              <div className="mt-1.5 space-y-1.5 rounded border border-amber-500/30 bg-amber-500/5 p-1.5">
+                <p className="text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                  {t('aiActionPickBook')}
+                </p>
+                {step.details.mergeCandidateGroups.map(group => {
+                  const key = `${step.stepId}:${group.index}`;
+                  return (
+                    <div key={key}>
+                      <p dir="auto" className="text-[10px] text-muted">{group.query}</p>
+                      <CandidatePicker
+                        selectionKey={key}
+                        candidates={group.candidates}
+                        selected={selections[key]}
+                        disabled={status !== 'pending'}
+                        onSelect={selectCandidate}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {step.details.outputPaths && step.details.outputPaths.length > 0 && (
               <div className="mt-1.5 space-y-0.5 rounded border border-subtle/60 bg-canvas px-2 py-1 text-[10px] text-muted">
                 <p className="font-medium text-ink">{t('aiActionOutputFiles')}</p>
@@ -155,8 +273,9 @@ export function AiActionsPreviewCard({
           <button
             type="button"
             data-ai-action-confirm
-            onClick={() => onConfirm(message)}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-semibold text-white hover:opacity-90"
+            disabled={missingSelection}
+            onClick={() => onConfirm(message, Object.keys(selections).length ? selections : undefined)}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Check className="size-3" />
             {t('aiActionConfirm')}
@@ -209,6 +328,58 @@ export function AiActionsPreviewCard({
       )}
     </div>
   );
+}
+
+export function aiActionErrorText(
+  code: AiActionErrorCode,
+  detail: string | undefined,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): string {
+  switch (code) {
+    case 'ai-disabled':
+      return t('assistantErrorDisabled');
+    case 'learning-mode-off':
+      return t('aiActionLearningModeOff');
+    case 'not-configured':
+      return t('researchAiNotConfigured');
+    case 'consent-required':
+      return t('aiPrivacyConsentRequired');
+    case 'tools-unsupported':
+      return t('aiActionUnsupported');
+    case 'not-found': {
+      const raw = detail || '';
+      if (raw.startsWith('book:')) return t('aiActionErrorBookNotFound', { name: raw.slice(5) });
+      if (raw.startsWith('pdf:')) return t('aiActionErrorPdfNotFound', { name: raw.slice(4) });
+      if (raw.startsWith('note:')) return t('aiActionErrorNoteNotFound', { name: raw.slice(5) });
+      if (raw.startsWith('hadith:')) return t('aiActionErrorHadithNotFound', { name: raw.slice(7) });
+      return t('aiActionErrorNotFound', { detail: raw || code });
+    }
+    case 'invalid-arguments': {
+      const reason = detail || '';
+      if (reason === 'invalid-source-target' || reason === 'unsupported-source-target') {
+        return t('aiActionErrorInvalidSourceTarget');
+      }
+      if (
+        reason === 'invalid-page-range-syntax' ||
+        reason === 'page-out-of-range' ||
+        reason === 'page-range-too-large' ||
+        reason === 'invalid-page-number'
+      ) {
+        return t('aiActionErrorInvalidPageRange');
+      }
+      if (reason === 'page-already-has-text-layer') {
+        return t('aiActionErrorOcrTextLayer');
+      }
+      if (reason === 'candidate-selection-required') {
+        return t('aiActionErrorPickRequired');
+      }
+      return t('aiActionErrorInvalidArgs', { detail: reason || code });
+    }
+    case 'provider-error':
+      return t('researchAiProviderError').replace('{message}', detail || code);
+    default:
+      return t('aiActionError', { detail: detail || code });
+  }
 }
 
 export function dispatchAiActionEvents(tools: AiActionPreviewStep['tool'][]): void {

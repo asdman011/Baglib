@@ -1,4 +1,24 @@
-﻿## AI epic KEY-434 complete, reviewed - 2026-11-21 - Agent: Claude Code
+﻿## KEY-445: AI actions natural book/reference resolution, candidate picker & honest error messages (epic KEY-434) — 2026-11-21T10:55+02:00 - Agent: Antigravity
+
+**Done:**
+- `src/shared/ai-actions.ts`: added `bookTitle` and `author` alongside optional `workId` on PDF/book tools (`split_pdf`, `merge_pdfs`, `extract_pdf_pages`, `rotate_pdf_pages`, `ocr_pdf_page`, `create_note`, `create_cards_from_selection`, `open_source`), plus optional `page` on `open_source`. Added `toAsciiDigits`, `normalizeNaturalQuranTarget` (`"2:11"`, `"ayah 2:11"`, `"Quran 2:11"`, `"البقرة 11"`, `"سورة البقرة آية 11"` → `quran:hafs:2:11`), `parseNaturalHadithRef` (`"Bukhari 1"`, `"البخاري ١"`), and `parseBookPageRef` (`"page 40 of <book>"`, `"صفحة ٤٠ من <كتاب>"`). Added `AiActionBookCandidate`, `candidates` / `mergeCandidateGroups` on `AiActionPreviewStep.details`, and `selections` on `AiActionConfirmRequest`.
+- `src/main/services/ai/actions/{tool-calling,tool-executor}.ts`, `src/main/ipc/ai-actions.ts`, `src/main/ipc/sunnah.ts`, `src/main/services/sunnah/{sunnah.service,research-corpus}.ts`: updated `buildActionPrompts` so models pass user book titles/natural refs rather than inventing IDs; added `searchLibraryWorks` (Arabic-normalized via `normalizeSearchString`/`matchesSearchQuery`), `resolvePdfCandidates`, `resolveWorkCandidate`, and `findHadithByNumber`/`resolveHadithByNumber`; 0 matches returns localized `not-found`, 2+ matches lists `candidates` in preview and requires user selection before `confirmPlan` executes, and invented `workId`s are never trusted.
+- `src/renderer/components/ai/{AiActionsPreview,GlobalAssistant}.tsx` & `src/renderer/translations.ts`: added `CandidatePicker` radio UI inside `AiActionsPreviewCard`, `aiActionErrorText` mapping validation/lookup errors to 11 new `ar` + `en` keys (never blaming the provider), and wired `selections` through `confirmActionPlan`.
+- `tests/services/ai-actions.test.ts` & `scripts/key445-live/{main.cjs,run.mjs}`: added unit tests for exact `ar`/`en` phrases and live Electron verification with real Arabic/English PDFs.
+
+**Tests:**
+- Focused (`tests/services/ai-actions.test.ts`): 8/8 pass.
+- Full suite (`node scripts/test-runner.js --test-concurrency=2`): 2,908/2,908 pass (404 suites, 0 fail, 0 skipped).
+- `node node_modules/typescript/bin/tsc --noEmit`: 0 errors. `npm run build:main`: pass. `npm run build:renderer`: pass. `git diff --check`: clean.
+- Live Electron (`node scripts/key445-live/run.mjs`): PASS in `ar` and `en` (`errors: []`, screenshots in `.baglib-data/key445-evidence/`, throwaway profile deleted).
+
+**Jira:**
+- `KEY-445` In Progress (`21`); Done (`41`) pending commit & push.
+
+**Files:**
+`CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-445.md`, `scripts/key445-live/main.cjs`, `scripts/key445-live/run.mjs`, `src/main/ipc/ai-actions.ts`, `src/main/ipc/sunnah.ts`, `src/main/services/ai/actions/tool-calling.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/main/services/sunnah/research-corpus.ts`, `src/main/services/sunnah/sunnah.service.ts`, `src/renderer/components/ai/AiActionsPreview.tsx`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/translations.ts`, `src/shared/ai-actions.ts`, `tests/services/ai-actions.test.ts`.
+
+## AI epic KEY-434 complete, reviewed - 2026-11-21 - Agent: Claude Code
 
 **Reviewed and passed (Claude):**
 

@@ -20,9 +20,15 @@ import { parseBookTarget, parseNoteTarget } from '../../../../shared/study-notes
 import type { AISettings } from '../../../../shared/types/ai';
 import type { StudyNote } from '../../../../shared/study-notes';
 import type { PersonalListItemKind } from '../../../../shared/personal-lists';
+import type { SunnahCollectionId } from '../../../../shared/types/sunnah';
+import { matchesSearchQuery, normalizeSearchString } from '../../../../shared/utils/text-normalizer';
 import {
+  normalizeNaturalQuranTarget,
+  parseBookPageRef,
+  parseNaturalHadithRef,
   parsePageRanges,
   validateToolCallArguments,
+  type AiActionBookCandidate,
   type AiActionConfirmResponse,
   type AiActionExecutedStep,
   type AiActionPlan,
@@ -30,6 +36,11 @@ import {
   type AiActionPlanResponse,
   type AiActionPreviewStep,
   type AiActionUndoResponse,
+  type BookLookupRef,
+  type ExtractPdfPagesArgs,
+  type OcrPdfPageArgs,
+  type RotatePdfPagesArgs,
+  type SplitPdfArgs,
   type ValidatedAiActionCall,
 } from '../../../../shared/ai-actions';
 import { translations } from '../../../../renderer/translations';
@@ -84,9 +95,24 @@ type ResolvedPdfPlan =
       outputPaths: string[];
     };
 
+type PdfCandidateEntry = AiActionBookCandidate & { source: PdfSource };
+
+type PendingPdfCall =
+  | { tool: 'split_pdf'; args: SplitPdfArgs }
+  | { tool: 'extract_pdf_pages'; args: ExtractPdfPagesArgs }
+  | { tool: 'rotate_pdf_pages'; args: RotatePdfPagesArgs }
+  | { tool: 'ocr_pdf_page'; args: OcrPdfPageArgs };
+
+type MergeSlotPlan =
+  | { kind: 'resolved'; source: PdfSource; totalPages: number }
+  | { kind: 'pending'; candidates: PdfCandidateEntry[] };
+
 type PlannedCall =
   | { kind: 'phase1'; call: ValidatedAiActionCall }
-  | { kind: 'pdf'; resolved: ResolvedPdfPlan };
+  | { kind: 'pdf'; resolved: ResolvedPdfPlan }
+  | { kind: 'pdf-pending'; call: PendingPdfCall; candidates: PdfCandidateEntry[] }
+  | { kind: 'merge-pending'; slots: MergeSlotPlan[] }
+  | { kind: 'open-pending'; page?: number; label?: string; candidates: AiActionBookCandidate[] };
 
 interface StoredPlan {
   planId: string;
@@ -128,6 +154,7 @@ export interface AiActionsServiceDeps {
   completeWithTools?: (request: AiActionPlanRequest, settings: AISettings) => Promise<ToolCallingResult>;
   pdfRunner?: PdfActionsRunner;
   inspectPdf?: (pdfPath: string, checkTextPage?: number) => Promise<PdfInspectionSummary>;
+  resolveSunnahHadith?: (collection: SunnahCollectionId, hadithNumber: string) => Promise<{ target: string; label: string } | null>;
 }
 
 const MAX_PLANS = 50;
@@ -210,6 +237,233 @@ export class AiActionsService {
     }
   }
 
+  private searchLibraryWorks(query: string, author?: string): Array<{ id: string; title: string; authors?: string }> {
+    const rows = this.deps.db
+      .prepare(
+        `SELECT w.id, w.title,
+          (SELECT GROUP_CONCAT(a.name, '، ') FROM work_author wa JOIN author a ON a.id = wa.author_id WHERE wa.work_id = w.id) AS authors
+         FROM work w
+         WHERE w.deleted_at IS NULL`
+      )
+      .all() as Array<{ id: string; title: string; authors: string | null }>;
+
+    const matched = rows.filter(row => {
+      if (author && !matchesSearchQuery(row.authors ?? '', author)) return false;
+      if (query && !matchesSearchQuery(`${row.title} ${row.authors ?? ''}`, query)) return false;
+      return true;
+    });
+
+    if (query && matched.length > 1) {
+      const normQuery = normalizeSearchString(query);
+      const exactTitleMatches = matched.filter(row => normalizeSearchString(row.title) === normQuery);
+      if (exactTitleMatches.length === 1) {
+        return exactTitleMatches.map(r => ({ id: r.id, title: r.title, ...(r.authors ? { authors: r.authors } : {}) }));
+      }
+    }
+
+    return matched.map(r => ({ id: r.id, title: r.title, ...(r.authors ? { authors: r.authors } : {}) }));
+  }
+
+  private resolveWorkCandidate(
+    ref: Pick<BookLookupRef, 'workId' | 'bookTitle' | 'author'>
+  ):
+    | { kind: 'one'; work: { id: string; title: string; authors?: string } }
+    | { kind: 'multiple'; candidates: AiActionBookCandidate[] }
+    | { kind: 'not-found'; detail: string } {
+    if (ref.workId) {
+      const row = this.deps.db
+        .prepare(
+          `SELECT w.id, w.title,
+            (SELECT GROUP_CONCAT(a.name, '، ') FROM work_author wa JOIN author a ON a.id = wa.author_id WHERE wa.work_id = w.id) AS authors
+           FROM work w WHERE w.id = ? AND w.deleted_at IS NULL`
+        )
+        .get(ref.workId) as { id: string; title: string; authors: string | null } | undefined;
+      if (!row) {
+        return { kind: 'not-found', detail: `book:${ref.workId}` };
+      }
+      return { kind: 'one', work: { id: row.id, title: row.title, ...(row.authors ? { authors: row.authors } : {}) } };
+    }
+
+    const query = ref.bookTitle ?? '';
+    const matches = this.searchLibraryWorks(query, ref.author);
+    if (matches.length === 0) {
+      return { kind: 'not-found', detail: `book:${query || ref.author || ''}` };
+    }
+    if (matches.length === 1) {
+      return { kind: 'one', work: matches[0] };
+    }
+    return {
+      kind: 'multiple',
+      candidates: matches.slice(0, 20).map(m => ({
+        workId: m.id,
+        title: m.title,
+        ...(m.authors ? { author: m.authors } : {}),
+      })),
+    };
+  }
+
+  private async resolvePdfCandidates(
+    ref: BookLookupRef
+  ): Promise<
+    | { kind: 'one'; source: PdfSource; title: string }
+    | { kind: 'multiple'; candidates: PdfCandidateEntry[] }
+    | { kind: 'not-found'; detail: string }
+  > {
+    let works: Array<{ id: string; title: string; authors?: string }>;
+    const labelForError = ref.bookTitle || ref.author || ref.workId || '';
+
+    if (ref.workId) {
+      const row = this.deps.db
+        .prepare(
+          `SELECT w.id, w.title,
+            (SELECT GROUP_CONCAT(a.name, '، ') FROM work_author wa JOIN author a ON a.id = wa.author_id WHERE wa.work_id = w.id) AS authors
+           FROM work w WHERE w.id = ? AND w.deleted_at IS NULL`
+        )
+        .get(ref.workId) as { id: string; title: string; authors: string | null } | undefined;
+      if (!row) {
+        return { kind: 'not-found', detail: `book:${ref.workId}` };
+      }
+      works = [{ id: row.id, title: row.title, ...(row.authors ? { authors: row.authors } : {}) }];
+    } else {
+      works = this.searchLibraryWorks(ref.bookTitle ?? '', ref.author);
+      if (works.length === 0) {
+        return { kind: 'not-found', detail: `book:${labelForError}` };
+      }
+    }
+
+    const candidates: PdfCandidateEntry[] = [];
+    for (const work of works.slice(0, 20)) {
+      const rows = this.deps.db
+        .prepare(
+          `SELECT s.id AS sourceId
+           FROM edition e
+           JOIN source s ON s.edition_id = e.id
+           JOIN file_source_detail f ON f.source_id = s.id
+           WHERE e.work_id = ? AND upper(f.file_format) = 'PDF' ${ref.sourceId ? 'AND s.id = ?' : ''}`
+        )
+        .all(...(ref.sourceId ? [work.id, ref.sourceId] : [work.id])) as Array<{ sourceId: string }>;
+
+      for (const row of rows) {
+        const source = await this.resolveLibraryPdf(work.id, row.sourceId);
+        if (!source) continue;
+        candidates.push({
+          workId: work.id,
+          sourceId: source.sourceId ?? row.sourceId,
+          title: work.title,
+          ...(work.authors ? { author: work.authors } : {}),
+          subtitle: path.basename(source.path),
+          source,
+        });
+      }
+    }
+
+    if (candidates.length === 0) {
+      return { kind: 'not-found', detail: `pdf:${works.length === 1 ? works[0].title : labelForError}` };
+    }
+    if (candidates.length === 1) {
+      return { kind: 'one', source: candidates[0].source, title: candidates[0].title };
+    }
+    return { kind: 'multiple', candidates };
+  }
+
+  private async resolveSinglePdfPlan(
+    call: PendingPdfCall,
+    source: PdfSource,
+    inspectPdf: (pdfPath: string, checkTextPage?: number) => Promise<PdfInspectionSummary>,
+    reservedOutputPaths: Set<string>
+  ): Promise<{ ok: true; resolved: ResolvedPdfPlan } | { ok: false; error: 'invalid-arguments'; detail: string }> {
+    switch (call.tool) {
+      case 'split_pdf': {
+        const info = await inspectPdf(source.path);
+        let groups: number[][] | undefined;
+        let expectedOutputs: number;
+        if (call.args.ranges) {
+          const parsed = parsePageRanges(call.args.ranges, info.totalPages);
+          if (!parsed.ok) return { ok: false, error: 'invalid-arguments', detail: parsed.reason };
+          groups = parsed.groups;
+          expectedOutputs = groups.length;
+        } else {
+          const perFile = call.args.pagesPerFile ?? 1;
+          expectedOutputs = Math.ceil(info.totalPages / perFile);
+        }
+        if (expectedOutputs > 200) {
+          return { ok: false, error: 'invalid-arguments', detail: 'too-many-split-outputs' };
+        }
+        const outputPaths = uniqueOutputPaths(source.path, expectedOutputs, 'split', '.pdf', reservedOutputPaths);
+        return {
+          ok: true,
+          resolved: {
+            tool: 'split_pdf',
+            source,
+            totalPages: info.totalPages,
+            groups,
+            pagesPerFile: call.args.pagesPerFile,
+            outputPaths,
+          },
+        };
+      }
+      case 'extract_pdf_pages': {
+        const info = await inspectPdf(source.path);
+        const parsed = parsePageRanges(call.args.pages, info.totalPages);
+        if (!parsed.ok) return { ok: false, error: 'invalid-arguments', detail: parsed.reason };
+        const outputPaths = uniqueOutputPaths(source.path, 1, 'extracted', '.pdf', reservedOutputPaths);
+        return {
+          ok: true,
+          resolved: {
+            tool: 'extract_pdf_pages',
+            source,
+            pages: parsed.pages,
+            outputPaths,
+          },
+        };
+      }
+      case 'rotate_pdf_pages': {
+        const info = await inspectPdf(source.path);
+        let pages: number[];
+        if (call.args.pages) {
+          const parsed = parsePageRanges(call.args.pages, info.totalPages);
+          if (!parsed.ok) return { ok: false, error: 'invalid-arguments', detail: parsed.reason };
+          pages = parsed.pages;
+        } else {
+          pages = Array.from({ length: info.totalPages }, (_, idx) => idx + 1);
+        }
+        const outputPaths = uniqueOutputPaths(source.path, 1, `rotated-${call.args.angle}`, '.pdf', reservedOutputPaths);
+        return {
+          ok: true,
+          resolved: {
+            tool: 'rotate_pdf_pages',
+            source,
+            totalPages: info.totalPages,
+            pages,
+            angle: call.args.angle,
+            outputPaths,
+          },
+        };
+      }
+      case 'ocr_pdf_page': {
+        const info = await inspectPdf(source.path, call.args.page);
+        if (call.args.page < 1 || call.args.page > info.totalPages) {
+          return { ok: false, error: 'invalid-arguments', detail: 'page-out-of-range' };
+        }
+        if (info.pageHasText && !call.args.force) {
+          return { ok: false, error: 'invalid-arguments', detail: 'page-already-has-text-layer' };
+        }
+        const ocrLanguage = call.args.language ?? 'auto';
+        const outputPaths = uniqueOutputPaths(source.path, 1, `page-${call.args.page}-ocr`, '.txt', reservedOutputPaths);
+        return {
+          ok: true,
+          resolved: {
+            tool: 'ocr_pdf_page',
+            source,
+            page: call.args.page,
+            ocrLanguage,
+            outputPaths,
+          },
+        };
+      }
+    }
+  }
+
   public async buildPreviewPlan(rawCalls: RawToolCall[], language: 'ar' | 'en'): Promise<AiActionPlanResponse> {
     if (!Array.isArray(rawCalls) || rawCalls.length === 0 || rawCalls.length > 10) {
       return { ok: false, error: 'invalid-arguments', detail: 'empty-or-too-many-tool-calls' };
@@ -234,9 +488,13 @@ export class AiActionsService {
 
       switch (call.tool) {
         case 'create_note': {
-          if (call.args.workId) {
-            const work = this.deps.db.prepare('SELECT id FROM work WHERE id = ?').get(call.args.workId);
-            if (!work) return { ok: false, error: 'not-found', detail: `work:${call.args.workId}` };
+          let resolvedWorkId = call.args.workId;
+          if (resolvedWorkId || call.args.bookTitle) {
+            const res = this.resolveWorkCandidate({ workId: resolvedWorkId, bookTitle: call.args.bookTitle });
+            if (res.kind === 'not-found') return { ok: false, error: 'not-found', detail: res.detail };
+            if (res.kind === 'one') resolvedWorkId = res.work.id;
+            // If multiple books match for an optional note workId, leave workId unset rather than guessing
+            else resolvedWorkId = undefined;
           }
           steps.push({
             stepId,
@@ -248,7 +506,10 @@ export class AiActionsService {
               tags: call.args.tags,
             },
           });
-          plannedCalls.push({ kind: 'phase1', call });
+          plannedCalls.push({
+            kind: 'phase1',
+            call: { tool: 'create_note', args: { ...call.args, ...(resolvedWorkId ? { workId: resolvedWorkId } : { workId: undefined }) } },
+          });
           break;
         }
 
@@ -272,9 +533,12 @@ export class AiActionsService {
         }
 
         case 'create_cards_from_selection': {
-          if (call.args.workId) {
-            const work = this.deps.db.prepare('SELECT id FROM work WHERE id = ?').get(call.args.workId);
-            if (!work) return { ok: false, error: 'not-found', detail: `work:${call.args.workId}` };
+          let resolvedWorkId = call.args.workId;
+          if (resolvedWorkId || call.args.bookTitle) {
+            const res = this.resolveWorkCandidate({ workId: resolvedWorkId, bookTitle: call.args.bookTitle });
+            if (res.kind === 'not-found') return { ok: false, error: 'not-found', detail: res.detail };
+            if (res.kind === 'one') resolvedWorkId = res.work.id;
+            else resolvedWorkId = undefined;
           }
           steps.push({
             stepId,
@@ -285,7 +549,10 @@ export class AiActionsService {
               sourceLabel: call.args.sourceLabel,
             },
           });
-          plannedCalls.push({ kind: 'phase1', call });
+          plannedCalls.push({
+            kind: 'phase1',
+            call: { tool: 'create_cards_from_selection', args: { ...call.args, ...(resolvedWorkId ? { workId: resolvedWorkId } : { workId: undefined }) } },
+          });
           break;
         }
 
@@ -313,21 +580,104 @@ export class AiActionsService {
         }
 
         case 'open_source': {
-          const target = call.args.target;
-          let resolvedLabel = call.args.label || target;
+          const rawTarget = call.args.target;
+          let target = rawTarget;
+          let resolvedLabel = call.args.label || rawTarget || call.args.bookTitle || '';
+
           if (target.startsWith('book:')) {
             const parsed = parseBookTarget(target);
-            const work = parsed ? (this.deps.db.prepare('SELECT id, title FROM work WHERE id = ?').get(parsed.id) as { id: string; title: string } | undefined) : undefined;
-            if (!work) return { ok: false, error: 'not-found', detail: target };
+            const work = parsed
+              ? (this.deps.db.prepare('SELECT id, title FROM work WHERE id = ? AND deleted_at IS NULL').get(parsed.id) as { id: string; title: string } | undefined)
+              : undefined;
+            if (!work) return { ok: false, error: 'not-found', detail: `book:${parsed?.id || target}` };
             if (!call.args.label) {
               resolvedLabel = parsed?.page ? `${work.title} (${parsed.page})` : work.title;
             }
           } else if (target.startsWith('note:')) {
             const parsed = parseNoteTarget(target);
             const note = parsed ? notesService.list(parsed.id)[0] : undefined;
-            if (!note) return { ok: false, error: 'not-found', detail: target };
+            if (!note) return { ok: false, error: 'not-found', detail: `note:${parsed?.id || target}` };
             if (!call.args.label) resolvedLabel = note.title || target;
+          } else if (target.startsWith('quran:') || target.startsWith('sunnah:')) {
+            // Canonical Quran / Sunnah target already validated
+          } else if (call.args.bookTitle) {
+            const res = this.resolveWorkCandidate({ bookTitle: call.args.bookTitle });
+            if (res.kind === 'not-found') return { ok: false, error: 'not-found', detail: res.detail };
+            if (res.kind === 'multiple') {
+              const titleLabel = call.args.page ? `${call.args.bookTitle} (${call.args.page})` : call.args.bookTitle;
+              steps.push({
+                stepId,
+                tool: 'open_source',
+                summary: t.aiActionStepOpenSource.replace('{label}', titleLabel),
+                details: {
+                  sourceLabel: titleLabel,
+                  ...(call.args.page ? { page: call.args.page } : {}),
+                  candidates: res.candidates,
+                },
+              });
+              plannedCalls.push({ kind: 'open-pending', page: call.args.page, label: call.args.label, candidates: res.candidates });
+              break;
+            }
+            target = call.args.page ? `book:${res.work.id}#p=${call.args.page}` : `book:${res.work.id}`;
+            if (!call.args.label) {
+              resolvedLabel = call.args.page ? `${res.work.title} (${call.args.page})` : res.work.title;
+            }
+          } else {
+            const normalizedQuran = normalizeNaturalQuranTarget(rawTarget);
+            if (normalizedQuran) {
+              target = normalizedQuran;
+              if (!call.args.label) resolvedLabel = rawTarget;
+            } else {
+              const hadithRef = parseNaturalHadithRef(rawTarget);
+              if (hadithRef) {
+                const resolvedHadith = this.deps.resolveSunnahHadith
+                  ? await this.deps.resolveSunnahHadith(hadithRef.collection, hadithRef.hadithNumber)
+                  : null;
+                if (!resolvedHadith) {
+                  return { ok: false, error: 'not-found', detail: `hadith:${rawTarget}` };
+                }
+                target = resolvedHadith.target;
+                if (!call.args.label) resolvedLabel = resolvedHadith.label;
+              } else {
+                const bookPage = parseBookPageRef(rawTarget);
+                const bookQuery = bookPage ? bookPage.query : rawTarget;
+                const page = call.args.page ?? bookPage?.page;
+                const res = this.resolveWorkCandidate({ bookTitle: bookQuery });
+                if (res.kind === 'multiple') {
+                  const titleLabel = page ? `${bookQuery} (${page})` : bookQuery;
+                  steps.push({
+                    stepId,
+                    tool: 'open_source',
+                    summary: t.aiActionStepOpenSource.replace('{label}', titleLabel),
+                    details: {
+                      sourceLabel: titleLabel,
+                      ...(page ? { page } : {}),
+                      candidates: res.candidates,
+                    },
+                  });
+                  plannedCalls.push({ kind: 'open-pending', page, label: call.args.label, candidates: res.candidates });
+                  break;
+                }
+                if (res.kind === 'one') {
+                  target = page ? `book:${res.work.id}#p=${page}` : `book:${res.work.id}`;
+                  if (!call.args.label) {
+                    resolvedLabel = page ? `${res.work.title} (${page})` : res.work.title;
+                  }
+                } else {
+                  const noteMatches = !page
+                    ? notesService.list().filter(n => normalizeSearchString(n.title) === normalizeSearchString(rawTarget))
+                    : [];
+                  if (noteMatches.length === 1) {
+                    target = `note:${noteMatches[0].id}`;
+                    if (!call.args.label) resolvedLabel = noteMatches[0].title || rawTarget;
+                  } else {
+                    return { ok: false, error: 'not-found', detail: `book:${bookQuery}` };
+                  }
+                }
+              }
+            }
           }
+
           steps.push({
             stepId,
             tool: 'open_source',
@@ -337,196 +687,145 @@ export class AiActionsService {
               sourceLabel: resolvedLabel,
             },
           });
-          plannedCalls.push({ kind: 'phase1', call });
+          plannedCalls.push({ kind: 'phase1', call: { tool: 'open_source', args: { target, ...(call.args.label ? { label: call.args.label } : {}) } } });
           break;
         }
 
-        case 'split_pdf': {
-          const source = await this.resolveLibraryPdf(call.args.workId, call.args.sourceId);
-          if (!source) return { ok: false, error: 'not-found', detail: `work:${call.args.workId}` };
-          const info = await inspectPdf(source.path);
-          let groups: number[][] | undefined;
-          let expectedOutputs: number;
-          if (call.args.ranges) {
-            const parsed = parsePageRanges(call.args.ranges, info.totalPages);
-            if (!parsed.ok) return { ok: false, error: 'invalid-arguments', detail: parsed.reason };
-            groups = parsed.groups;
-            expectedOutputs = groups.length;
-          } else {
-            const perFile = call.args.pagesPerFile ?? 1;
-            expectedOutputs = Math.ceil(info.totalPages / perFile);
+        case 'split_pdf':
+        case 'extract_pdf_pages':
+        case 'rotate_pdf_pages':
+        case 'ocr_pdf_page': {
+          const pdfLookup = await this.resolvePdfCandidates(call.args);
+          if (pdfLookup.kind === 'not-found') {
+            return { ok: false, error: 'not-found', detail: pdfLookup.detail };
           }
-          if (expectedOutputs > 200) {
-            return { ok: false, error: 'invalid-arguments', detail: 'too-many-split-outputs' };
+          const queryLabel = call.args.bookTitle || call.args.author || call.args.workId || '';
+          const stepSummary = (label: string, outputCount = 1) => {
+            switch (call.tool) {
+              case 'split_pdf':
+                return t.aiActionStepSplitPdf.replace('{label}', label).replace('{count}', String(outputCount));
+              case 'extract_pdf_pages':
+                return t.aiActionStepExtractPdf.replace('{pages}', call.args.pages).replace('{label}', label);
+              case 'rotate_pdf_pages':
+                return t.aiActionStepRotatePdf.replace('{angle}', String(call.args.angle)).replace('{label}', label);
+              case 'ocr_pdf_page':
+                return t.aiActionStepOcrPdfPage.replace('{page}', String(call.args.page)).replace('{label}', label);
+            }
+          };
+
+          if (pdfLookup.kind === 'multiple') {
+            const publicCandidates: AiActionBookCandidate[] = pdfLookup.candidates.map(({ workId, sourceId, title, author, subtitle }) => ({
+              workId,
+              ...(sourceId ? { sourceId } : {}),
+              title,
+              ...(author ? { author } : {}),
+              ...(subtitle ? { subtitle } : {}),
+            }));
+            steps.push({
+              stepId,
+              tool: call.tool,
+              summary: stepSummary(queryLabel),
+              details: {
+                sourceLabel: queryLabel,
+                ...(call.tool === 'extract_pdf_pages' ? { pageRange: call.args.pages } : {}),
+                ...(call.tool === 'rotate_pdf_pages' ? { angle: call.args.angle, ...(call.args.pages ? { pageRange: call.args.pages } : {}) } : {}),
+                ...(call.tool === 'split_pdf' && call.args.ranges ? { pageRange: call.args.ranges } : {}),
+                ...(call.tool === 'ocr_pdf_page' ? { page: call.args.page, ocrLanguage: call.args.language ?? 'auto' } : {}),
+                candidates: publicCandidates,
+              },
+            });
+            plannedCalls.push({ kind: 'pdf-pending', call: call as PendingPdfCall, candidates: pdfLookup.candidates });
+            break;
           }
-          const outputPaths = uniqueOutputPaths(source.path, expectedOutputs, 'split', '.pdf', reservedOutputPaths);
-          const label = this.workTitle(source.workId, source.path);
+
+          const resolvedRes = await this.resolveSinglePdfPlan(call as PendingPdfCall, pdfLookup.source, inspectPdf, reservedOutputPaths);
+          if (!resolvedRes.ok) return resolvedRes;
+          const resolved = resolvedRes.resolved;
+          const label = this.workTitle(pdfLookup.source.workId, pdfLookup.source.path);
           steps.push({
             stepId,
-            tool: 'split_pdf',
-            summary: t.aiActionStepSplitPdf
-              .replace('{label}', label)
-              .replace('{count}', String(outputPaths.length)),
+            tool: call.tool,
+            summary: stepSummary(label, resolved.outputPaths.length),
             details: {
               sourceLabel: label,
-              ...(call.args.ranges ? { pageRange: call.args.ranges } : {}),
-              outputPaths,
+              ...(call.tool === 'extract_pdf_pages' ? { pageRange: call.args.pages } : {}),
+              ...(call.tool === 'rotate_pdf_pages' ? { angle: call.args.angle, ...(call.args.pages ? { pageRange: call.args.pages } : {}) } : {}),
+              ...(call.tool === 'split_pdf' && call.args.ranges ? { pageRange: call.args.ranges } : {}),
+              ...(call.tool === 'ocr_pdf_page' ? { page: call.args.page, ocrLanguage: call.args.language ?? 'auto' } : {}),
+              outputPaths: resolved.outputPaths,
             },
           });
-          plannedCalls.push({
-            kind: 'pdf',
-            resolved: {
-              tool: 'split_pdf',
-              source,
-              totalPages: info.totalPages,
-              groups,
-              pagesPerFile: call.args.pagesPerFile,
-              outputPaths,
-            },
-          });
+          plannedCalls.push({ kind: 'pdf', resolved });
           break;
         }
 
         case 'merge_pdfs': {
-          const resolvedSources: Array<{ source: PdfSource; totalPages: number }> = [];
+          const slots: MergeSlotPlan[] = [];
           const labels: string[] = [];
-          for (const item of call.args.sources) {
-            const source = await this.resolveLibraryPdf(item.workId, item.sourceId);
-            if (!source) return { ok: false, error: 'not-found', detail: `work:${item.workId}` };
-            const info = await inspectPdf(source.path);
-            resolvedSources.push({ source, totalPages: info.totalPages });
-            labels.push(this.workTitle(source.workId, source.path));
+          const mergeCandidateGroups: Array<{ index: number; query: string; candidates: AiActionBookCandidate[] }> = [];
+          for (let idx = 0; idx < call.args.sources.length; idx++) {
+            const item = call.args.sources[idx];
+            const pdfLookup = await this.resolvePdfCandidates(item);
+            if (pdfLookup.kind === 'not-found') {
+              return { ok: false, error: 'not-found', detail: pdfLookup.detail };
+            }
+            if (pdfLookup.kind === 'multiple') {
+              const queryLabel = item.bookTitle || item.author || item.workId || '';
+              labels.push(queryLabel);
+              slots.push({ kind: 'pending', candidates: pdfLookup.candidates });
+              mergeCandidateGroups.push({
+                index: idx,
+                query: queryLabel,
+                candidates: pdfLookup.candidates.map(({ workId, sourceId, title, author, subtitle }) => ({
+                  workId,
+                  ...(sourceId ? { sourceId } : {}),
+                  title,
+                  ...(author ? { author } : {}),
+                  ...(subtitle ? { subtitle } : {}),
+                })),
+              });
+            } else {
+              const info = await inspectPdf(pdfLookup.source.path);
+              slots.push({ kind: 'resolved', source: pdfLookup.source, totalPages: info.totalPages });
+              labels.push(this.workTitle(pdfLookup.source.workId, pdfLookup.source.path));
+            }
           }
-          const outputPaths = uniqueOutputPaths(resolvedSources[0].source.path, 1, 'merged', '.pdf', reservedOutputPaths);
-          steps.push({
-            stepId,
-            tool: 'merge_pdfs',
-            summary: t.aiActionStepMergePdfs.replace('{count}', String(resolvedSources.length)),
-            details: {
-              sourceLabel: labels.join(' + '),
-              outputPaths,
-            },
-          });
-          plannedCalls.push({
-            kind: 'pdf',
-            resolved: {
+
+          if (mergeCandidateGroups.length > 0) {
+            steps.push({
+              stepId,
               tool: 'merge_pdfs',
-              sources: resolvedSources,
-              outputPaths,
-            },
-          });
-          break;
-        }
-
-        case 'extract_pdf_pages': {
-          const source = await this.resolveLibraryPdf(call.args.workId, call.args.sourceId);
-          if (!source) return { ok: false, error: 'not-found', detail: `work:${call.args.workId}` };
-          const info = await inspectPdf(source.path);
-          const parsed = parsePageRanges(call.args.pages, info.totalPages);
-          if (!parsed.ok) return { ok: false, error: 'invalid-arguments', detail: parsed.reason };
-          const outputPaths = uniqueOutputPaths(source.path, 1, 'extracted', '.pdf', reservedOutputPaths);
-          const label = this.workTitle(source.workId, source.path);
-          steps.push({
-            stepId,
-            tool: 'extract_pdf_pages',
-            summary: t.aiActionStepExtractPdf
-              .replace('{pages}', call.args.pages)
-              .replace('{label}', label),
-            details: {
-              sourceLabel: label,
-              pageRange: call.args.pages,
-              outputPaths,
-            },
-          });
-          plannedCalls.push({
-            kind: 'pdf',
-            resolved: {
-              tool: 'extract_pdf_pages',
-              source,
-              pages: parsed.pages,
-              outputPaths,
-            },
-          });
-          break;
-        }
-
-        case 'rotate_pdf_pages': {
-          const source = await this.resolveLibraryPdf(call.args.workId, call.args.sourceId);
-          if (!source) return { ok: false, error: 'not-found', detail: `work:${call.args.workId}` };
-          const info = await inspectPdf(source.path);
-          let pages: number[];
-          if (call.args.pages) {
-            const parsed = parsePageRanges(call.args.pages, info.totalPages);
-            if (!parsed.ok) return { ok: false, error: 'invalid-arguments', detail: parsed.reason };
-            pages = parsed.pages;
+              summary: t.aiActionStepMergePdfs.replace('{count}', String(slots.length)),
+              details: {
+                sourceLabel: labels.join(' + '),
+                mergeCandidateGroups,
+              },
+            });
+            plannedCalls.push({ kind: 'merge-pending', slots });
           } else {
-            pages = Array.from({ length: info.totalPages }, (_, idx) => idx + 1);
+            const resolvedSources = slots.map(s => {
+              if (s.kind !== 'resolved') throw new Error('unexpected-pending-slot');
+              return { source: s.source, totalPages: s.totalPages };
+            });
+            const outputPaths = uniqueOutputPaths(resolvedSources[0].source.path, 1, 'merged', '.pdf', reservedOutputPaths);
+            steps.push({
+              stepId,
+              tool: 'merge_pdfs',
+              summary: t.aiActionStepMergePdfs.replace('{count}', String(resolvedSources.length)),
+              details: {
+                sourceLabel: labels.join(' + '),
+                outputPaths,
+              },
+            });
+            plannedCalls.push({
+              kind: 'pdf',
+              resolved: {
+                tool: 'merge_pdfs',
+                sources: resolvedSources,
+                outputPaths,
+              },
+            });
           }
-          const outputPaths = uniqueOutputPaths(source.path, 1, `rotated-${call.args.angle}`, '.pdf', reservedOutputPaths);
-          const label = this.workTitle(source.workId, source.path);
-          steps.push({
-            stepId,
-            tool: 'rotate_pdf_pages',
-            summary: t.aiActionStepRotatePdf
-              .replace('{angle}', String(call.args.angle))
-              .replace('{label}', label),
-            details: {
-              sourceLabel: label,
-              angle: call.args.angle,
-              ...(call.args.pages ? { pageRange: call.args.pages } : {}),
-              outputPaths,
-            },
-          });
-          plannedCalls.push({
-            kind: 'pdf',
-            resolved: {
-              tool: 'rotate_pdf_pages',
-              source,
-              totalPages: info.totalPages,
-              pages,
-              angle: call.args.angle,
-              outputPaths,
-            },
-          });
-          break;
-        }
-
-        case 'ocr_pdf_page': {
-          const source = await this.resolveLibraryPdf(call.args.workId, call.args.sourceId);
-          if (!source) return { ok: false, error: 'not-found', detail: `work:${call.args.workId}` };
-          const info = await inspectPdf(source.path, call.args.page);
-          if (call.args.page < 1 || call.args.page > info.totalPages) {
-            return { ok: false, error: 'invalid-arguments', detail: 'page-out-of-range' };
-          }
-          if (info.pageHasText && !call.args.force) {
-            return { ok: false, error: 'invalid-arguments', detail: 'page-already-has-text-layer' };
-          }
-          const ocrLanguage = call.args.language ?? 'auto';
-          const outputPaths = uniqueOutputPaths(source.path, 1, `page-${call.args.page}-ocr`, '.txt', reservedOutputPaths);
-          const label = this.workTitle(source.workId, source.path);
-          steps.push({
-            stepId,
-            tool: 'ocr_pdf_page',
-            summary: t.aiActionStepOcrPdfPage
-              .replace('{page}', String(call.args.page))
-              .replace('{label}', label),
-            details: {
-              sourceLabel: label,
-              page: call.args.page,
-              ocrLanguage,
-              outputPaths,
-            },
-          });
-          plannedCalls.push({
-            kind: 'pdf',
-            resolved: {
-              tool: 'ocr_pdf_page',
-              source,
-              page: call.args.page,
-              ocrLanguage,
-              outputPaths,
-            },
-          });
           break;
         }
       }
@@ -542,9 +841,90 @@ export class AiActionsService {
     return { ok: true, kind: 'plan', plan };
   }
 
-  public async confirmPlan(planId: string, language: 'ar' | 'en'): Promise<AiActionConfirmResponse> {
+  public async confirmPlan(
+    planId: string,
+    language: 'ar' | 'en',
+    selections?: Record<string, { workId: string; sourceId?: string }>
+  ): Promise<AiActionConfirmResponse> {
     const stored = this.plans.get(planId);
     if (!stored) return { ok: false, error: 'plan-not-found' };
+
+    const inspectPdf = this.deps.inspectPdf ?? inspectPdfFile;
+    const reservedOutputPaths = new Set<string>();
+    for (const c of stored.calls) {
+      if (c.kind === 'pdf') {
+        for (const p of c.resolved.outputPaths) reservedOutputPaths.add(p);
+      }
+    }
+
+    const finalizedCalls: Array<{ kind: 'phase1'; call: ValidatedAiActionCall } | { kind: 'pdf'; resolved: ResolvedPdfPlan }> = [];
+    for (let i = 0; i < stored.calls.length; i++) {
+      const planned = stored.calls[i];
+      const stepId = stored.stepIds[i];
+
+      if (planned.kind === 'open-pending') {
+        const pick = selections?.[stepId];
+        const chosen = pick
+          ? planned.candidates.find(c => c.workId === pick.workId && (!c.sourceId || c.sourceId === pick.sourceId))
+          : undefined;
+        if (!chosen) {
+          return { ok: false, error: 'invalid-arguments', detail: 'candidate-selection-required' };
+        }
+        const target = planned.page ? `book:${chosen.workId}#p=${planned.page}` : `book:${chosen.workId}`;
+        finalizedCalls.push({
+          kind: 'phase1',
+          call: { tool: 'open_source', args: { target, ...(planned.label ? { label: planned.label } : {}) } },
+        });
+        continue;
+      }
+
+      if (planned.kind === 'pdf-pending') {
+        const pick = selections?.[stepId];
+        const chosen = pick
+          ? planned.candidates.find(c => c.workId === pick.workId && (!c.sourceId || c.sourceId === pick.sourceId))
+          : undefined;
+        if (!chosen) {
+          return { ok: false, error: 'invalid-arguments', detail: 'candidate-selection-required' };
+        }
+        const resolvedRes = await this.resolveSinglePdfPlan(planned.call, chosen.source, inspectPdf, reservedOutputPaths);
+        if (!resolvedRes.ok) return resolvedRes;
+        finalizedCalls.push({ kind: 'pdf', resolved: resolvedRes.resolved });
+        continue;
+      }
+
+      if (planned.kind === 'merge-pending') {
+        const resolvedSources: Array<{ source: PdfSource; totalPages: number }> = [];
+        for (let idx = 0; idx < planned.slots.length; idx++) {
+          const slot = planned.slots[idx];
+          if (slot.kind === 'resolved') {
+            resolvedSources.push({ source: slot.source, totalPages: slot.totalPages });
+          } else {
+            const pick = selections?.[`${stepId}:${idx}`] ?? selections?.[stepId];
+            const chosen = pick
+              ? slot.candidates.find(c => c.workId === pick.workId && (!c.sourceId || c.sourceId === pick.sourceId))
+              : undefined;
+            if (!chosen) {
+              return { ok: false, error: 'invalid-arguments', detail: 'candidate-selection-required' };
+            }
+            const info = await inspectPdf(chosen.source.path);
+            resolvedSources.push({ source: chosen.source, totalPages: info.totalPages });
+          }
+        }
+        const outputPaths = uniqueOutputPaths(resolvedSources[0].source.path, 1, 'merged', '.pdf', reservedOutputPaths);
+        finalizedCalls.push({
+          kind: 'pdf',
+          resolved: {
+            tool: 'merge_pdfs',
+            sources: resolvedSources,
+            outputPaths,
+          },
+        });
+        continue;
+      }
+
+      finalizedCalls.push(planned);
+    }
+
     this.plans.delete(planId);
 
     const lang: 'ar' | 'en' = language === 'ar' ? 'ar' : 'en';
@@ -559,8 +939,8 @@ export class AiActionsService {
     const openTargets: string[] = [];
 
     try {
-      for (let i = 0; i < stored.calls.length; i++) {
-        const planned = stored.calls[i];
+      for (let i = 0; i < finalizedCalls.length; i++) {
+        const planned = finalizedCalls[i];
         const stepId = stored.stepIds[i];
 
         if (planned.kind === 'phase1') {

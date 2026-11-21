@@ -42,6 +42,11 @@ export const searchSunnahNarrators = (query: string, limit = 20) => syncNarrator
 /** KEY-409: the chapter numbers of one collection, for following a whole collection. */
 export const readSunnahChapterNumbers = (collection: string) => syncChapterNumbers ? syncChapterNumbers(collection) : Promise.resolve([]);
 
+let hadithNumberResolver: ((collection: SunnahCollectionId, hadithNumber: string) => Promise<{ target: string; label: string } | null>) | null = null;
+/** KEY-445: resolve a collection + hadith number (e.g. Bukhari 1) to a canonical `sunnah:` target. */
+export const resolveHadithByNumber = (collection: SunnahCollectionId, hadithNumber: string) =>
+  hadithNumberResolver ? hadithNumberResolver(collection, hadithNumber) : Promise.resolve(null);
+
 export function registerSunnahIpc(): void {
   let service: SunnahService | undefined;
   let slashSearch: SunnahSearchProcess | undefined;
@@ -91,6 +96,14 @@ export function registerSunnahIpc(): void {
   syncChapterNumbers = async collection => ((await getService().catalog())?.collections.find(c => c.id === collection)?.chapters ?? []).map(c => c.number);
   chapterReader = async (collection, chapter) => (await getService().chapter(collection as SunnahCollectionId, chapter)).hadiths
     .map(hadith => ({ id: hadith.id, number: String(hadith.number), text: hadith.text.ar.matn || hadith.text.ar.full }));
+  hadithNumberResolver = async (collection, hadithNumber) => {
+    const found = await getService().findHadithByNumber(collection, hadithNumber).catch(() => null);
+    if (!found) return null;
+    return {
+      target: `sunnah:${collection}:${found.chapter}:${found.hadith.id}`,
+      label: `${collection} ${found.hadith.number}`,
+    };
+  };
   const getService = () => service ??= new SunnahService(path.join(app.getPath('userData'), 'sunnah'), app.isPackaged ? [] : [
     path.join(app.getAppPath(), 'repos', 'Hadith', 'LK-Hadith-Corpus-master.zip'),
     path.join(app.getAppPath(), 'repos', 'LK-Hadith-Corpus-master.zip'),

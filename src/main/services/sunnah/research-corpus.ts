@@ -234,6 +234,18 @@ export class SunnahResearchCorpus {
     }
     return selected.map(row => this.hit(row));
   }
+  findHadithByNumber(collection: SunnahCollectionId, hadithNumber: string): { chapter: number; hadith: SunnahHadith } | null {
+    const bookKey = Object.keys(collections).find(k => collections[k] === collection);
+    if (!bookKey) return null;
+    const clean = hadithNumber.trim();
+    if (!clean) return null;
+    const row = this.db.prepare(
+      `SELECT ${baseColumns} FROM hadiths WHERE book_key = ? AND (Hadith_number = ? OR Hadith_number = ?) ORDER BY id LIMIT 1`
+    ).get(bookKey, clean, `${clean}.0`) as Row | undefined;
+    if (!row) return null;
+    const chapter = Number(row.Chapter_Number || 0);
+    return { chapter, hadith: this.record(row) };
+  }
   research(id: number): SunnahResearch {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Invalid hadith identity');
     const row = this.db.prepare('SELECT * FROM hadiths WHERE id=?').get(id) as Row | undefined;

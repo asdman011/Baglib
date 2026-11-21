@@ -10,7 +10,10 @@
  */
 import { CARD_SOURCE_KINDS, type CardSourceKind } from './types/knowledge-cards';
 import { PERSONAL_LIST_KINDS, canonicalItemRef, isListItemKind, type PersonalListItemKind } from './personal-lists';
+import { parseQuranReference } from './quran-reference';
 import { validStudyTarget } from './study-notes';
+import type { SunnahCollectionId } from './types/sunnah';
+import { normalizeArabicText } from './utils/text-normalizer';
 
 export const AI_ACTION_TOOL_NAMES = [
   'create_note',
@@ -49,7 +52,8 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
         properties: {
           title: { type: 'string', minLength: 1, maxLength: 300 },
           content: { type: 'string', minLength: 1, maxLength: 50000 },
-          workId: { type: 'string', maxLength: 180 },
+          workId: { type: 'string', maxLength: 180, description: 'Optional existing BagLib workId from context. Never invent an ID.' },
+          bookTitle: { type: 'string', maxLength: 300, description: 'Optional book title or author as stated by the user.' },
           tags: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 100 } },
         },
       },
@@ -98,7 +102,8 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
           sourceKind: { type: 'string', enum: [...CARD_SOURCE_KINDS] },
           sourceRef: { type: 'string', maxLength: 500 },
           sourceLabel: { type: 'string', maxLength: 500 },
-          workId: { type: 'string', maxLength: 180 },
+          workId: { type: 'string', maxLength: 180, description: 'Optional existing BagLib workId from context. Never invent an ID.' },
+          bookTitle: { type: 'string', maxLength: 300, description: 'Optional book title or author as stated by the user.' },
           language: { type: 'string', enum: ['ar', 'en'] },
         },
       },
@@ -126,13 +131,19 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'open_source',
-      description: 'Open a BagLib source (book page, Quran ayah, hadith, or study note).',
+      description: 'Open a BagLib source (book or book page, Quran ayah, hadith, or study note). Pass the user\'s natural reference or title — never invent an ID.',
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['target'],
         properties: {
-          target: { type: 'string', minLength: 1, maxLength: 600 },
+          target: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 600,
+            description: 'Natural reference or canonical target, e.g. "2:11", "ayah 2:11", "البقرة 11", "Bukhari 1", "البخاري ١", "page 40 of The Master and His Emissary", or a book/note title.',
+          },
+          bookTitle: { type: 'string', minLength: 1, maxLength: 300, description: 'Optional book title or author as stated by the user.' },
+          page: { type: 'integer', minimum: 1, maximum: 100000, description: 'Optional page number when opening a book.' },
           label: { type: 'string', maxLength: 300 },
         },
       },
@@ -142,13 +153,14 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'split_pdf',
-      description: 'Split a library PDF into new PDF files next to the source. Never overwrites the original.',
+      description: 'Split a library PDF into new PDF files next to the source. Never overwrites the original. Pass bookTitle as stated by the user rather than inventing a workId.',
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['workId'],
         properties: {
-          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          bookTitle: { type: 'string', minLength: 1, maxLength: 300, description: 'Book title (Arabic or English) as stated by the user.' },
+          author: { type: 'string', minLength: 1, maxLength: 200, description: 'Optional author name to narrow the book search.' },
+          workId: { type: 'string', minLength: 1, maxLength: 180, description: 'Optional existing BagLib workId from context. Never invent an ID.' },
           sourceId: { type: 'string', maxLength: 180 },
           ranges: { type: 'string', minLength: 1, maxLength: 500 },
           pagesPerFile: { type: 'integer', minimum: 1, maximum: 5000 },
@@ -160,7 +172,7 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'merge_pdfs',
-      description: 'Merge two or more library PDFs into a new PDF file next to the first source.',
+      description: 'Merge two or more library PDFs into a new PDF file next to the first source. Pass bookTitle as stated by the user rather than inventing a workId.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -173,9 +185,10 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
             items: {
               type: 'object',
               additionalProperties: false,
-              required: ['workId'],
               properties: {
-                workId: { type: 'string', minLength: 1, maxLength: 180 },
+                bookTitle: { type: 'string', minLength: 1, maxLength: 300, description: 'Book title as stated by the user.' },
+                author: { type: 'string', minLength: 1, maxLength: 200 },
+                workId: { type: 'string', minLength: 1, maxLength: 180, description: 'Optional existing BagLib workId from context. Never invent an ID.' },
                 sourceId: { type: 'string', maxLength: 180 },
               },
             },
@@ -188,13 +201,15 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'extract_pdf_pages',
-      description: 'Extract specific pages (e.g. "1,3-5") from a library PDF into a new PDF file next to the source.',
+      description: 'Extract specific pages (e.g. "1,3-5" or "8-12") from a library PDF into a new PDF file next to the source. Pass bookTitle as stated by the user rather than inventing a workId.',
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['workId', 'pages'],
+        required: ['pages'],
         properties: {
-          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          bookTitle: { type: 'string', minLength: 1, maxLength: 300, description: 'Book title (Arabic or English) as stated by the user.' },
+          author: { type: 'string', minLength: 1, maxLength: 200, description: 'Optional author name to narrow the book search.' },
+          workId: { type: 'string', minLength: 1, maxLength: 180, description: 'Optional existing BagLib workId from context. Never invent an ID.' },
           sourceId: { type: 'string', maxLength: 180 },
           pages: { type: 'string', minLength: 1, maxLength: 500 },
         },
@@ -205,13 +220,15 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'rotate_pdf_pages',
-      description: 'Rotate pages of a library PDF by 90, 180, or 270 degrees into a new PDF file next to the source.',
+      description: 'Rotate pages of a library PDF by 90, 180, or 270 degrees into a new PDF file next to the source. Pass bookTitle as stated by the user rather than inventing a workId.',
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['workId', 'angle'],
+        required: ['angle'],
         properties: {
-          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          bookTitle: { type: 'string', minLength: 1, maxLength: 300, description: 'Book title (Arabic or English) as stated by the user.' },
+          author: { type: 'string', minLength: 1, maxLength: 200, description: 'Optional author name to narrow the book search.' },
+          workId: { type: 'string', minLength: 1, maxLength: 180, description: 'Optional existing BagLib workId from context. Never invent an ID.' },
           sourceId: { type: 'string', maxLength: 180 },
           angle: { type: 'integer', enum: [90, 180, 270] },
           pages: { type: 'string', minLength: 1, maxLength: 500 },
@@ -223,13 +240,15 @@ export const AI_ACTION_TOOLS: readonly OpenAiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'ocr_pdf_page',
-      description: 'Run OCR on one named page of a library PDF and write a new text file next to the source. Do not force OCR on pages that already have a text layer unless explicitly asked.',
+      description: 'Run OCR on one named page of a library PDF and write a new text file next to the source. Pass bookTitle as stated by the user rather than inventing a workId. Do not force OCR on pages that already have a text layer unless explicitly asked.',
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['workId', 'page'],
+        required: ['page'],
         properties: {
-          workId: { type: 'string', minLength: 1, maxLength: 180 },
+          bookTitle: { type: 'string', minLength: 1, maxLength: 300, description: 'Book title (Arabic or English) as stated by the user.' },
+          author: { type: 'string', minLength: 1, maxLength: 200, description: 'Optional author name to narrow the book search.' },
+          workId: { type: 'string', minLength: 1, maxLength: 180, description: 'Optional existing BagLib workId from context. Never invent an ID.' },
           sourceId: { type: 'string', maxLength: 180 },
           page: { type: 'integer', minimum: 1, maximum: 10000 },
           language: { type: 'string', enum: ['ara', 'eng', 'ara+eng', 'auto'] },
@@ -244,6 +263,7 @@ export interface CreateNoteArgs {
   title: string;
   content: string;
   workId?: string;
+  bookTitle?: string;
   tags?: string[];
 }
 
@@ -258,6 +278,7 @@ export interface CreateCardsArgs {
   sourceRef?: string;
   sourceLabel?: string;
   workId?: string;
+  bookTitle?: string;
   language?: 'ar' | 'en';
 }
 
@@ -270,36 +291,37 @@ export interface AddToPersonalListArgs {
 
 export interface OpenSourceArgs {
   target: string;
+  bookTitle?: string;
+  page?: number;
   label?: string;
 }
 
-export interface SplitPdfArgs {
-  workId: string;
+export interface BookLookupRef {
+  workId?: string;
+  bookTitle?: string;
+  author?: string;
   sourceId?: string;
+}
+
+export interface SplitPdfArgs extends BookLookupRef {
   ranges?: string;
   pagesPerFile?: number;
 }
 
 export interface MergePdfsArgs {
-  sources: Array<{ workId: string; sourceId?: string }>;
+  sources: BookLookupRef[];
 }
 
-export interface ExtractPdfPagesArgs {
-  workId: string;
-  sourceId?: string;
+export interface ExtractPdfPagesArgs extends BookLookupRef {
   pages: string;
 }
 
-export interface RotatePdfPagesArgs {
-  workId: string;
-  sourceId?: string;
+export interface RotatePdfPagesArgs extends BookLookupRef {
   angle: 90 | 180 | 270;
   pages?: string;
 }
 
-export interface OcrPdfPageArgs {
-  workId: string;
-  sourceId?: string;
+export interface OcrPdfPageArgs extends BookLookupRef {
   page: number;
   language?: 'ara' | 'eng' | 'ara+eng' | 'auto';
   force?: boolean;
@@ -331,6 +353,14 @@ export type AiActionErrorCode =
   | 'provider-error'
   | 'execution-failed';
 
+export interface AiActionBookCandidate {
+  workId: string;
+  sourceId?: string;
+  title: string;
+  author?: string;
+  subtitle?: string;
+}
+
 export interface AiActionPreviewStep {
   stepId: string;
   tool: AiActionToolName;
@@ -355,6 +385,12 @@ export interface AiActionPreviewStep {
     angle?: number;
     page?: number;
     ocrLanguage?: string;
+    candidates?: AiActionBookCandidate[];
+    mergeCandidateGroups?: Array<{
+      index: number;
+      query: string;
+      candidates: AiActionBookCandidate[];
+    }>;
   };
 }
 
@@ -396,6 +432,7 @@ export type AiActionPlanResponse =
 export interface AiActionConfirmRequest {
   planId: string;
   language: 'ar' | 'en';
+  selections?: Record<string, { workId: string; sourceId?: string }>;
 }
 
 export type AiActionConfirmResponse =
@@ -429,8 +466,177 @@ export interface AiActionsAPI {
 
 const SAFE_ID = /^[\w-]{1,180}$/u;
 const OPEN_SOURCE_PREFIXES = ['book:', 'quran:', 'sunnah:', 'note:'] as const;
+const BLOCKED_TARGET_RE = /^(?:https?:|file:|javascript:|data:|mailto:)/iu;
 const PAGE_RANGE_SYNTAX = /^\s*\d+(?:\s*-\s*\d+)?(?:\s*,\s*\d+(?:\s*-\s*\d+)?)*\s*$/u;
 const OCR_LANGUAGES = ['ara', 'eng', 'ara+eng', 'auto'] as const;
+
+const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+
+export function toAsciiDigits(value: string): string {
+  let out = '';
+  for (const ch of value) {
+    const ar = ARABIC_INDIC_DIGITS.indexOf(ch);
+    if (ar >= 0) {
+      out += String(ar);
+      continue;
+    }
+    const fa = PERSIAN_DIGITS.indexOf(ch);
+    if (fa >= 0) {
+      out += String(fa);
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+export function normalizeNaturalQuranTarget(raw: string): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('quran:') && validStudyTarget(trimmed)) return trimmed;
+
+  let text = toAsciiDigits(trimmed).replace(/^quran:\s*/iu, '').trim();
+  text = text.replace(/^(?:(?:the\s+)?quran|ayah|aya|verse|surah|sura)\s+/iu, '').trim();
+  text = text.replace(/^(?:ayah|aya|verse)\s+/iu, '').trim();
+
+  const reversedEn = /^(?:ayah|aya|verse)\s+(\d{1,3}(?:\s*[-–—]\s*\d{1,3})?)\s+(?:of|from|in)\s+(.+)$/iu.exec(text);
+  if (reversedEn) {
+    text = `${reversedEn[2].trim()} ${reversedEn[1].trim()}`;
+  }
+  const reversedAr = /^(?:آية|اية|الآية|الاية)\s+(\d{1,3}(?:\s*[-–—]\s*\d{1,3})?)\s+(?:من|في)\s+(.+)$/u.exec(text);
+  if (reversedAr) {
+    text = `${reversedAr[2].trim()} ${reversedAr[1].trim()}`;
+  }
+
+  text = text
+    .replace(/\s+(?:آية|اية|الآية|الاية|رقم|ayah|aya|verse)\s+/giu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const ref = parseQuranReference(text, 'hafs');
+  if (!ref) return null;
+  return ref.from === ref.to
+    ? `quran:hafs:${ref.surah}:${ref.from}`
+    : `quran:hafs:${ref.surah}:${ref.from}-${ref.to}`;
+}
+
+const SUNNAH_COLLECTION_ALIASES: ReadonlyArray<readonly [string, SunnahCollectionId]> = [
+  ['sahih al bukhari', 'Bukhari'],
+  ['sahih bukhari', 'Bukhari'],
+  ['al bukhari', 'Bukhari'],
+  ['bukhari', 'Bukhari'],
+  ['صحيح البخاري', 'Bukhari'],
+  ['البخاري', 'Bukhari'],
+  ['بخاري', 'Bukhari'],
+  ['sahih muslim', 'Muslim'],
+  ['muslim', 'Muslim'],
+  ['صحيح مسلم', 'Muslim'],
+  ['مسلم', 'Muslim'],
+  ['sunan abi dawud', 'AbuDaud'],
+  ['sunan abu dawud', 'AbuDaud'],
+  ['abu dawud', 'AbuDaud'],
+  ['abu daud', 'AbuDaud'],
+  ['سنن ابي داود', 'AbuDaud'],
+  ['ابي داود', 'AbuDaud'],
+  ['ابو داود', 'AbuDaud'],
+  ['jami at tirmidhi', 'Tirmizi'],
+  ['sunan al tirmidhi', 'Tirmizi'],
+  ['al tirmidhi', 'Tirmizi'],
+  ['tirmidhi', 'Tirmizi'],
+  ['tirmizi', 'Tirmizi'],
+  ['جامع الترمذي', 'Tirmizi'],
+  ['سنن الترمذي', 'Tirmizi'],
+  ['الترمذي', 'Tirmizi'],
+  ['ترمذي', 'Tirmizi'],
+  ['sunan an nasai', 'Nesai'],
+  ['an nasai', 'Nesai'],
+  ['nasai', 'Nesai'],
+  ['nesai', 'Nesai'],
+  ['سنن النسائي', 'Nesai'],
+  ['النسائي', 'Nesai'],
+  ['نسائي', 'Nesai'],
+  ['sunan ibn majah', 'IbnMaja'],
+  ['ibn majah', 'IbnMaja'],
+  ['ibn maja', 'IbnMaja'],
+  ['سنن ابن ماجه', 'IbnMaja'],
+  ['ابن ماجه', 'IbnMaja'],
+  ['muwatta malik', 'MuwattaMalik'],
+  ['muwatta', 'MuwattaMalik'],
+  ['موطا مالك', 'MuwattaMalik'],
+  ['الموطا', 'MuwattaMalik'],
+  ['musnad ahmad', 'MusnadAhmad'],
+  ['مسند احمد', 'MusnadAhmad'],
+  ['sunan al darimi', 'SunanDarimi'],
+  ['sunan darimi', 'SunanDarimi'],
+  ['دارمي', 'SunanDarimi'],
+  ['الدارمي', 'SunanDarimi'],
+  ['سنن الدارمي', 'SunanDarimi'],
+  ['nawawi 40', 'Nawawi40'],
+  ['40 nawawi', 'Nawawi40'],
+  ['الاربعون النوويه', 'Nawawi40'],
+  ['الاربعين النوويه', 'Nawawi40'],
+];
+
+export function parseNaturalHadithRef(raw: string): { collection: SunnahCollectionId; hadithNumber: string } | null {
+  if (typeof raw !== 'string') return null;
+  const ascii = toAsciiDigits(raw.trim());
+  if (!ascii) return null;
+  const norm = normalizeArabicText(ascii, { normalizeTaaMarbuta: true, lowercase: true })
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\b(?:hadith|hadeeth|no|num|number)\b/gu, ' ')
+    .replace(/(?:^|\s)(?:حديث|رقم)(?=\s|$)/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!norm) return null;
+
+  for (const [alias, collection] of SUNNAH_COLLECTION_ALIASES) {
+    const normAlias = normalizeArabicText(alias, { normalizeTaaMarbuta: true, lowercase: true });
+    if (norm.startsWith(normAlias + ' ')) {
+      const rest = norm.slice(normAlias.length).trim();
+      if (/^\d{1,6}$/u.test(rest)) {
+        return { collection, hadithNumber: rest };
+      }
+    }
+    if (norm.endsWith(' ' + normAlias)) {
+      const rest = norm.slice(0, norm.length - normAlias.length).trim();
+      if (/^\d{1,6}$/u.test(rest)) {
+        return { collection, hadithNumber: rest };
+      }
+    }
+  }
+  return null;
+}
+
+export function parseBookPageRef(raw: string): { query: string; page?: number } | null {
+  if (typeof raw !== 'string') return null;
+  const ascii = toAsciiDigits(raw.trim());
+  if (!ascii) return null;
+
+  const enPrefix = /^(?:pages?|p\.?)\s*(\d{1,6})\s+(?:of|in|from)\s+(.+)$/iu.exec(ascii);
+  if (enPrefix) {
+    const page = Number.parseInt(enPrefix[1], 10);
+    const query = enPrefix[2].trim();
+    if (page >= 1 && page <= 100_000 && query) return { query, page };
+  }
+
+  const arPrefix = /^(?:صفحة|صفحه|ص\.?)\s*(\d{1,6})\s+(?:من|في)\s+(.+)$/u.exec(ascii);
+  if (arPrefix) {
+    const page = Number.parseInt(arPrefix[1], 10);
+    const query = arPrefix[2].trim();
+    if (page >= 1 && page <= 100_000 && query) return { query, page };
+  }
+
+  const suffix = /^(.+?)[,\s]+(?:page|p\.?|صفحة|صفحه|ص\.?)\s*(\d{1,6})$/iu.exec(ascii);
+  if (suffix) {
+    const page = Number.parseInt(suffix[2], 10);
+    const query = suffix[1].trim();
+    if (page >= 1 && page <= 100_000 && query) return { query, page };
+  }
+
+  return null;
+}
 
 export function parsePageRanges(
   spec: string,
@@ -472,6 +678,37 @@ function parseOptionalId(raw: unknown): string | undefined | null {
   return typeof raw === 'string' && SAFE_ID.test(raw.trim()) ? raw.trim() : null;
 }
 
+function parseOptionalText(raw: unknown, maxLen: number): string | undefined | null {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > maxLen) return null;
+  return trimmed;
+}
+
+function parseBookLookupRef(rec: Record<string, unknown>): { ok: true; ref: BookLookupRef } | { ok: false; reason: string } {
+  const workId = parseOptionalId(rec.workId);
+  if (workId === null) return { ok: false, reason: 'invalid-work-id' };
+  const sourceId = parseOptionalId(rec.sourceId);
+  if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+  const bookTitle = parseOptionalText(rec.bookTitle, 300);
+  if (bookTitle === null) return { ok: false, reason: 'invalid-book-title' };
+  const author = parseOptionalText(rec.author, 200);
+  if (author === null) return { ok: false, reason: 'invalid-author' };
+  if (!workId && !bookTitle && !author) {
+    return { ok: false, reason: 'missing-book-reference' };
+  }
+  return {
+    ok: true,
+    ref: {
+      ...(workId ? { workId } : {}),
+      ...(bookTitle ? { bookTitle } : {}),
+      ...(author ? { author } : {}),
+      ...(sourceId ? { sourceId } : {}),
+    },
+  };
+}
+
 export function isAiActionToolName(name: unknown): name is AiActionToolName {
   return typeof name === 'string' && (AI_ACTION_TOOL_NAMES as readonly string[]).includes(name);
 }
@@ -494,10 +731,10 @@ export function validateToolCallArguments(
       const content = typeof args.content === 'string' ? args.content.trim() : '';
       if (!title || title.length > 300) return { ok: false, reason: 'invalid-note-title' };
       if (!content || content.length > 50_000) return { ok: false, reason: 'invalid-note-content' };
-      const workId = args.workId === undefined || args.workId === null || args.workId === ''
-        ? undefined
-        : (typeof args.workId === 'string' && SAFE_ID.test(args.workId) ? args.workId : null);
+      const workId = parseOptionalId(args.workId);
       if (workId === null) return { ok: false, reason: 'invalid-work-id' };
+      const bookTitle = parseOptionalText(args.bookTitle, 300);
+      if (bookTitle === null) return { ok: false, reason: 'invalid-book-title' };
       let tags: string[] | undefined;
       if (args.tags !== undefined) {
         if (!Array.isArray(args.tags) || args.tags.length > 20 || args.tags.some(t => typeof t !== 'string' || !t.trim() || t.length > 100)) {
@@ -505,7 +742,19 @@ export function validateToolCallArguments(
         }
         tags = [...new Set(args.tags.map(t => t.trim()))];
       }
-      return { ok: true, call: { tool: 'create_note', args: { title, content, ...(workId ? { workId } : {}), ...(tags ? { tags } : {}) } } };
+      return {
+        ok: true,
+        call: {
+          tool: 'create_note',
+          args: {
+            title,
+            content,
+            ...(workId ? { workId } : {}),
+            ...(bookTitle ? { bookTitle } : {}),
+            ...(tags ? { tags } : {}),
+          },
+        },
+      };
     }
 
     case 'append_to_note': {
@@ -536,10 +785,10 @@ export function validateToolCallArguments(
       }
       const sourceRef = typeof args.sourceRef === 'string' && args.sourceRef.trim() ? args.sourceRef.trim().slice(0, 500) : undefined;
       const sourceLabel = typeof args.sourceLabel === 'string' && args.sourceLabel.trim() ? args.sourceLabel.trim().slice(0, 500) : undefined;
-      const workId = args.workId === undefined || args.workId === null || args.workId === ''
-        ? undefined
-        : (typeof args.workId === 'string' && SAFE_ID.test(args.workId) ? args.workId : null);
+      const workId = parseOptionalId(args.workId);
       if (workId === null) return { ok: false, reason: 'invalid-work-id' };
+      const bookTitle = parseOptionalText(args.bookTitle, 300);
+      if (bookTitle === null) return { ok: false, reason: 'invalid-book-title' };
       const language = args.language === 'ar' || args.language === 'en' ? args.language : undefined;
       return {
         ok: true,
@@ -551,6 +800,7 @@ export function validateToolCallArguments(
             ...(sourceRef ? { sourceRef } : {}),
             ...(sourceLabel ? { sourceLabel } : {}),
             ...(workId ? { workId } : {}),
+            ...(bookTitle ? { bookTitle } : {}),
             ...(language ? { language } : {}),
           },
         },
@@ -574,24 +824,54 @@ export function validateToolCallArguments(
     }
 
     case 'open_source': {
-      const target = typeof args.target === 'string' ? args.target.trim() : '';
-      if (!target || target.length > 600 || !validStudyTarget(target)) {
+      const rawTarget = typeof args.target === 'string' ? args.target.trim() : '';
+      const bookTitle = parseOptionalText(args.bookTitle, 300);
+      if (bookTitle === null) return { ok: false, reason: 'invalid-book-title' };
+      let page: number | undefined;
+      if (args.page !== undefined) {
+        if (typeof args.page !== 'number' || !Number.isInteger(args.page) || args.page < 1 || args.page > 100_000) {
+          return { ok: false, reason: 'invalid-page-number' };
+        }
+        page = args.page;
+      }
+      if (!rawTarget && !bookTitle) {
         return { ok: false, reason: 'invalid-source-target' };
       }
-      if (!OPEN_SOURCE_PREFIXES.some(prefix => target.startsWith(prefix))) {
+      if (rawTarget.length > 600) {
+        return { ok: false, reason: 'invalid-source-target' };
+      }
+      if (rawTarget && (BLOCKED_TARGET_RE.test(rawTarget) || rawTarget.includes('..') || rawTarget.includes('\\'))) {
         return { ok: false, reason: 'unsupported-source-target' };
       }
+      let target = rawTarget;
+      if (target && validStudyTarget(target)) {
+        if (!OPEN_SOURCE_PREFIXES.some(prefix => target.startsWith(prefix))) {
+          return { ok: false, reason: 'unsupported-source-target' };
+        }
+      } else if (target) {
+        const normalizedQuran = normalizeNaturalQuranTarget(target);
+        if (normalizedQuran) target = normalizedQuran;
+      }
       const label = typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 300) : undefined;
-      return { ok: true, call: { tool: 'open_source', args: { target, ...(label ? { label } : {}) } } };
+      return {
+        ok: true,
+        call: {
+          tool: 'open_source',
+          args: {
+            target,
+            ...(bookTitle ? { bookTitle } : {}),
+            ...(page !== undefined ? { page } : {}),
+            ...(label ? { label } : {}),
+          },
+        },
+      };
     }
 
     case 'split_pdf': {
-      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
-      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
-      const sourceId = parseOptionalId(args.sourceId);
-      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
-      const ranges = typeof args.ranges === 'string' && args.ranges.trim() ? args.ranges.trim() : undefined;
-      if (ranges !== undefined && (ranges.length > 500 || !PAGE_RANGE_SYNTAX.test(ranges))) {
+      const lookup = parseBookLookupRef(args);
+      if ('reason' in lookup) return { ok: false, reason: lookup.reason };
+      const rawRanges = typeof args.ranges === 'string' && args.ranges.trim() ? toAsciiDigits(args.ranges.trim()) : undefined;
+      if (rawRanges !== undefined && (rawRanges.length > 500 || !PAGE_RANGE_SYNTAX.test(rawRanges))) {
         return { ok: false, reason: 'invalid-page-range-syntax' };
       }
       let pagesPerFile: number | undefined;
@@ -606,9 +886,8 @@ export function validateToolCallArguments(
         call: {
           tool: 'split_pdf',
           args: {
-            workId,
-            ...(sourceId ? { sourceId } : {}),
-            ...(ranges ? { ranges } : {}),
+            ...lookup.ref,
+            ...(rawRanges ? { ranges: rawRanges } : {}),
             ...(pagesPerFile !== undefined ? { pagesPerFile } : {}),
           },
         },
@@ -619,25 +898,20 @@ export function validateToolCallArguments(
       if (!Array.isArray(args.sources) || args.sources.length < 2 || args.sources.length > 10) {
         return { ok: false, reason: 'invalid-merge-sources' };
       }
-      const sources: Array<{ workId: string; sourceId?: string }> = [];
+      const sources: BookLookupRef[] = [];
       for (const item of args.sources) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) return { ok: false, reason: 'invalid-merge-sources' };
-        const rec = item as Record<string, unknown>;
-        const workId = typeof rec.workId === 'string' ? rec.workId.trim() : '';
-        if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
-        const sourceId = parseOptionalId(rec.sourceId);
-        if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
-        sources.push({ workId, ...(sourceId ? { sourceId } : {}) });
+        const lookup = parseBookLookupRef(item as Record<string, unknown>);
+        if ('reason' in lookup) return { ok: false, reason: lookup.reason };
+        sources.push(lookup.ref);
       }
       return { ok: true, call: { tool: 'merge_pdfs', args: { sources } } };
     }
 
     case 'extract_pdf_pages': {
-      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
-      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
-      const sourceId = parseOptionalId(args.sourceId);
-      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
-      const pages = typeof args.pages === 'string' ? args.pages.trim() : '';
+      const lookup = parseBookLookupRef(args);
+      if ('reason' in lookup) return { ok: false, reason: lookup.reason };
+      const pages = typeof args.pages === 'string' ? toAsciiDigits(args.pages.trim()) : '';
       if (!pages || pages.length > 500 || !PAGE_RANGE_SYNTAX.test(pages)) {
         return { ok: false, reason: 'invalid-page-range-syntax' };
       }
@@ -645,20 +919,18 @@ export function validateToolCallArguments(
         ok: true,
         call: {
           tool: 'extract_pdf_pages',
-          args: { workId, ...(sourceId ? { sourceId } : {}), pages },
+          args: { ...lookup.ref, pages },
         },
       };
     }
 
     case 'rotate_pdf_pages': {
-      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
-      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
-      const sourceId = parseOptionalId(args.sourceId);
-      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+      const lookup = parseBookLookupRef(args);
+      if ('reason' in lookup) return { ok: false, reason: lookup.reason };
       if (args.angle !== 90 && args.angle !== 180 && args.angle !== 270) {
         return { ok: false, reason: 'invalid-rotation-angle' };
       }
-      const pages = typeof args.pages === 'string' && args.pages.trim() ? args.pages.trim() : undefined;
+      const pages = typeof args.pages === 'string' && args.pages.trim() ? toAsciiDigits(args.pages.trim()) : undefined;
       if (pages !== undefined && (pages.length > 500 || !PAGE_RANGE_SYNTAX.test(pages))) {
         return { ok: false, reason: 'invalid-page-range-syntax' };
       }
@@ -666,16 +938,14 @@ export function validateToolCallArguments(
         ok: true,
         call: {
           tool: 'rotate_pdf_pages',
-          args: { workId, ...(sourceId ? { sourceId } : {}), angle: args.angle, ...(pages ? { pages } : {}) },
+          args: { ...lookup.ref, angle: args.angle, ...(pages ? { pages } : {}) },
         },
       };
     }
 
     case 'ocr_pdf_page': {
-      const workId = typeof args.workId === 'string' ? args.workId.trim() : '';
-      if (!SAFE_ID.test(workId)) return { ok: false, reason: 'invalid-work-id' };
-      const sourceId = parseOptionalId(args.sourceId);
-      if (sourceId === null) return { ok: false, reason: 'invalid-source-id' };
+      const lookup = parseBookLookupRef(args);
+      if ('reason' in lookup) return { ok: false, reason: lookup.reason };
       if (typeof args.page !== 'number' || !Number.isInteger(args.page) || args.page < 1 || args.page > 10_000) {
         return { ok: false, reason: 'invalid-page-number' };
       }
@@ -692,8 +962,7 @@ export function validateToolCallArguments(
         call: {
           tool: 'ocr_pdf_page',
           args: {
-            workId,
-            ...(sourceId ? { sourceId } : {}),
+            ...lookup.ref,
             page: args.page,
             ...(language ? { language } : {}),
             ...(force ? { force } : {}),

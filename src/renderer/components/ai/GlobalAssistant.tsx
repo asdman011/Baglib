@@ -25,7 +25,7 @@ import { openStudyNote } from '../../utils/study-navigation';
 import { useOpenStudyLink } from '../../utils/use-study-link';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { TranslationKey } from '../../translations';
-import { AiActionsPreviewCard, dispatchAiActionEvents, type ActionPlanMessage, type ActionUndoneMessage } from './AiActionsPreview';
+import { aiActionErrorText, AiActionsPreviewCard, dispatchAiActionEvents, type ActionPlanMessage, type ActionSelections, type ActionUndoneMessage } from './AiActionsPreview';
 
 const AISettingsModal = React.lazy(() => import('./AISettingsModal').then(module => ({ default: module.AISettingsModal })));
 const StudyAssistant = React.lazy(() => import('../notes/StudyAssistant').then(module => ({ default: module.StudyAssistant })));
@@ -128,7 +128,7 @@ export function GlobalAssistant() {
         if (res.ok && res.kind === 'plan') push({ id: id(), role: 'action-plan', plan: res.plan, status: 'pending' });
         else if (res.ok && res.kind === 'unsupported') push({ id: id(), role: 'error', text: t('aiActionUnsupported') });
         else if (res.ok && res.kind === 'message') push({ id: id(), role: 'assistant', text: res.text, citations: [], sourceCount: 0 });
-        else if (!res.ok) push({ id: id(), role: 'error', text: res.error === 'learning-mode-off' ? t('aiActionLearningModeOff') : errorText(res.error, res.detail) });
+        else if (!res.ok) push({ id: id(), role: 'error', text: aiActionErrorText(res.error, res.detail, t) });
         return;
       }
       if (action === 'cards') {
@@ -182,12 +182,16 @@ export function GlobalAssistant() {
     setMessages(current => current.map(item => (item.id === message.id && item.role === 'cards' ? { ...item, state: { ...item.state, [index]: 'added' } } : item)));
   };
   const explainable = sources.filter(ref => passageKind(ref.target));
-  const confirmActionPlan = async (message: ActionPlanMessage) => {
+  const confirmActionPlan = async (message: ActionPlanMessage, selections?: ActionSelections) => {
     const prevView = viewMode;
     setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'running', error: undefined } : item)));
-    const res = await window.electronAPI.aiActions.confirm({ planId: message.plan.planId, language: lang === 'ar' ? 'ar' : 'en' });
+    const res = await window.electronAPI.aiActions.confirm({
+      planId: message.plan.planId,
+      language: lang === 'ar' ? 'ar' : 'en',
+      ...(selections ? { selections } : {}),
+    });
     if (!res.ok) {
-      setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'pending', error: t('aiActionError', { detail: res.detail || res.error }) } : item)));
+      setMessages(current => current.map(item => (item.id === message.id && item.role === 'action-plan' ? { ...item, status: 'pending', error: aiActionErrorText(res.error, res.detail, t) } : item)));
       return;
     }
     dispatchAiActionEvents(message.plan.steps.map(step => step.tool));

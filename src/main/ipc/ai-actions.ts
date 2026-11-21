@@ -6,6 +6,7 @@ import { getDatabase } from '../database/connection';
 import { SqliteSettingsRepository } from '../database/repositories/settings.repository';
 import { AIResearchService } from '../services/ai/ai-research.service';
 import { AiActionsService } from '../services/ai/actions/tool-executor';
+import { resolveHadithByNumber } from './sunnah';
 import type { AiActionConfirmRequest, AiActionPlanRequest, AiActionUndoRequest } from '../../shared/ai-actions';
 
 const authorize = (event: IpcMainInvokeEvent) => {
@@ -36,6 +37,7 @@ function getService(): AiActionsService {
       db,
       settingsRepo: new SqliteSettingsRepository(db),
       getAiSettings: () => AIResearchService.getInstance().getSettings(),
+      resolveSunnahHadith: resolveHadithByNumber,
     });
   }
   return cachedService;
@@ -52,7 +54,8 @@ export function registerAiActionsIpc(): void {
     const planId = typeof request?.planId === 'string' ? request.planId : '';
     const language = request?.language === 'ar' ? 'ar' : 'en';
     if (!planId) return { ok: false as const, error: 'plan-not-found' as const };
-    return getService().confirmPlan(planId, language);
+    const selections = request?.selections && typeof request.selections === 'object' ? request.selections : undefined;
+    return getService().confirmPlan(planId, language, selections);
   });
 
   ipcMain.handle('ai-actions:undo', (event, request: AiActionUndoRequest) => {

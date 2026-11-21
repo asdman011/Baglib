@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { access, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { unzip } from 'fflate';
-import { SUNNAH_COLLECTION_IDS, type SunnahCatalog, type SunnahChapter, type SunnahCollectionId } from '../../../shared/types/sunnah';
+import { SUNNAH_COLLECTION_IDS, type SunnahCatalog, type SunnahChapter, type SunnahCollectionId, type SunnahHadith } from '../../../shared/types/sunnah';
 import { parseLkChapter } from './lk-corpus';
 import { discoverResearchCorpus, SunnahResearchCorpus } from './research-corpus';
 import type { SunnahResearchQuery } from '../../../shared/types/sunnah';
@@ -181,6 +181,20 @@ export class SunnahService {
       await rm(staging, { recursive: true, force: true });
       await rm(temporaryCatalog, { force: true });
     }
+  }
+
+  async findHadithByNumber(collection: SunnahCollectionId, hadithNumber: string): Promise<{ chapter: number; hadith: SunnahHadith } | null> {
+    const catalog = await this.catalog();
+    if (this.researchCorpus) return this.researchCorpus.findHadithByNumber(collection, hadithNumber);
+    const col = catalog?.collections.find(c => c.id === collection);
+    if (!col) return null;
+    const clean = hadithNumber.trim();
+    for (const ch of col.chapters) {
+      const loaded = await this.chapter(collection, ch.number);
+      const found = loaded.hadiths.find(h => String(h.number).trim() === clean);
+      if (found) return { chapter: ch.number, hadith: found };
+    }
+    return null;
   }
 
   async chapter(collection: SunnahCollectionId, number: number): Promise<SunnahChapter> {

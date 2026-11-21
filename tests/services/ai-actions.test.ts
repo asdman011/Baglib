@@ -8,9 +8,13 @@ import Database from 'better-sqlite3';
 import {
   AI_ACTION_TOOLS,
   AI_ACTION_TOOL_NAMES,
+  normalizeNaturalQuranTarget,
+  parseBookPageRef,
+  parseNaturalHadithRef,
   parsePageRanges,
   validateToolCallArguments,
 } from '../../src/shared/ai-actions';
+import { aiActionErrorText } from '../../src/renderer/components/ai/AiActionsPreview';
 import { callModelWithTools } from '../../src/main/services/ai/actions/tool-calling';
 import { AiActionsService } from '../../src/main/services/ai/actions/tool-executor';
 import { migrations } from '../../src/main/database/migrations';
@@ -438,6 +442,215 @@ test('Phase 2 PDF actions resolve library paths, validate page ranges, respect t
     }
     assert.equal(fs.existsSync(pdf1), true);
     assert.equal(fs.existsSync(pdf2), true);
+  } finally {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('KEY-445: open_source normalizes natural Quran, Hadith, and book-page references in ar and en', async () => {
+  const db = createTestDb();
+  const settingsRepo = new SqliteSettingsRepository(db);
+  settingsRepo.set('ai.learningMode', 'full');
+
+  try {
+    db.prepare(`INSERT INTO work (id, title) VALUES ('w-master', 'The Master and His Emissary'), ('w-muqaddimah', 'مُقَدِّمَةُ ابْنِ خَلْدُونَ')`).run();
+
+    const makeService = (targetArg: string) =>
+      new AiActionsService({
+        db,
+        settingsRepo,
+        getAiSettings: () => LOCAL_OLLAMA_SETTINGS,
+        completeWithTools: async () => ({
+          ok: true,
+          kind: 'tool_calls',
+          calls: [{ name: 'open_source', arguments: { target: targetArg } }],
+        }),
+        resolveSunnahHadith: async (collection, hadithNumber) =>
+          collection === 'Bukhari' && hadithNumber === '1'
+            ? { target: 'sunnah:Bukhari:1:Bukhari:1:1', label: 'Bukhari 1' }
+            : null,
+      });
+
+    // Quran natural forms
+    for (const quranPhrase of ['2:11', 'ayah 2:11', 'Quran 2:11', 'البقرة 11', 'سورة البقرة آية 11']) {
+      assert.equal(normalizeNaturalQuranTarget(quranPhrase), 'quran:hafs:2:11');
+      const svc = makeService(quranPhrase);
+      const plan = await svc.planFromInstruction({ instruction: `open ${quranPhrase}`, language: 'en' });
+      assert.equal(plan.ok, true);
+      if (!plan.ok || plan.kind !== 'plan') assert.fail(`Expected plan for ${quranPhrase}`);
+      assert.equal(plan.plan.steps[0].details.target, 'quran:hafs:2:11');
+      const confirmed = await svc.confirmPlan(plan.plan.planId, 'en');
+      assert.equal(confirmed.ok, true);
+    }
+
+    // Hadith natural forms (English + Arabic-Indic digits)
+    assert.deepEqual(parseNaturalHadithRef('Bukhari 1'), { collection: 'Bukhari', hadithNumber: '1' });
+    assert.deepEqual(parseNaturalHadithRef('البخاري ١'), { collection: 'Bukhari', hadithNumber: '1' });
+    for (const hadithPhrase of ['Bukhari 1', 'البخاري ١']) {
+      const svc = makeService(hadithPhrase);
+      const plan = await svc.planFromInstruction({ instruction: `open ${hadithPhrase}`, language: 'ar' });
+      assert.equal(plan.ok, true);
+      if (!plan.ok || plan.kind !== 'plan') assert.fail(`Expected plan for ${hadithPhrase}`);
+      assert.equal(plan.plan.steps[0].details.target, 'sunnah:Bukhari:1:Bukhari:1:1');
+    }
+
+    // Book + page natural forms
+    assert.deepEqual(parseBookPageRef('page 40 of The Master and His Emissary'), {
+      query: 'The Master and His Emissary',
+      page: 40,
+    });
+    assert.deepEqual(parseBookPageRef('صفحة ٤٠ من مقدمة ابن خلدون'), {
+      query: 'مقدمة ابن خلدون',
+      page: 40,
+    });
+
+    const bookPagePlan = await makeService('page 40 of the master and his emissary').planFromInstruction({
+      instruction: 'open page 40 of the master and his emissary',
+      language: 'en',
+    });
+    assert.equal(bookPagePlan.ok, true);
+    if (!bookPagePlan.ok || bookPagePlan.kind !== 'plan') assert.fail('Expected book page plan');
+    assert.equal(bookPagePlan.plan.steps[0].details.target, 'book:w-master#p=40');
+
+    const arBookPagePlan = await makeService('صفحة ٤٠ من مقدمه ابن خلدون').planFromInstruction({
+      instruction: 'افتح صفحة ٤٠ من مقدمه ابن خلدون',
+      language: 'ar',
+    });
+    assert.equal(arBookPagePlan.ok, true);
+    if (!arBookPagePlan.ok || arBookPagePlan.kind !== 'plan') assert.fail('Expected Arabic book page plan');
+    assert.equal(arBookPagePlan.plan.steps[0].details.target, 'book:w-muqaddimah#p=40');
+  } finally {
+    db.close();
+  }
+});
+
+test('KEY-445: PDF and book tools resolve titles, reject invented IDs, list candidates on 2+ matches, and give honest localized errors', async () => {
+  const db = createTestDb();
+  const settingsRepo = new SqliteSettingsRepository(db);
+  settingsRepo.set('ai.learningMode', 'full');
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'baglib-key445-test-'));
+
+  try {
+    const masterPdf = path.join(tempDir, 'master.pdf');
+    const muq1Pdf = path.join(tempDir, 'muq1.pdf');
+    const muq2Pdf = path.join(tempDir, 'muq2.pdf');
+    writeFileSync(masterPdf, '%PDF-1.4\n%master\n');
+    writeFileSync(muq1Pdf, '%PDF-1.4\n%muq1\n');
+    writeFileSync(muq2Pdf, '%PDF-1.4\n%muq2\n');
+
+    db.prepare(
+      `INSERT INTO work (id, title) VALUES
+        ('w-master', 'The Master and His Emissary'),
+        ('w-muq-1', 'مقدمة ابن خلدون - طبعة أولى'),
+        ('w-muq-2', 'مقدمة ابن خلدون - طبعة ثانية')`
+    ).run();
+    db.prepare(
+      `INSERT INTO edition (id, work_id) VALUES ('e-master', 'w-master'), ('e-muq-1', 'w-muq-1'), ('e-muq-2', 'w-muq-2')`
+    ).run();
+    db.prepare(
+      `INSERT INTO source (id, edition_id, source_type) VALUES ('s-master', 'e-master', 'file'), ('s-muq-1', 'e-muq-1', 'file'), ('s-muq-2', 'e-muq-2', 'file')`
+    ).run();
+    db.prepare(
+      `INSERT INTO file_source_detail (source_id, file_path, file_format) VALUES ('s-master', ?, 'pdf'), ('s-muq-1', ?, 'pdf'), ('s-muq-2', ?, 'pdf')`
+    ).run(masterPdf, muq1Pdf, muq2Pdf);
+
+    let nextCalls: Array<{ name: unknown; arguments: unknown }> = [];
+    const service = new AiActionsService({
+      db,
+      settingsRepo,
+      getAiSettings: () => LOCAL_OLLAMA_SETTINGS,
+      completeWithTools: async () => ({
+        ok: true,
+        kind: 'tool_calls',
+        calls: nextCalls,
+      }),
+      inspectPdf: async () => ({ totalPages: 20, pageHasText: true }),
+      pdfRunner: {
+        async splitPdf({ outputPaths }) { return outputPaths; },
+        async mergePdfs({ outputPath }) { return [outputPath]; },
+        async extractPdfPages({ outputPath }) {
+          writeFileSync(outputPath, '%PDF-1.4\n%extracted\n');
+          return [outputPath];
+        },
+        async rotatePdfPages({ outputPath }) { return [outputPath]; },
+        async ocrPdfPage({ outputPath }) { return [outputPath]; },
+      },
+    });
+
+    // 1. Exact user request: "extract pages 8 to 12 from the master and his emissary"
+    nextCalls = [{ name: 'extract_pdf_pages', arguments: { bookTitle: 'the master and his emissary', pages: '8-12' } }];
+    const extractPlan = await service.planFromInstruction({
+      instruction: 'extract pages 8 to 12 from the master and his emissary',
+      language: 'en',
+    });
+    assert.equal(extractPlan.ok, true);
+    if (!extractPlan.ok || extractPlan.kind !== 'plan') assert.fail('Expected extract plan');
+    assert.equal(extractPlan.plan.steps[0].details.sourceLabel, 'The Master and His Emissary');
+    const extractConfirm = await service.confirmPlan(extractPlan.plan.planId, 'en');
+    assert.equal(extractConfirm.ok, true);
+    if (!extractConfirm.ok) assert.fail('Expected extract confirm');
+    const createdFile = extractConfirm.executed[0].outputPaths?.[0];
+    assert.ok(createdFile && fs.existsSync(createdFile));
+    await service.undoExecution(extractConfirm.executionId);
+    assert.equal(fs.existsSync(createdFile), false);
+
+    // 2. 0 matches -> clear not-found error
+    nextCalls = [{ name: 'extract_pdf_pages', arguments: { bookTitle: 'Nonexistent Book', pages: '1-2' } }];
+    const missingPlan = await service.planFromInstruction({
+      instruction: 'extract pages 1 to 2 from Nonexistent Book',
+      language: 'en',
+    });
+    assert.deepEqual(missingPlan, { ok: false, error: 'not-found', detail: 'book:Nonexistent Book' });
+
+    // 3. Invented workId -> rejected cleanly (never trusted)
+    nextCalls = [{ name: 'extract_pdf_pages', arguments: { workId: 'work:master-and-his-emissary', pages: '8-12' } }];
+    const inventedPlan = await service.planFromInstruction({
+      instruction: 'extract pages 8 to 12 from the master and his emissary',
+      language: 'en',
+    });
+    assert.equal(inventedPlan.ok, false);
+
+    // 4. 2+ matches -> preview lists candidates; confirm requires pick; confirm with pick executes chosen one
+    nextCalls = [{ name: 'extract_pdf_pages', arguments: { bookTitle: 'مقدمة ابن خلدون', pages: '8-12' } }];
+    const multiPlan = await service.planFromInstruction({
+      instruction: 'استخرج الصفحات 8 إلى 12 من مقدمة ابن خلدون',
+      language: 'ar',
+    });
+    assert.equal(multiPlan.ok, true);
+    if (!multiPlan.ok || multiPlan.kind !== 'plan') assert.fail('Expected multi-candidate plan');
+    const step = multiPlan.plan.steps[0];
+    assert.equal(step.details.candidates?.length, 2);
+
+    const missingPick = await service.confirmPlan(multiPlan.plan.planId, 'ar');
+    assert.deepEqual(missingPick, { ok: false, error: 'invalid-arguments', detail: 'candidate-selection-required' });
+
+    const pickedConfirm = await service.confirmPlan(multiPlan.plan.planId, 'ar', {
+      [step.stepId]: { workId: 'w-muq-2', sourceId: 's-muq-2' },
+    });
+    assert.equal(pickedConfirm.ok, true);
+    if (!pickedConfirm.ok) assert.fail('Expected picked confirm ok');
+    const pickedOut = pickedConfirm.executed[0].outputPaths?.[0];
+    assert.ok(pickedOut && path.basename(pickedOut).startsWith('muq2'));
+    await service.undoExecution(pickedConfirm.executionId);
+
+    // 5. Honest localized error messages in ar and en (never blame provider for validation/lookup errors)
+    for (const lang of ['ar', 'en'] as const) {
+      const t = (key: keyof typeof translations.en, params?: Record<string, string | number>) => {
+        let str: string = translations[lang][key];
+        if (params) {
+          for (const [k, v] of Object.entries(params)) {
+            str = str.replace(`{${k}}`, String(v));
+          }
+        }
+        return str;
+      };
+      const notFoundMsg = aiActionErrorText('not-found', 'book:The Master and His Emissary', t);
+      const invalidTargetMsg = aiActionErrorText('invalid-arguments', 'invalid-source-target', t);
+      assert.ok(!notFoundMsg.includes('المزوّد') && !notFoundMsg.includes('provider'));
+      assert.ok(!invalidTargetMsg.includes('المزوّد') && !invalidTargetMsg.includes('provider'));
+      assert.ok(notFoundMsg.includes('The Master and His Emissary'));
+    }
   } finally {
     db.close();
     rmSync(tempDir, { recursive: true, force: true });
