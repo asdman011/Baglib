@@ -1,4 +1,8 @@
-﻿## Review of KEY-449 (epic KEY-434), 2026-11-21. Agent: Claude Code (orchestrator)
+﻿## Jira: KEY-450 created, 2026-11-21. Agent: Claude Code (orchestrator)
+
+- Created bug **KEY-450** (label Research, parent epic KEY-361), reported by the user: in the AFFiNE research editor, the embed view of a link loads no thumbnail, and online videos (YouTube) don't play inside the editor. The cause is not investigated yet; the leading guess is that the CSP blocks `img-src`/`frame-src`, or that the link-preview endpoint is missing. Suggested agent: Antigravity. Status: To Do.
+
+## Review of KEY-449 (epic KEY-434), 2026-11-21. Agent: Claude Code (orchestrator)
 
 **Result: reviewed-pass.** Commit `f9b169eb` (Antigravity), pushed to `origin/feature/library-domain`.
 - Path guard checked in `src/main/services/ai/actions/tool-executor.ts` (`findRecordedOutput`): Open, Show in folder and Add to library look up the execution and use the path stored in its record, never the path the renderer sends. An unknown or undone execution, or an unrecorded path, is refused.
