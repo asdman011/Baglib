@@ -1,4 +1,14 @@
-﻿## KEY-449: AI actions output result cards, recorded-path guard, chat action memory & output folder setting (epic KEY-434) — 2026-11-21T13:02+02:00 - Agent: Antigravity
+﻿## Review of KEY-449 (epic KEY-434), 2026-11-21. Agent: Claude Code (orchestrator)
+
+**Result: reviewed-pass.** Commit `f9b169eb` (Antigravity), pushed to `origin/feature/library-domain`.
+- Path guard checked in `src/main/services/ai/actions/tool-executor.ts` (`findRecordedOutput`): Open, Show in folder and Add to library look up the execution and use the path stored in its record, never the path the renderer sends. An unknown or undone execution, or an unrecorded path, is refused.
+- Imports from Add to library carry the `ai-generated` tag, which follows KEY-434 principle 3 (the user stays the author).
+- Re-run by the reviewer: `tsc --noEmit` exit 0; `tests/services/ai-actions.test.ts` 11/11 pass. The full suite (2,911/2,911), both builds and the live run in en and ar come from Antigravity's report; the reviewer did not re-run them.
+- Jira: KEY-449 is Done, and its comment matches the commit. The previous session's Antigravity process died while it waited for the full suite. It was resumed in the same conversation (229e3665) to finish the suite, commit, push and Jira.
+- Minor: the commit message has no Co-Authored-By line. No action is needed, since history is not rewritten.
+- Still to check by the user: in the real app, extract pages, use the result card buttons, and ask "where is the output?".
+
+## KEY-449: AI actions output result cards, recorded-path guard, chat action memory & output folder setting (epic KEY-434) — 2026-11-21T13:02+02:00 - Agent: Antigravity
 
 **Done:**
 - **Output result cards & main-process recorded-paths-only guard**:
@@ -22,7 +32,7 @@
 - Live Electron (`node scripts/key449-live/run.mjs`): PASS in `en` and `ar` (`geminiActionCalls: 2`, `geminiChatCalls: 2`, `shownInFolder: 2`, `openedPaths: 2`, `errors: []`, throwaway profile deleted).
 
 **Jira:**
-- `KEY-449` In Progress (`21`); Done (`41`) pending commit & push.
+- `KEY-449` Done (`41`); commit `f9b169ebabdea92ee0d3383b8b324b2626229b09` pushed to `origin/feature/library-domain`.
 
 **Files:**
 `CURRENT_TASK.md`, `docs/agent-ops/reports/KEY-449.md`, `scripts/key449-live/main.cjs`, `scripts/key449-live/run.mjs`, `src/main/ipc/ai-actions.ts`, `src/main/services/ai/actions/pdf-actions.ts`, `src/main/services/ai/actions/tool-calling.ts`, `src/main/services/ai/actions/tool-executor.ts`, `src/preload/index.ts`, `src/renderer/components/ai/AISettingsModal.tsx`, `src/renderer/components/ai/AiActionsPreview.tsx`, `src/renderer/components/ai/GlobalAssistant.tsx`, `src/renderer/translations.ts`, `src/shared/ai-actions.ts`, `src/shared/assistant-chat.ts`, `src/shared/types/ai.ts`, `tests/services/ai-actions.test.ts`.
